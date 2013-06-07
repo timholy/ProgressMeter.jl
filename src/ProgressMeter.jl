@@ -33,7 +33,9 @@ function next!(p::Progress)
         p.inext += iceil(p.n/100)
         if t > p.tlast+p.dt
             printover(string("Progress: ", iround(100*p.counter/p.n), "%"), :green)
-            p.tlast = t
+            # Compensate for any overhead of printing. This can be especially important
+            # if you're running over a slow network connection.
+            p.tlast = t + 2*(time()-t)
             p.printed = true
         end
     end

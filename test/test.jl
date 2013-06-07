@@ -6,4 +6,4 @@ function testfunc(n, dt, tsleep)
     end
 end
 
-testfunc(1017, 0.01, 0.001)
+testfunc(107, 0.01, 0.01)
