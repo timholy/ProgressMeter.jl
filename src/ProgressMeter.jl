@@ -8,14 +8,12 @@ type Progress
     counter::Int
     inext::Int
     tlast::Float64
-    nprintover::Int
     printed::Bool    # true if we have issued at least one status update
     
     function Progress(n::Integer, dt::Real)
         this = new(convert(Int, n), convert(Float64, dt), 0)
         this.inext = iceil(n/100)
         this.tlast = time()
-        this.nprintover = 0
         this.printed = false
         this
     end
@@ -26,7 +24,7 @@ function next!(p::Progress)
     p.counter += 1
     if p.counter >= p.n
         if p.printed
-            printover("Progress: done", p.nprintover, :green)
+            printover("Progress: done", :green)
             println()
         end
         return
@@ -34,7 +32,7 @@ function next!(p::Progress)
     if p.counter >= p.inext
         p.inext += iceil(p.n/100)
         if t > p.tlast+p.dt
-            p.nprintover = printover(string("Progress: ", iround(100*p.counter/p.n), "%"), p.nprintover, :green)
+            printover(string("Progress: ", iround(100*p.counter/p.n), "%"), :green)
             p.tlast = t
             p.printed = true
         end
@@ -42,12 +40,12 @@ function next!(p::Progress)
 end
     
 
-function printover(io::IO, s::String, n::Integer, color::Symbol = color_normal)
-    print(io, "\r"*" "^n*"\r")
+function printover(io::IO, s::String, color::Symbol = color_normal)
+    print(io, "\u1b[1G")   # go to first column
     print_with_color(color, io, s)
-    length(s)
+    print(io, "\u1b[K")    # clear the rest of the line
 end
 
-printover(s::String, n::Integer, color::Symbol = color_normal) = printover(OUTPUT_STREAM, s, n, color)
+printover(s::String, color::Symbol = color_normal) = printover(OUTPUT_STREAM, s, color)
 
 end
