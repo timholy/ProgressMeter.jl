@@ -48,6 +48,6 @@ function printover(io::IO, s::String, color::Symbol = color_normal)
     print(io, "\u1b[K")    # clear the rest of the line
 end
 
-printover(s::String, color::Symbol = color_normal) = printover(OUTPUT_STREAM, s, color)
+printover(s::String, color::Symbol = color_normal) = printover(STDOUT, s, color)
 
 end
