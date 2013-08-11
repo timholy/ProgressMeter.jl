@@ -10,7 +10,7 @@ type Progress
     tlast::Float64
     printed::Bool    # true if we have issued at least one status update
     
-    function Progress(n::Integer, dt::Real)
+    function Progress(n::Integer, dt::Real = 1.0)
         this = new(convert(Int, n), convert(Float64, dt), 0)
         this.inext = iceil(n/100)
         this.tlast = time()
