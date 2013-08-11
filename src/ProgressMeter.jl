@@ -1,6 +1,6 @@
 module ProgressMeter
 
-export Progress, next!
+export Progress, next!, cancel
 
 type Progress
     n::Int
@@ -40,7 +40,14 @@ function next!(p::Progress)
         end
     end
 end
-    
+
+function cancel(p::Progress, msg::String = "Computation aborted before all tasks were completed", color = :red)
+    if p.printed
+        printover(msg, color)
+        println()
+    end
+    return
+end
 
 function printover(io::IO, s::String, color::Symbol = color_normal)
     print(io, "\u1b[1G")   # go to first column
