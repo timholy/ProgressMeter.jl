@@ -42,3 +42,5 @@ will yield
 ```
 Computing initial pass...53%|###########################                       |  ETA: 0:09:02
 ```
+
+in a manner similar to [python-progressbar](https://code.google.com/p/python-progressbar/).
