@@ -10,8 +10,8 @@ type Progress
     tfirst::Float64
     tlast::Float64
     printed::Bool    # true if we have issued at least one status update
-    desc::String
-    barlen::Int
+    desc::String     # prefix to the percentage, e.g.  "Computing..."
+    barlen::Int      # TODO: autosize progress bar to available terminal width
     
     function Progress(n::Integer, dt::Real = 1.0, desc::String = "Progress: ", barlen::Int = 0)
         this = new(convert(Int, n), convert(Float64, dt), 0)
@@ -32,8 +32,8 @@ function next!(p::Progress)
     if p.counter >= p.n
         if p.printed
             percentage_complete = 100.0 * p.counter / p.n
-            bar = print_bar(p.barlen, percentage_complete)
-            dur = print_duration(t-p.tfirst)
+            bar = barstring(p.barlen, percentage_complete)
+            dur = durationstring(t-p.tfirst)
             msg = @sprintf "%s%3u%%%s Time: %s" p.desc iround(percentage_complete) bar dur
             printover(msg, :green)
             println()
@@ -44,11 +44,11 @@ function next!(p::Progress)
         p.inext += iceil(p.n/100)
         if t > p.tlast+p.dt
             percentage_complete = 100.0 * p.counter / p.n
-            bar = print_bar(p.barlen, percentage_complete)
+            bar = barstring(p.barlen, percentage_complete)
             elapsed_time = t - p.tfirst
             est_total_time = 100 * elapsed_time / percentage_complete
             eta_sec = iround( est_total_time - elapsed_time )
-            eta = print_duration(eta_sec)
+            eta = durationstring(eta_sec)
             msg = @sprintf "%s%3u%%%s  ETA: %s" p.desc iround(percentage_complete) bar eta
             printover(msg, :green)
             # Compensate for any overhead of printing. This can be especially important
@@ -75,17 +75,17 @@ end
 
 printover(s::String, color::Symbol = color_normal) = printover(STDOUT, s, color)
 
-function print_bar(barlen, percentage_complete)
+function barstring(barlen, percentage_complete)
     bar = ""
     if barlen>0
         nsolid = iround(barlen * percentage_complete / 100)
         nempty = barlen - nsolid
         bar = string("|", repeat("#",nsolid), repeat(" ",nempty), "|")
     end
-    return bar
+    bar
 end
 
-function print_duration(nsec)
+function durationstring(nsec)
     days = div(nsec, 60*60*24)
     r = nsec - 60*60*24*days
     hours = div(r,60*60)
@@ -97,7 +97,7 @@ function print_duration(nsec)
     if days>0
        return @sprintf "%u days, %s" days hhmmss
     end
-    return hhmmss
+    hhmmss
 end
 
 end
