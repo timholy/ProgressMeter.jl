@@ -34,7 +34,8 @@ function next!(p::Progress)
             percentage_complete = 100.0 * p.counter / p.n
             bar = print_bar(p.barlen, percentage_complete)
             dur = print_duration(t-p.tfirst)
-            printover(string(p.desc, iround(percentage_complete), "%", bar, " Time: ", dur), :green)
+            msg = @sprintf "%s%3u%%%s Time: %s" p.desc iround(percentage_complete) bar dur
+            printover(msg, :green)
             println()
         end
         return
@@ -48,7 +49,8 @@ function next!(p::Progress)
             est_total_time = 100 * elapsed_time / percentage_complete
             eta_sec = iround( est_total_time - elapsed_time )
             eta = print_duration(eta_sec)
-            printover(string(p.desc, iround(percentage_complete), "%", bar, "  ETA: ", eta), :green)
+            msg = @sprintf "%s%3u%%%s  ETA: %s" p.desc iround(percentage_complete) bar eta
+            printover(msg, :green)
             # Compensate for any overhead of printing. This can be especially important
             # if you're running over a slow network connection.
             p.tlast = t + 2*(time()-t)
