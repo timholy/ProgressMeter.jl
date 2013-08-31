@@ -27,6 +27,20 @@ function my_long_running_function(filenames::Array)
 end
 ```
 
-You should see a green status line that indicates progress during this computation.
+You should see a green status line that indicates progress during this computation, including ETA and final duration.
 
 If your computation runs so quickly that it never needs to show progress, no extraneous output will be displayed.
+
+Optionally, a description string can be specified which will be prepended to the output, and a progress meter M characters long can be shown.  E.g. 
+
+```julia
+p = Progress(n, 1, "Computing initial pass...", 50)
+```
+
+will yield
+
+```
+Computing initial pass...53%|###########################                       |  ETA: 0:09:02
+```
+
+in a manner similar to [python-progressbar](https://code.google.com/p/python-progressbar/).
