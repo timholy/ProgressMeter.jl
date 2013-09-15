@@ -6,7 +6,6 @@ type Progress
     n::Int
     dt::Float64
     counter::Int
-    inext::Int
     tfirst::Float64
     tlast::Float64
     printed::Bool    # true if we have issued at least one status update
@@ -15,7 +14,6 @@ type Progress
     
     function Progress(n::Integer, dt::Real = 1.0, desc::String = "Progress: ", barlen::Int = 0)
         this = new(convert(Int, n), convert(Float64, dt), 0)
-        this.inext = ceil(n/100)
         this.tfirst = time()
         this.tlast = this.tfirst
         this.printed = false
@@ -40,23 +38,22 @@ function next!(p::Progress)
         end
         return
     end
-    if p.counter >= p.inext
-        p.inext += iceil(p.n/100)
-        if t > p.tlast+p.dt
-            percentage_complete = 100.0 * p.counter / p.n
-            bar = barstring(p.barlen, percentage_complete)
-            elapsed_time = t - p.tfirst
-            est_total_time = 100 * elapsed_time / percentage_complete
-            eta_sec = iround( est_total_time - elapsed_time )
-            eta = durationstring(eta_sec)
-            msg = @sprintf "%s%3u%%%s  ETA: %s" p.desc iround(percentage_complete) bar eta
-            printover(msg, :green)
-            # Compensate for any overhead of printing. This can be especially important
-            # if you're running over a slow network connection.
-            p.tlast = t + 2*(time()-t)
-            p.printed = true
-        end
+
+    if t > p.tlast+p.dt
+        percentage_complete = 100.0 * p.counter / p.n
+        bar = barstring(p.barlen, percentage_complete)
+        elapsed_time = t - p.tfirst
+        est_total_time = 100 * elapsed_time / percentage_complete
+        eta_sec = iround( est_total_time - elapsed_time )
+        eta = durationstring(eta_sec)
+        msg = @sprintf "%s%3u%%%s  ETA: %s" p.desc iround(percentage_complete) bar eta
+        printover(msg, :green)
+        # Compensate for any overhead of printing. This can be especially important
+        # if you're running over a slow network connection.
+        p.tlast = t + 2*(time()-t)
+        p.printed = true
     end
+
 end
 
 function cancel(p::Progress, msg::String = "Computation aborted before all tasks were completed", color = :red)
