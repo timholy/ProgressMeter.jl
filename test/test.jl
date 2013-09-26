@@ -1,3 +1,5 @@
+import ProgressMeter
+
 function testfunc(n, dt, tsleep)
     p = ProgressMeter.Progress(n, dt)
     for i = 1:n
