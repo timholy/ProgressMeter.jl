@@ -10,7 +10,7 @@ type Progress
     tlast::Float64
     printed::Bool    # true if we have issued at least one status update
     desc::String     # prefix to the percentage, e.g.  "Computing..."
-    barlen::Int      # TODO: autosize progress bar to available terminal width
+    barlen::Int      # progress bar size (default is available terminal width)
     
     function Progress(n::Integer, dt::Real = 1.0, desc::String = "Progress: ", barlen::Int = 0)
         this = new(convert(Int, n), convert(Float64, dt), 0)
@@ -22,6 +22,16 @@ type Progress
         this
     end
 
+    function Progress(n::Integer, desc::String = "Progress: ")
+        this = new(convert(Int, n), convert(Float64, 0.01), 0)
+        this.tfirst = time()
+        this.tlast = this.tfirst
+        this.printed = false
+        this.desc = desc
+        #...length of percentage and ETA string with days is 29 characters 
+        this.barlen = max(0, Base.tty_cols() - (length(desc)+29))
+        this
+    end
 end
 
 function next!(p::Progress)
@@ -53,10 +63,9 @@ function next!(p::Progress)
         p.tlast = t + 2*(time()-t)
         p.printed = true
     end
-
 end
 
-function cancel(p::Progress, msg::String = "Computation aborted before all tasks were completed", color = :red)
+function cancel(p::Progress, msg::String = "Aborted before all tasks were completed", color = :red)
     if p.printed
         printover(msg, color)
         println()
@@ -98,3 +107,4 @@ function durationstring(nsec)
 end
 
 end
+
