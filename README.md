@@ -1,6 +1,6 @@
 # ProgressMeter.jl
 
-Progress meter for long-running computations in Julia
+Progress meter for long-running operations in Julia
 
 ## Installation
 
