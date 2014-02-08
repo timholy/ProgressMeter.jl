@@ -11,14 +11,16 @@ type Progress
     printed::Bool    # true if we have issued at least one status update
     desc::String     # prefix to the percentage, e.g.  "Computing..."
     barlen::Int      # progress bar size (default is available terminal width)
-    
-    function Progress(n::Integer, dt::Real = 1.0, desc::String = "Progress: ", barlen::Int = 0)
+    color::Symbol    # default to green
+
+    function Progress(n::Integer, dt::Real = 1.0, desc::String = "Progress: ", barlen::Int = 0, color::Symbol = :green)
         this = new(convert(Int, n), convert(Float64, dt), 0)
         this.tfirst = time()
         this.tlast = this.tfirst
         this.printed = false
         this.desc = desc
         this.barlen = barlen
+        this.color = color
         this
     end
 
@@ -28,8 +30,9 @@ type Progress
         this.tlast = this.tfirst
         this.printed = false
         this.desc = desc
-        #...length of percentage and ETA string with days is 29 characters 
+        #...length of percentage and ETA string with days is 29 characters
         this.barlen = max(0, Base.tty_cols() - (length(desc)+29))
+        this.color = :green
         this
     end
 end
@@ -43,7 +46,7 @@ function next!(p::Progress)
             bar = barstring(p.barlen, percentage_complete)
             dur = durationstring(t-p.tfirst)
             msg = @sprintf "%s%3u%%%s Time: %s" p.desc iround(percentage_complete) bar dur
-            printover(msg, :green)
+            printover(msg, p.color)
             println()
         end
         return
@@ -57,12 +60,17 @@ function next!(p::Progress)
         eta_sec = iround( est_total_time - elapsed_time )
         eta = durationstring(eta_sec)
         msg = @sprintf "%s%3u%%%s  ETA: %s" p.desc iround(percentage_complete) bar eta
-        printover(msg, :green)
+        printover(msg, p.color)
         # Compensate for any overhead of printing. This can be especially important
         # if you're running over a slow network connection.
         p.tlast = t + 2*(time()-t)
         p.printed = true
     end
+end
+
+function next!(p::Progress, color::Symbol)
+  p.color = color
+  next!(p)
 end
 
 function cancel(p::Progress, msg::String = "Aborted before all tasks were completed", color = :red)
