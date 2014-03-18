@@ -44,3 +44,7 @@ Computing initial pass...53%|###########################                       |
 ```
 
 in a manner similar to [python-progressbar](https://code.google.com/p/python-progressbar/).
+
+## Credits
+
+Thanks to Alan Bahm and Andrew Burroughs for major enhancements to this package.
