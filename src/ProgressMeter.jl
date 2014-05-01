@@ -82,9 +82,13 @@ function cancel(p::Progress, msg::String = "Aborted before all tasks were comple
 end
 
 function printover(io::IO, s::String, color::Symbol = :color_normal)
-    print(io, "\u1b[1G")   # go to first column
-    print_with_color(color, io, s)
-    print(io, "\u1b[K")    # clear the rest of the line
+    if isdefined(Main, :IJulia)
+        print(io, "\r" * s)
+    else
+        print(io, "\u1b[1G")   # go to first column
+        print_with_color(color, io, s)
+        print(io, "\u1b[K")    # clear the rest of the line
+    end
 end
 
 printover(s::String, color::Symbol = :color_normal) = printover(STDOUT, s, color)
