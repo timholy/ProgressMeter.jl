@@ -31,7 +31,7 @@ type Progress
         this.printed = false
         this.desc = desc
         #...length of percentage and ETA string with days is 29 characters
-        this.barlen = max(0, Base.tty_cols() - (length(desc)+29))
+        this.barlen = max(0, Base.tty_size()[2] - (length(desc)+29))
         this.color = :green
         this
     end
