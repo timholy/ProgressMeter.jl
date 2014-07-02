@@ -37,6 +37,13 @@ type Progress
     end
 end
 
+# In Julia v0.3, tty_size() replaced tty_rows() and tty_cols()
+# This definition required for backwards compatibility with v0.2
+# (can probably be removed some time after v0.3 is released)
+if VERSION < v"0.3-"
+    tty_size() = (tty_rows(), tty_cols())
+end
+
 function next!(p::Progress)
     t = time()
     p.counter += 1
