@@ -15,4 +15,5 @@ before_install:
 script:
   - julia -e 'Pkg.init(); run(`ln -s $(pwd()) $(Pkg.dir("ProgressMeter"))`); Pkg.pin("ProgressMeter"); Pkg.resolve()'
   - julia -e 'using ProgressMeter; @assert isdefined(:ProgressMeter); @assert typeof(ProgressMeter) === Module'
-  - julia -e 'Pkg.test("ProgressMeter");'
+  - if [ $JULIAVERSION = "julianightlies" ]; then julia -e 'Pkg.test("ProgressMeter");'; fi
+  - if [ $JULIAVERSION = "juliareleases" ]; then julia test/runtests.jl; fi
