@@ -31,10 +31,17 @@ type Progress
         this.printed = false
         this.desc = desc
         #...length of percentage and ETA string with days is 29 characters
-        this.barlen = max(0, Base.tty_cols() - (length(desc)+29))
+        this.barlen = max(0, Base.tty_size()[2] - (length(desc)+29))
         this.color = :green
         this
     end
+end
+
+# In Julia v0.3, tty_size() replaced tty_rows() and tty_cols()
+# This definition required for backwards compatibility with v0.2
+# (can probably be removed some time after v0.3 is released)
+if VERSION < v"0.3-"
+    tty_size() = (tty_rows(), tty_cols())
 end
 
 function next!(p::Progress)
