@@ -1,5 +1,7 @@
 module ProgressMeter
 
+using Compat
+
 export Progress, next!, cancel
 
 type Progress
@@ -37,13 +39,6 @@ type Progress
     end
 end
 
-# In Julia v0.3, tty_size() replaced tty_rows() and tty_cols()
-# This definition required for backwards compatibility with v0.2
-# (can probably be removed some time after v0.3 is released)
-if VERSION < v"0.3-"
-    tty_size() = (tty_rows(), tty_cols())
-end
-
 function next!(p::Progress)
     t = time()
     p.counter += 1
@@ -52,7 +47,7 @@ function next!(p::Progress)
             percentage_complete = 100.0 * p.counter / p.n
             bar = barstring(p.barlen, percentage_complete)
             dur = durationstring(t-p.tfirst)
-            msg = @sprintf "%s%3u%%%s Time: %s" p.desc iround(percentage_complete) bar dur
+            msg = @sprintf "%s%3u%%%s Time: %s" p.desc round(Int, percentage_complete) bar dur
             printover(msg, p.color)
             println()
         end
@@ -64,9 +59,9 @@ function next!(p::Progress)
         bar = barstring(p.barlen, percentage_complete)
         elapsed_time = t - p.tfirst
         est_total_time = 100 * elapsed_time / percentage_complete
-        eta_sec = iround( est_total_time - elapsed_time )
+        eta_sec = round(Int, est_total_time - elapsed_time )
         eta = durationstring(eta_sec)
-        msg = @sprintf "%s%3u%%%s  ETA: %s" p.desc iround(percentage_complete) bar eta
+        msg = @sprintf "%s%3u%%%s  ETA: %s" p.desc round(Int, percentage_complete) bar eta
         printover(msg, p.color)
         # Compensate for any overhead of printing. This can be especially important
         # if you're running over a slow network connection.
@@ -103,7 +98,7 @@ printover(s::String, color::Symbol = :color_normal) = printover(STDOUT, s, color
 function barstring(barlen, percentage_complete)
     bar = ""
     if barlen>0
-        nsolid = iround(barlen * percentage_complete / 100)
+        nsolid = round(Int, barlen * percentage_complete / 100)
         nempty = barlen - nsolid
         bar = string("|", repeat("#",nsolid), repeat(" ",nempty), "|")
     end
@@ -126,4 +121,3 @@ function durationstring(nsec)
 end
 
 end
-
