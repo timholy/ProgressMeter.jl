@@ -2,7 +2,7 @@ module ProgressMeter
 
 using Compat
 
-export Progress, next!, cancel
+export Progress, next!, cancel, @showprogress
 
 type Progress
     n::Int
@@ -118,6 +118,65 @@ function durationstring(nsec)
        return @sprintf "%u days, %s" days hhmmss
     end
     hhmmss
+end
+
+function showprogress_process_expr(node, metersym)
+    if !isa(node, Expr)
+        node
+    elseif node.head === :continue
+        # special handling for continue statement
+        quote
+            ($next!)($metersym)
+            $node
+        end
+    elseif node.head === :for || node.head === :while
+        # do not process continue statements in inner loops
+        node
+    else
+        # process each subexpression recursively
+        Expr(node.head, [showprogress_process_expr(a, metersym) for a in node.args]...)
+    end
+end
+
+macro showprogress(args...)
+    if length(args) < 1
+        throw(ArgumentError("@showprogress requires at least one argument."))
+    end
+    progressargs = args[1:end-1]
+    loop = args[end]
+    metersym = gensym("meter")
+    if isa(loop, Expr) && loop.head === :for
+        @assert length(loop.args) == 2
+        loopassign = loop.args[1]
+        @assert loopassign.head == :(=)
+        @assert length(loopassign.args) == 2
+        return quote
+            iterable = $(esc(loopassign.args[2]))
+            $(esc(metersym)) = Progress(length(iterable), $([esc(arg) for arg in progressargs]...))
+            for $(esc(loopassign.args[1])) in iterable
+                rv = $(esc(showprogress_process_expr(loop.args[2], metersym)))
+                $(next!)($(esc(metersym)))
+                rv
+            end
+        end
+    elseif isa(loop, Expr) && loop.head === :comprehension
+        @assert length(loop.args) == 2
+        loopassign = loop.args[2]
+        @assert loopassign.head == :(=)
+        @assert length(loopassign.args) == 2
+        return quote
+            iterable = $(esc(loopassign.args[2]))
+            $(esc(metersym)) = Progress(length(iterable), $([esc(arg) for arg in progressargs]...))
+            [begin
+                 rv = $(esc(showprogress_process_expr(loop.args[1], metersym)))
+                 $(next!)($(esc(metersym)))
+                 rv
+             end
+             for $(esc(loopassign.args[1])) in iterable]
+        end
+    else
+        throw(ArgumentError("Final argument to @showprogress must be a for loop or comprehension."))
+    end
 end
 
 end

@@ -45,6 +45,14 @@ Computing initial pass...53%|###########################                       |
 
 in a manner similar to [python-progressbar](https://code.google.com/p/python-progressbar/).
 
+Finally, it is possible to use the `@showprogress` macro to wrap a for loop or comprehension, as long as the object being iterated over implements the `length` method.  This macro will correctly handle any `continue` statements in a for loop as well.
+
+```julia
+@showprogress 1 "Computing..." for i in 1:50
+    sleep(0.1)
+end
+```
+
 ## Credits
 
 Thanks to Alan Bahm and Andrew Burroughs for major enhancements to this package.

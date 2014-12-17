@@ -1,4 +1,5 @@
 import ProgressMeter
+import Base.Test.@test
 
 function testfunc(n, dt, tsleep)
     p = ProgressMeter.Progress(n, dt)
@@ -65,5 +66,50 @@ end
 
 println("Testing changing the bar color")
 testfunc5(107, 0.01, 0.01, "Computing...", 50)
+
+
+function testfunc6(n, dt, tsleep)
+    ProgressMeter.@showprogress dt for i in 1:n
+        if !isprime(i)
+            sleep(tsleep)
+            continue
+        end
+    end
+end
+
+println("Testing @showprogress macro on for loop")
+testfunc6(3000, 0.01, 0.002)
+
+
+function testfunc7(n, dt, tsleep)
+    s = ProgressMeter.@showprogress dt "Calculating..." [(sleep(tsleep); z) for z in 1:n]
+    @test s == [1:n]
+end
+
+println("Testing @showprogress macro on comprehension")
+testfunc7(100, 0.1, 0.01)
+
+
+function testfunc8(n, dt, tsleep)
+    ProgressMeter.@showprogress dt for i in 1:n
+        if !isprime(i)
+            sleep(tsleep)
+            continue
+        end
+        for j in 1:10
+            if j % 2 == 0
+                continue
+            end
+        end
+        while randbool()
+            continue
+        end
+    end
+end
+
+println("Testing @showprogress macro on a for loop with inner loops containing continue statements")
+testfunc8(3000, 0.01, 0.002)
+
+
 println("")
 println("All tests complete")
