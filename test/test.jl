@@ -90,5 +90,26 @@ println("Testing @showprogress macro on comprehension")
 testfunc7(100, 0.1, 0.01)
 
 
+function testfunc8(n, dt, tsleep)
+    ProgressMeter.@showprogress dt for i in 1:n
+        if !isprime(i)
+            sleep(tsleep)
+            continue
+        end
+        for j in 1:10
+            if j % 2 == 0
+                continue
+            end
+        end
+        while randbool()
+            continue
+        end
+    end
+end
+
+println("Testing @showprogress macro on a for loop with inner loops containing continue statements")
+testfunc8(3000, 0.01, 0.002)
+
+
 println("")
 println("All tests complete")
