@@ -55,4 +55,4 @@ end
 
 ## Credits
 
-Thanks to Alan Bahm and Andrew Burroughs for major enhancements to this package.
+Thanks to Alan Bahm, Andrew Burroughs, and Jim Garrison for major enhancements to this package.
