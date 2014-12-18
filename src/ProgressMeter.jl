@@ -174,6 +174,21 @@ macro showprogress(args...)
              end
              for $(esc(loopassign.args[1])) in iterable]
         end
+    elseif isa(loop, Expr) && loop.head === :typed_comprehension
+        @assert length(loop.args) == 3
+        loopassign = loop.args[3]
+        @assert loopassign.head == :(=)
+        @assert length(loopassign.args) == 2
+        return quote
+            iterable = $(esc(loopassign.args[2]))
+            $(esc(metersym)) = Progress(length(iterable), $([esc(arg) for arg in progressargs]...))
+            $(loop.args[1])[begin
+                 rv = $(esc(showprogress_process_expr(loop.args[2], metersym)))
+                 $(next!)($(esc(metersym)))
+                 rv
+             end
+             for $(esc(loopassign.args[1])) in iterable]
+        end
     else
         throw(ArgumentError("Final argument to @showprogress must be a for loop or comprehension."))
     end

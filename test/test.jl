@@ -111,5 +111,14 @@ println("Testing @showprogress macro on a for loop with inner loops containing c
 testfunc8(3000, 0.01, 0.002)
 
 
+function testfunc9(n, dt, tsleep)
+    s = ProgressMeter.@showprogress dt "Calculating..." Float64[(sleep(tsleep); z) for z in 1:n]
+    @test s == [1:n]
+end
+
+println("Testing @showprogress macro on typed comprehension")
+testfunc9(100, 0.1, 0.01)
+
+
 println("")
 println("All tests complete")
