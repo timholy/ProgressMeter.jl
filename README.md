@@ -19,7 +19,7 @@ using ProgressMeter
 
 function my_long_running_function(filenames::Array)
     n = length(filenames)
-    p = Progress(n, 1)   # minumum update interval: 1 second
+    p = Progress(n, 1)   # minimum update interval: 1 second
     for f in filenames
         # Here's where you do all the hard, slow work
         next!(p)
@@ -31,7 +31,7 @@ You should see a green status line that indicates progress during this computati
 
 If your computation runs so quickly that it never needs to show progress, no extraneous output will be displayed.
 
-Optionally, a description string can be specified which will be prepended to the output, and a progress meter M characters long can be shown.  E.g. 
+Optionally, a description string can be specified which will be prepended to the output, and a progress meter `M` characters long can be shown.  E.g. 
 
 ```julia
 p = Progress(n, 1, "Computing initial pass...", 50)
@@ -45,7 +45,7 @@ Computing initial pass...53%|###########################                       |
 
 in a manner similar to [python-progressbar](https://code.google.com/p/python-progressbar/).
 
-Finally, it is possible to use the `@showprogress` macro to wrap a for loop or comprehension, as long as the object being iterated over implements the `length` method.  This macro will correctly handle any `continue` statements in a for loop as well.
+Finally, it is possible to use the `@showprogress` macro to wrap a `for` loop or comprehension, as long as the object being iterated over implements the `length` method.  This macro will correctly handle any `continue` statements in a `for` loop as well.
 
 ```julia
 @showprogress 1 "Computing..." for i in 1:50
@@ -56,3 +56,4 @@ end
 ## Credits
 
 Thanks to Alan Bahm, Andrew Burroughs, and Jim Garrison for major enhancements to this package.
+
