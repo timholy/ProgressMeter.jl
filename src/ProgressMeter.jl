@@ -95,12 +95,12 @@ end
 
 printover(s::String, color::Symbol = :color_normal) = printover(STDOUT, s, color)
 
-function barstring(barlen, percentage_complete)
+function barstring(barlen, percentage_complete; solidglyph="█", emptyglyph=" ")
     bar = ""
     if barlen>0
         nsolid = round(Int, barlen * percentage_complete / 100)
         nempty = barlen - nsolid
-        bar = string("|", repeat("#",nsolid), repeat(" ",nempty), "|")
+        bar = string("|", repeat(solidglyph, nsolid), repeat(emptyglyph, nempty), "|")
     end
     bar
 end
