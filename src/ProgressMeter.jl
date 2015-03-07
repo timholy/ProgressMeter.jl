@@ -2,7 +2,7 @@ module ProgressMeter
 
 using Compat
 
-export Progress, next!, cancel, @showprogress
+export Progress, next!, cancel, finish!, @showprogress
 
 type Progress
     n::Int
@@ -43,7 +43,7 @@ function next!(p::Progress)
     t = time()
     p.counter += 1
     if p.counter >= p.n
-        if p.printed
+        if p.counter == p.n && p.printed
             percentage_complete = 100.0 * p.counter / p.n
             bar = barstring(p.barlen, percentage_complete)
             dur = durationstring(t-p.tfirst)
@@ -81,6 +81,12 @@ function cancel(p::Progress, msg::String = "Aborted before all tasks were comple
         println()
     end
     return
+end
+
+function finish!(p::Progress)
+    while p.counter < p.n
+        next!(p)
+    end
 end
 
 function printover(io::IO, s::String, color::Symbol = :color_normal)

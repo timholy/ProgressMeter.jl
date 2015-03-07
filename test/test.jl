@@ -120,5 +120,18 @@ println("Testing @showprogress macro on typed comprehension")
 testfunc9(100, 0.1, 0.01)
 
 
+function testfunc10(n, k, dt, tsleep)
+    p = ProgressMeter.Progress(n, dt)
+    for i = 1:k
+        sleep(tsleep)
+        ProgressMeter.next!(p)
+    end
+    ProgressMeter.finish!(p)
+end
+println("Testing under-shooting progress with finish!...")
+testfunc10(107, 105, 0.01, 0.01)
+println("Testing over-shooting progress with finish!...")
+testfunc10(107, 111, 0.01, 0.01)
+
 println("")
 println("All tests complete")
