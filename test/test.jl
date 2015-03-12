@@ -54,11 +54,11 @@ testfunc4()
 
 function testfunc5(n, dt, tsleep, desc, barlen)
     p = ProgressMeter.Progress(n, dt, desc, barlen)
-    for i = 1:int(floor(n/2))
+    for i = 1:round(Int, floor(n/2))
         sleep(tsleep)
         ProgressMeter.next!(p)
     end
-    for i = int(ceil(n/2)):n
+    for i = round(Int, ceil(n/2)):n
         sleep(tsleep)
         ProgressMeter.next!(p, :red)
     end
@@ -83,7 +83,7 @@ testfunc6(3000, 0.01, 0.002)
 
 function testfunc7(n, dt, tsleep)
     s = ProgressMeter.@showprogress dt "Calculating..." [(sleep(tsleep); z) for z in 1:n]
-    @test s == [1:n]
+    @test s == [1:n;]
 end
 
 println("Testing @showprogress macro on comprehension")
@@ -101,7 +101,7 @@ function testfunc8(n, dt, tsleep)
                 continue
             end
         end
-        while randbool()
+        while rand(Bool)
             continue
         end
     end
@@ -113,7 +113,7 @@ testfunc8(3000, 0.01, 0.002)
 
 function testfunc9(n, dt, tsleep)
     s = ProgressMeter.@showprogress dt "Calculating..." Float64[(sleep(tsleep); z) for z in 1:n]
-    @test s == [1:n]
+    @test s == [1:n;]
 end
 
 println("Testing @showprogress macro on typed comprehension")
