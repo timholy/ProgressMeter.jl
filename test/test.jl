@@ -139,5 +139,26 @@ testfunc10(107, 105, 0.01, 0.01)
 println("Testing over-shooting progress with finish!...")
 testfunc10(107, 111, 0.01, 0.01)
 
+
+function testfunc11(n, dt, tsleep)
+    f(x) = (sleep(0.1); 2x)
+    s = ProgressMeter.@showprogress dt "Calculating..." [z => f(z) for z in 1:n]
+    @test s == [z => 2z for z in 1:n]
+end
+
+println("Testing @showprogress macro on dict comprehension")
+testfunc11(100, 0.1, 0.01)
+
+
+function testfunc12(n, dt, tsleep)
+    f(x) = (sleep(0.1); 2x)
+    s = ProgressMeter.@showprogress dt "Calculating..." (Int=>Int)[z => f(z) for z in 1:n]
+    @test s == (Int=>Int)[z => 2z for z in 1:n]
+end
+
+println("Testing @showprogress macro on typed dict comprehension")
+testfunc12(100, 0.1, 0.01)
+
+
 println("")
 println("All tests complete")

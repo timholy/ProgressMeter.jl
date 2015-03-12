@@ -162,11 +162,11 @@ macro showprogress(args...)
         @assert length(loop.args) == 2
         assignidx = 1
         loopbodyidx = 2
-    elseif isa(loop, Expr) && loop.head === :comprehension
+    elseif isa(loop, Expr) && loop.head in (:comprehension, :dict_comprehension)
         @assert length(loop.args) == 2
         assignidx = 2
         loopbodyidx = 1
-    elseif isa(loop, Expr) && loop.head === :typed_comprehension
+    elseif isa(loop, Expr) && loop.head in (:typed_comprehension, :typed_dict_comprehension)
         @assert length(loop.args) == 3
         assignidx = 3
         loopbodyidx = 2
@@ -174,19 +174,36 @@ macro showprogress(args...)
         throw(ArgumentError("Final argument to @showprogress must be a for loop or comprehension."))
     end
 
-    loopassign = loop.args[assignidx]
-    @assert loopassign.head == :(=)
-    @assert length(loopassign.args) == 2
-
     newloop = Expr(loop.head, loop.args...)
-    newloop.args[loopbodyidx] = quote
+
+    # Transform the loop body
+    is_dict_comprehension = loop.head in (:dict_comprehension, :typed_dict_comprehension)
+    if is_dict_comprehension
+        @assert loop.args[loopbodyidx].head === :(=>)
+        @assert length(loop.args[loopbodyidx].args) == 2
+        innerbody = loop.args[loopbodyidx].args[2]
+    else
+        innerbody = loop.args[loopbodyidx]
+    end
+    newinnerbody = quote
         begin
-            rv = $(esc(showprogress_process_expr(loop.args[loopbodyidx], metersym)))
+            rv = $(esc(showprogress_process_expr(innerbody, metersym)))
             $(next!)($(esc(metersym)))
             rv
         end
     end
+    if is_dict_comprehension
+        newloop.args[loopbodyidx] = Expr(:(=>), esc(loop.args[loopbodyidx].args[1]), newinnerbody)
+    else
+        newloop.args[loopbodyidx] = newinnerbody
+    end
+
+    # Transform the loop assignment
+    loopassign = loop.args[assignidx]
+    @assert loopassign.head == :(=)
+    @assert length(loopassign.args) == 2
     newloop.args[assignidx] = :($(esc(loopassign.args[1])) = iterable)
+
     return quote
         iterable = $(esc(loopassign.args[2]))
         $(esc(metersym)) = Progress(length(iterable), $([esc(arg) for arg in progressargs]...))
