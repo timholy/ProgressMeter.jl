@@ -151,52 +151,40 @@ macro showprogress(args...)
     progressargs = args[1:end-1]
     loop = args[end]
     metersym = gensym("meter")
+
     if isa(loop, Expr) && loop.head === :for
         @assert length(loop.args) == 2
-        loopassign = loop.args[1]
-        @assert loopassign.head == :(=)
-        @assert length(loopassign.args) == 2
-        return quote
-            iterable = $(esc(loopassign.args[2]))
-            $(esc(metersym)) = Progress(length(iterable), $([esc(arg) for arg in progressargs]...))
-            for $(esc(loopassign.args[1])) in iterable
-                rv = $(esc(showprogress_process_expr(loop.args[2], metersym)))
-                $(next!)($(esc(metersym)))
-                rv
-            end
-        end
+        assignidx = 1
+        loopbodyidx = 2
     elseif isa(loop, Expr) && loop.head === :comprehension
         @assert length(loop.args) == 2
-        loopassign = loop.args[2]
-        @assert loopassign.head == :(=)
-        @assert length(loopassign.args) == 2
-        return quote
-            iterable = $(esc(loopassign.args[2]))
-            $(esc(metersym)) = Progress(length(iterable), $([esc(arg) for arg in progressargs]...))
-            [begin
-                 rv = $(esc(showprogress_process_expr(loop.args[1], metersym)))
-                 $(next!)($(esc(metersym)))
-                 rv
-             end
-             for $(esc(loopassign.args[1])) in iterable]
-        end
+        assignidx = 2
+        loopbodyidx = 1
     elseif isa(loop, Expr) && loop.head === :typed_comprehension
         @assert length(loop.args) == 3
-        loopassign = loop.args[3]
-        @assert loopassign.head == :(=)
-        @assert length(loopassign.args) == 2
-        return quote
-            iterable = $(esc(loopassign.args[2]))
-            $(esc(metersym)) = Progress(length(iterable), $([esc(arg) for arg in progressargs]...))
-            $(loop.args[1])[begin
-                 rv = $(esc(showprogress_process_expr(loop.args[2], metersym)))
-                 $(next!)($(esc(metersym)))
-                 rv
-             end
-             for $(esc(loopassign.args[1])) in iterable]
-        end
+        assignidx = 3
+        loopbodyidx = 2
     else
         throw(ArgumentError("Final argument to @showprogress must be a for loop or comprehension."))
+    end
+
+    loopassign = loop.args[assignidx]
+    @assert loopassign.head == :(=)
+    @assert length(loopassign.args) == 2
+
+    newloop = Expr(loop.head, loop.args...)
+    newloop.args[loopbodyidx] = quote
+        begin
+            rv = $(esc(showprogress_process_expr(loop.args[loopbodyidx], metersym)))
+            $(next!)($(esc(metersym)))
+            rv
+        end
+    end
+    newloop.args[assignidx] = :($(esc(loopassign.args[1])) = iterable)
+    return quote
+        iterable = $(esc(loopassign.args[2]))
+        $(esc(metersym)) = Progress(length(iterable), $([esc(arg) for arg in progressargs]...))
+        $newloop
     end
 end
 
