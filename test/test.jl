@@ -70,6 +70,9 @@ testfunc5(107, 0.01, 0.01, "Computing...", 50)
 
 function testfunc6(n, dt, tsleep)
     ProgressMeter.@showprogress dt for i in 1:n
+        if i == div(n, 2)
+            break
+        end
         if !isprime(i)
             sleep(tsleep)
             continue
@@ -104,10 +107,13 @@ function testfunc8(n, dt, tsleep)
         while rand(Bool)
             continue
         end
+        while true
+            break
+        end
     end
 end
 
-println("Testing @showprogress macro on a for loop with inner loops containing continue statements")
+println("Testing @showprogress macro on a for loop with inner loops containing continue and break statements")
 testfunc8(3000, 0.01, 0.002)
 
 

@@ -129,6 +129,12 @@ end
 function showprogress_process_expr(node, metersym)
     if !isa(node, Expr)
         node
+    elseif node.head === :break
+        # special handling for break statement
+        quote
+            ($finish!)($metersym)
+            $node
+        end
     elseif node.head === :continue
         # special handling for continue statement
         quote
@@ -136,7 +142,7 @@ function showprogress_process_expr(node, metersym)
             $node
         end
     elseif node.head === :for || node.head === :while
-        # do not process continue statements in inner loops
+        # do not process break and continue statements in inner loops
         node
     else
         # process each subexpression recursively
