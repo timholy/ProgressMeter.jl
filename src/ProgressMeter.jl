@@ -14,8 +14,9 @@ type Progress
     desc::String     # prefix to the percentage, e.g.  "Computing..."
     barlen::Int      # progress bar size (default is available terminal width)
     color::Symbol    # default to green
+    output::IO       # output stream into which the progress is written
 
-    function Progress(n::Integer, dt::Real = 1.0, desc::String = "Progress: ", barlen::Int = 0, color::Symbol = :green)
+    function Progress(n::Integer, dt::Real = 1.0, desc::String = "Progress: ", barlen::Int = 0, color::Symbol = :green, output::IO = STDOUT)
         this = new(convert(Int, n), convert(Float64, dt), 0)
         this.tfirst = time()
         this.tlast = this.tfirst
@@ -23,6 +24,7 @@ type Progress
         this.desc = desc
         this.barlen = barlen
         this.color = color
+        this.output = output
         this
     end
 
@@ -35,6 +37,7 @@ type Progress
         #...length of percentage and ETA string with days is 29 characters
         this.barlen = max(0, Base.tty_size()[2] - (length(desc)+29))
         this.color = :green
+        this.output = STDOUT
         this
     end
 end
@@ -48,8 +51,8 @@ function next!(p::Progress)
             bar = barstring(p.barlen, percentage_complete)
             dur = durationstring(t-p.tfirst)
             msg = @sprintf "%s%3u%%%s Time: %s" p.desc round(Int, percentage_complete) bar dur
-            printover(msg, p.color)
-            println()
+            printover(p.output, msg, p.color)
+            println(p.output)
         end
         return
     end
@@ -62,7 +65,7 @@ function next!(p::Progress)
         eta_sec = round(Int, est_total_time - elapsed_time )
         eta = durationstring(eta_sec)
         msg = @sprintf "%s%3u%%%s  ETA: %s" p.desc round(Int, percentage_complete) bar eta
-        printover(msg, p.color)
+        printover(p.output, msg, p.color)
         # Compensate for any overhead of printing. This can be especially important
         # if you're running over a slow network connection.
         p.tlast = t + 2*(time()-t)
@@ -77,8 +80,8 @@ end
 
 function cancel(p::Progress, msg::String = "Aborted before all tasks were completed", color = :red)
     if p.printed
-        printover(msg, color)
-        println()
+        printover(p.output, msg, color)
+        println(p.output)
     end
     return
 end
@@ -98,8 +101,6 @@ function printover(io::IO, s::String, color::Symbol = :color_normal)
         print(io, "\u1b[K")    # clear the rest of the line
     end
 end
-
-printover(s::String, color::Symbol = :color_normal) = printover(STDOUT, s, color)
 
 function barstring(barlen, percentage_complete; solidglyph="█", emptyglyph=" ")
     bar = ""
