@@ -16,7 +16,7 @@ type Progress
     color::Symbol    # default to green
     output::IO       # output stream into which the progress is written
 
-    function Progress(n::Integer; dt::Real=1.0, desc::String="Progress: ", color::Symbol=:green, output::IO=STDOUT,
+    function Progress(n::Integer; dt::Real=0.01, desc::String="Progress: ", color::Symbol=:green, output::IO=STDOUT,
                       #...length of percentage and ETA string with days is 29 characters
                       barlen::Int=max(0, Base.tty_size()[2] - (length(desc)+29)))
         counter = 0
@@ -29,7 +29,7 @@ end
 Progress(n::Integer, dt::Real=1.0, desc::String="Progress: ", barlen::Int=0, color::Symbol=:green, output::IO=STDOUT) =
     Progress(n, dt=dt, desc=desc, barlen=barlen, color=color, output=output)
 
-Progress(n::Integer, desc::String) = Progress(n, dt=0.01, desc=desc)
+Progress(n::Integer, desc::String) = Progress(n, desc=desc)
 
 function next!(p::Progress)
     t = time()
