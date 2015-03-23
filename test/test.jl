@@ -160,5 +160,24 @@ println("Testing @showprogress macro on typed dict comprehension")
 testfunc12(100, 0.1, 0.01)
 
 
+function testfunc13()
+    n = 30
+    # minimal
+    p = ProgressMeter.Progress(n)
+    for n in 1:n
+        sleep(0.1)
+        ProgressMeter.next!(p)
+    end
+    # maximal
+    p = ProgressMeter.Progress(n, dt=0.01, desc="", color=:red, output=STDERR, barlen=40)
+    for n in 1:n
+        sleep(0.1)
+        ProgressMeter.next!(p)
+    end
+end
+
+println("Testing keyword arguments")
+testfunc13()
+
 println("")
 println("All tests complete")
