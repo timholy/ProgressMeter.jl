@@ -163,14 +163,17 @@ macro showprogress(args...)
         @assert length(loop.args) == 2
         assignidx = 1
         loopbodyidx = 2
+        is_comprehension = false
     elseif isa(loop, Expr) && loop.head in (:comprehension, :dict_comprehension)
         @assert length(loop.args) == 2
         assignidx = 2
         loopbodyidx = 1
+        is_comprehension = true
     elseif isa(loop, Expr) && loop.head in (:typed_comprehension, :typed_dict_comprehension)
         @assert length(loop.args) == 3
         assignidx = 3
         loopbodyidx = 2
+        is_comprehension = true
     else
         throw(ArgumentError("Final argument to @showprogress must be a for loop or comprehension."))
     end
@@ -186,11 +189,20 @@ macro showprogress(args...)
     else
         innerbody = loop.args[loopbodyidx]
     end
-    newinnerbody = quote
-        begin
-            rv = $(esc(showprogress_process_expr(innerbody, metersym)))
-            $(next!)($(esc(metersym)))
-            rv
+    if is_comprehension
+        newinnerbody = quote
+            begin
+                rv = $(esc(showprogress_process_expr(innerbody, metersym)))
+                $(next!)($(esc(metersym)))
+                rv
+            end
+        end
+    else
+        newinnerbody = quote
+            begin
+                $(esc(showprogress_process_expr(innerbody, metersym)))
+                $(next!)($(esc(metersym)))
+            end
         end
     end
     if is_dict_comprehension

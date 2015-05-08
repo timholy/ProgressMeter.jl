@@ -160,5 +160,14 @@ println("Testing @showprogress macro on typed dict comprehension")
 testfunc12(100, 0.1, 0.01)
 
 
+function testfunc13()
+    ProgressMeter.@showprogress 1 for i=1:10
+        return
+    end
+end
+
+println("Testing @showprogress macro on loop ending with return statement")
+testfunc13()
+
 println("")
 println("All tests complete")
