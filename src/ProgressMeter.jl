@@ -130,8 +130,8 @@ end
 function showprogress_process_expr(node, metersym)
     if !isa(node, Expr)
         node
-    elseif node.head === :break
-        # special handling for break statement
+    elseif node.head === :break || node.head === :return
+        # special handling for break and return statements
         quote
             ($finish!)($metersym)
             $node
