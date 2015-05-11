@@ -31,6 +31,28 @@ You should see a green status line that indicates progress during this computati
 
 If your computation runs so quickly that it never needs to show progress, no extraneous output will be displayed.
 
+For tasks such as reading file data where the progress increment varies between iterations, you can use `update!`:
+
+```julia
+using ProgressMeter
+
+function readFileLines(fileName::String)
+    file = open(fileName,"r")
+    
+    seekend(file)
+    fileSize = position(file)
+    
+    seekstart(file)
+    p = Progress(fileSize, 1)   # minimum update interval: 1 second
+    while !eof(file)
+        line = readline(file)
+        # Here's where you do all the hard, slow work
+        
+        update!(p, position(file))
+    end
+end
+```
+
 Optionally, a description string can be specified which will be prepended to the output, and a progress meter `M` characters long can be shown.  E.g. 
 
 ```julia
