@@ -2,7 +2,7 @@ module ProgressMeter
 
 using Compat
 
-export Progress, next!, cancel, finish!, @showprogress
+export Progress, next!, update!, cancel, finish!, @showprogress
 
 type Progress
     n::Int
@@ -42,9 +42,9 @@ type Progress
     end
 end
 
-function next!(p::Progress)
+# update progress display
+function updateProgress!(p::Progress)
     t = time()
-    p.counter += 1
     if p.counter >= p.n
         if p.counter == p.n && p.printed
             percentage_complete = 100.0 * p.counter / p.n
@@ -73,9 +73,26 @@ function next!(p::Progress)
     end
 end
 
+function next!(p::Progress)
+    p.counter += 1
+    updateProgress!(p)
+end
+
 function next!(p::Progress, color::Symbol)
   p.color = color
   next!(p)
+end
+
+
+# for custom progress value 'counter'
+function update!(p::Progress, counter::Int)
+  p.counter = counter
+  updateProgress!(p)
+end
+
+function update!(p::Progress, counter::Int, color::Symbol)
+  p.color = color
+  update!(p, counter)
 end
 
 function cancel(p::Progress, msg::String = "Aborted before all tasks were completed", color = :red)
