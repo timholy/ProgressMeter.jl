@@ -1,6 +1,8 @@
 import ProgressMeter
 import Base.Test.@test
 
+using Compat
+
 function testfunc(n, dt, tsleep)
     p = ProgressMeter.Progress(n, dt)
     for i = 1:n
@@ -80,8 +82,21 @@ function testfunc6(n, dt, tsleep)
     end
 end
 
+function testfunc6a(n, dt, tsleep)
+    ProgressMeter.@showprogress dt for i in 1:n, j in 1:n
+        if i == div(n, 2)
+            break
+        end
+        if !isprime(i)
+            sleep(tsleep)
+            continue
+        end
+    end
+end
+
 println("Testing @showprogress macro on for loop")
 testfunc6(3000, 0.01, 0.002)
+testfunc6a(30, 0.01, 0.002)
 
 
 function testfunc7(n, dt, tsleep)
@@ -89,8 +104,14 @@ function testfunc7(n, dt, tsleep)
     @test s == [1:n;]
 end
 
+function testfunc7a(n, dt, tsleep)
+    s = ProgressMeter.@showprogress dt "Calculating..." [(sleep(tsleep); z) for z in 1:n, y in 1:n]
+    @test s == [z for z in 1:n, y in 1:n]
+end
+
 println("Testing @showprogress macro on comprehension")
-testfunc7(100, 0.1, 0.01)
+testfunc7(25, 0.1, 0.1)
+testfunc7a(5, 0.1, 0.1)
 
 
 function testfunc8(n, dt, tsleep)
@@ -122,8 +143,14 @@ function testfunc9(n, dt, tsleep)
     @test s == [1:n;]
 end
 
+function testfunc9a(n, dt, tsleep)
+    s = ProgressMeter.@showprogress dt "Calculating..." Float64[(sleep(tsleep); z) for z in 1:n, y in 1:n]
+    @test s == [z for z in 1:n, y in 1:n]
+end
+
 println("Testing @showprogress macro on typed comprehension")
 testfunc9(100, 0.1, 0.01)
+testfunc9a(10, 0.1, 0.01)
 
 
 function testfunc10(n, k, dt, tsleep)
@@ -146,8 +173,15 @@ function testfunc11(n, dt, tsleep)
     @test s == [z => 2z for z in 1:n]
 end
 
+function testfunc11a(n, dt, tsleep)
+    f(x) = (sleep(tsleep); 2x)
+    s = ProgressMeter.@showprogress dt "Calculating..." [(y,z) => f(z) for z in 1:n, y in 1:n]
+    @test s == [(y,z) => 2z for z in 1:n, y in 1:n]
+end
+
 println("Testing @showprogress macro on dict comprehension")
-testfunc11(100, 0.1, 0.01)
+testfunc11(100, 0.1, 0.1)
+testfunc11a(10, 0.1, 0.1)
 
 
 function testfunc12(n, dt, tsleep)
@@ -156,8 +190,15 @@ function testfunc12(n, dt, tsleep)
     @test s == (Int=>Int)[z => 2z for z in 1:n]
 end
 
+function testfunc12a(n, dt, tsleep)
+    f(x) = (sleep(tsleep); 2x)
+    s = ProgressMeter.@showprogress dt "Calculating..." (@compat(Tuple{Int,Int})=>Int)[(y,z) => f(z) for z in 1:n, y in 1:n]
+    @test s == (@compat(Tuple{Int,Int})=>Int)[(y,z) => 2z for z in 1:n, y in 1:n]
+end
+
 println("Testing @showprogress macro on typed dict comprehension")
-testfunc12(100, 0.1, 0.01)
+testfunc12(100, 0.1, 0.1)
+testfunc12a(10, 0.1, 0.1)
 
 
 function testfunc13()
