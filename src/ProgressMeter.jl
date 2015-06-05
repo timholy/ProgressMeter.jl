@@ -79,20 +79,20 @@ function next!(p::Progress)
 end
 
 function next!(p::Progress, color::Symbol)
-  p.color = color
-  next!(p)
+    p.color = color
+    next!(p)
 end
 
 
 # for custom progress value 'counter'
 function update!(p::Progress, counter::Int)
-  p.counter = counter
-  updateProgress!(p)
+    p.counter = counter
+    updateProgress!(p)
 end
 
 function update!(p::Progress, counter::Int, color::Symbol)
-  p.color = color
-  update!(p, counter)
+    p.color = color
+    update!(p, counter)
 end
 
 function cancel(p::Progress, msg::String = "Aborted before all tasks were completed", color = :red)
