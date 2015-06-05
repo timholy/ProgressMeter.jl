@@ -153,19 +153,34 @@ function showprogress_process_expr(node, metersym)
             ($finish!)($metersym)
             $node
         end
-    elseif node.head === :continue
-        # special handling for continue statement
-        quote
-            ($next!)($metersym)
-            $node
-        end
     elseif node.head === :for || node.head === :while
-        # do not process break and continue statements in inner loops
+        # do not process inner loops
+        #
+        # FIXME: do not process break and return statements in inner functions
+        # either
         node
     else
         # process each subexpression recursively
         Expr(node.head, [showprogress_process_expr(a, metersym) for a in node.args]...)
     end
+end
+
+immutable ProgressWrapper{T}
+    obj::T
+    meter::Progress
+end
+
+ProgressWrapper{T}(obj::T, meter::Progress) = ProgressWrapper{T}(obj, meter)
+
+Base.length(wrap::ProgressWrapper) = Base.length(wrap.obj)
+Base.start(wrap::ProgressWrapper) = (Base.start(wrap.obj), true)
+Base.done(wrap::ProgressWrapper, state) = Base.done(wrap.obj, state[1])
+
+function Base.next(wrap::ProgressWrapper, state)
+    st, firstiteration = state
+    firstiteration || next!(wrap.meter)
+    i, st = Base.next(wrap.obj, st)
+    return (i, (st, false))
 end
 
 macro showprogress(args...)
@@ -177,67 +192,66 @@ macro showprogress(args...)
     metersym = gensym("meter")
 
     if isa(loop, Expr) && loop.head === :for
-        @assert length(loop.args) == 2
-        assignidx = 1
-        loopbodyidx = 2
-        is_comprehension = false
+        outerassignidx = 1
+        loopbodyidx = endof(loop.args)
     elseif isa(loop, Expr) && loop.head in (:comprehension, :dict_comprehension)
-        @assert length(loop.args) == 2
-        assignidx = 2
+        outerassignidx = endof(loop.args)
         loopbodyidx = 1
-        is_comprehension = true
     elseif isa(loop, Expr) && loop.head in (:typed_comprehension, :typed_dict_comprehension)
-        @assert length(loop.args) == 3
-        assignidx = 3
+        outerassignidx = endof(loop.args)
         loopbodyidx = 2
-        is_comprehension = true
     else
         throw(ArgumentError("Final argument to @showprogress must be a for loop or comprehension."))
     end
 
-    newloop = Expr(loop.head, loop.args...)
+    loop = copy(loop)
 
-    # Transform the loop body
-    is_dict_comprehension = loop.head in (:dict_comprehension, :typed_dict_comprehension)
-    if is_dict_comprehension
-        @assert loop.args[loopbodyidx].head === :(=>)
-        @assert length(loop.args[loopbodyidx].args) == 2
-        innerbody = loop.args[loopbodyidx].args[2]
-    else
-        innerbody = loop.args[loopbodyidx]
+    # Transform the first loop assignment
+    loopassign = loop.args[outerassignidx] = copy(loop.args[outerassignidx])
+    if loopassign.head === :block # this will happen in a for loop with multiple iteration variables
+        for i in 2:length(loopassign.args)
+            loopassign.args[i] = esc(loopassign.args[i])
+        end
+        loopassign = loopassign.args[1] = copy(loopassign.args[1])
     end
-    if is_comprehension
-        newinnerbody = quote
+    @assert loopassign.head === :(=)
+    @assert length(loopassign.args) == 2
+    obj = loopassign.args[2]
+    loopassign.args[1] = esc(loopassign.args[1])
+    loopassign.args[2] = :(ProgressWrapper(iterable, $(esc(metersym))))
+
+    # Transform the loop body break and return statements
+    if loop.head === :for
+        loop.args[loopbodyidx] = showprogress_process_expr(loop.args[loopbodyidx], metersym)
+    end
+
+    # Escape all args except the loop assignment, which was already appropriately escaped.
+    for i in 1:length(loop.args)
+        if i != outerassignidx
+            loop.args[i] = esc(loop.args[i])
+        end
+    end
+
+    setup = quote
+        iterable = $(esc(obj))
+        $(esc(metersym)) = Progress(length(iterable), $([esc(arg) for arg in progressargs]...))
+    end
+
+    if loop.head === :for
+        return quote
+            $setup
+            $loop
+        end
+    else
+        # We're dealing with a comprehension
+        return quote
             begin
-                rv = $(esc(showprogress_process_expr(innerbody, metersym)))
-                $(next!)($(esc(metersym)))
+                $setup
+                rv = $loop
+                next!($(esc(metersym)))
                 rv
             end
         end
-    else
-        newinnerbody = quote
-            begin
-                $(esc(showprogress_process_expr(innerbody, metersym)))
-                $(next!)($(esc(metersym)))
-            end
-        end
-    end
-    if is_dict_comprehension
-        newloop.args[loopbodyidx] = Expr(:(=>), esc(loop.args[loopbodyidx].args[1]), newinnerbody)
-    else
-        newloop.args[loopbodyidx] = newinnerbody
-    end
-
-    # Transform the loop assignment
-    loopassign = loop.args[assignidx]
-    @assert loopassign.head == :(=)
-    @assert length(loopassign.args) == 2
-    newloop.args[assignidx] = :($(esc(loopassign.args[1])) = iterable)
-
-    return quote
-        iterable = $(esc(loopassign.args[2]))
-        $(esc(metersym)) = Progress(length(iterable), $([esc(arg) for arg in progressargs]...))
-        $newloop
     end
 end
 
