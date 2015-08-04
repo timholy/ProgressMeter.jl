@@ -174,7 +174,12 @@ ProgressWrapper{T}(obj::T, meter::Progress) = ProgressWrapper{T}(obj, meter)
 
 Base.length(wrap::ProgressWrapper) = Base.length(wrap.obj)
 Base.start(wrap::ProgressWrapper) = (Base.start(wrap.obj), true)
-Base.done(wrap::ProgressWrapper, state) = Base.done(wrap.obj, state[1])
+
+function Base.done(wrap::ProgressWrapper, state)
+    done = Base.done(wrap.obj, state[1])
+    done && finish!(wrap.meter)
+    return done
+end
 
 function Base.next(wrap::ProgressWrapper, state)
     st, firstiteration = state
