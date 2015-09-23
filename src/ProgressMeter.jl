@@ -12,13 +12,13 @@ type Progress
     counter::Int
     tfirst::Float64
     tlast::Float64
-    printed::Bool    # true if we have issued at least one status update
-    desc::String     # prefix to the percentage, e.g.  "Computing..."
-    barlen::Int      # progress bar size (default is available terminal width)
-    color::Symbol    # default to green
-    output::IO       # output stream into which the progress is written
+    printed::Bool        # true if we have issued at least one status update
+    desc::AbstractString # prefix to the percentage, e.g.  "Computing..."
+    barlen::Int          # progress bar size (default is available terminal width)
+    color::Symbol        # default to green
+    output::IO           # output stream into which the progress is written
 
-    function Progress(n::Integer, dt::Real = 1.0, desc::String = "Progress: ", barlen::Int = 0, color::Symbol = :green, output::IO = STDOUT)
+    function Progress(n::Integer, dt::Real = 1.0, desc::AbstractString = "Progress: ", barlen::Int = 0, color::Symbol = :green, output::IO = STDOUT)
         this = new(convert(Int, n), convert(Float64, dt), 0)
         this.tfirst = time()
         this.tlast = this.tfirst
@@ -30,7 +30,7 @@ type Progress
         this
     end
 
-    function Progress(n::Integer, desc::String = "Progress: ")
+    function Progress(n::Integer, desc::AbstractString = "Progress: ")
         this = new(convert(Int, n), convert(Float64, 0.01), 0)
         this.tfirst = time()
         this.tlast = this.tfirst
@@ -97,7 +97,7 @@ function update!(p::Progress, counter::Int, color::Symbol)
     update!(p, counter)
 end
 
-function cancel(p::Progress, msg::String = "Aborted before all tasks were completed", color = :red)
+function cancel(p::Progress, msg::AbstractString = "Aborted before all tasks were completed", color = :red)
     if p.printed
         printover(p.output, msg, color)
         println(p.output)
@@ -111,7 +111,7 @@ function finish!(p::Progress)
     end
 end
 
-function printover(io::IO, s::String, color::Symbol = :color_normal)
+function printover(io::IO, s::AbstractString, color::Symbol = :color_normal)
     if isdefined(Main, :IJulia)
         print(io, "\r" * s)
     else
