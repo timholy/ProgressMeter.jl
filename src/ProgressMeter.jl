@@ -112,7 +112,7 @@ function finish!(p::Progress)
 end
 
 function printover(io::IO, s::AbstractString, color::Symbol = :color_normal)
-    if isdefined(Main, :IJulia)
+    if isdefined(Main, :IJulia) || isdefined(Main, :ESS)
         print(io, "\r" * s)
     else
         print(io, "\u1b[1G")   # go to first column
