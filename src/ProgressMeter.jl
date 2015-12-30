@@ -18,31 +18,27 @@ type Progress
     color::Symbol        # default to green
     output::IO           # output stream into which the progress is written
 
-    function Progress(n::Integer, dt::Real = 1.0, desc::AbstractString = "Progress: ", barlen::Int = 0, color::Symbol = :green, output::IO = STDOUT)
-        this = new(convert(Int, n), convert(Float64, dt), 0)
-        this.tfirst = time()
-        this.tlast = this.tfirst
-        this.printed = false
-        this.desc = desc
-        this.barlen = barlen
-        this.color = color
-        this.output = output
-        this
-    end
-
-    function Progress(n::Integer, desc::AbstractString = "Progress: ")
-        this = new(convert(Int, n), convert(Float64, 0.01), 0)
-        this.tfirst = time()
-        this.tlast = this.tfirst
-        this.printed = false
-        this.desc = desc
-        #...length of percentage and ETA string with days is 29 characters
-        this.barlen = max(0, Base.tty_size()[2] - (length(desc)+29))
-        this.color = :green
-        this.output = STDOUT
-        this
+    function Progress(n::Integer;
+                      dt::Real=0.1,
+                      desc::AbstractString="Progress: ",
+                      color::Symbol=:green,
+                      output::IO=STDOUT,
+                      barlen::Integer=tty_width(desc))
+        counter = 0
+        tfirst = tlast = time()
+        printed = false
+        new(n, dt, counter, tfirst, tlast, printed, desc, barlen, color, output)
     end
 end
+
+Progress(n::Integer, dt::Real=0.1, desc::AbstractString="Progress: ",
+         barlen::Integer=0, color::Symbol=:green, output::IO=STDOUT) =
+    Progress(n, dt=dt, desc=desc, barlen=barlen, color=color, output=output)
+
+Progress(n::Integer, desc::AbstractString) = Progress(n, desc=desc)
+
+#...length of percentage and ETA string with days is 29 characters
+tty_width(desc) = max(0, Base.tty_size()[2] - (length(desc) + 29))
 
 # update progress display
 function updateProgress!(p::Progress)
