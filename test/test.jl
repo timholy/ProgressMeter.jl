@@ -210,5 +210,24 @@ end
 println("Testing @showprogress macro on loop ending with return statement")
 testfunc13()
 
+function testfunc13()
+    n = 30
+    # no keyword arguments
+    p = ProgressMeter.Progress(n)
+    for n in 1:n
+        sleep(0.1)
+        ProgressMeter.next!(p)
+    end
+    # full keyword argumetns
+    p = ProgressMeter.Progress(n, dt=0.01, desc="", color=:red, output=STDERR, barlen=40)
+    for n in 1:n
+        sleep(0.1)
+        ProgressMeter.next!(p)
+    end
+end
+
+println("Testing keyword arguments")
+testfunc13()
+
 println("")
 println("All tests complete")
