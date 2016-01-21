@@ -6,6 +6,26 @@ using Compat
 
 export Progress, next!, update!, cancel, finish!, @showprogress
 
+"""
+`ProgressMeter` contains a suite of utilities for displaying progress
+in long-running computations. The major functions/types in this module
+are:
+
+- `@showprogress`: an easy interface for straightforward situations
+- `Progress`: an object for managing progress updates
+- `next!` and `update!`: report that progress has been made
+- `cancel` and `finish!`: early termination
+"""
+ProgressMeter
+
+"""
+`prog = Progress(n; dt=0.1, desc="Progress: ", color=:green,
+output=STDOUT, barlen=tty_width(desc))` creates a progress meter for a
+task with `n` iterations or stages. Output will be generated at
+intervals at least `dt` seconds apart, and perhaps longer if each
+iteration takes longer than `dt`. `desc` is a description describing
+the current task.
+"""
 type Progress
     n::Int
     dt::Float64
@@ -71,6 +91,13 @@ function updateProgress!(p::Progress)
     end
 end
 
+"""
+`next!(prog, [color])` reports that one unit of progress has been
+made. Depending on the time interval since the last update, this may
+or may not result in a change to the display.
+
+You may optionally change the color of the display. See also `update!`.
+"""
 function next!(p::Progress)
     p.counter += 1
     updateProgress!(p)
@@ -82,7 +109,15 @@ function next!(p::Progress, color::Symbol)
 end
 
 
-# for custom progress value 'counter'
+
+"""
+`update!(prog, counter, [color])` sets the progress counter to
+`counter`, relative to the `n` units of progress specified when `prog`
+was initialized.  Depending on the time interval since the last
+update, this may or may not result in a change to the display.
+
+You may optionally change the color of the display. See also `next!`.
+"""
 function update!(p::Progress, counter::Int)
     p.counter = counter
     updateProgress!(p)
@@ -93,6 +128,13 @@ function update!(p::Progress, counter::Int, color::Symbol)
     update!(p, counter)
 end
 
+"""
+`cancel(prog, [msg], [color=:red])` cancels the progress display
+before all tasks were completed. Optionally you can specify the
+message printed and its color.
+
+See also `finish!`.
+"""
 function cancel(p::Progress, msg::AbstractString = "Aborted before all tasks were completed", color = :red)
     if p.printed
         printover(p.output, msg, color)
@@ -101,6 +143,11 @@ function cancel(p::Progress, msg::AbstractString = "Aborted before all tasks wer
     return
 end
 
+"""
+`finish!(prog)` indicates that all tasks have been completed.
+
+See also `cancel`.
+"""
 function finish!(p::Progress)
     while p.counter < p.n
         next!(p)
@@ -186,6 +233,19 @@ function Base.next(wrap::ProgressWrapper, state)
     return (i, (st, false))
 end
 
+"""
+```
+@showprogress dt "Computing..." for i = 1:50
+    # computation goes here
+end
+```
+displays progress in performing a computation. `dt` is the minimum
+interval between updates to the user. You may optionally supply a
+custom message to be printed that specifies the computation being
+performed.
+
+`@showprogress` works for both loops and comprehensions.
+"""
 macro showprogress(args...)
     if length(args) < 1
         throw(ArgumentError("@showprogress requires at least one argument."))
