@@ -35,22 +35,24 @@ type Progress <: AbstractProgress
     counter::Int
     tfirst::Float64
     tlast::Float64
-    printed::Bool        # true if we have issued at least one status update
-    desc::AbstractString # prefix to the percentage, e.g.  "Computing..."
-    barlen::Int          # progress bar size (default is available terminal width)
-    color::Symbol        # default to green
-    output::IO           # output stream into which the progress is written
+    printed::Bool           # true if we have issued at least one status update
+    desc::AbstractString    # prefix to the percentage, e.g.  "Computing..."
+    barlen::Int             # progress bar size (default is available terminal width)
+    barspec::AbstractString # string specifying the characters to be used in the bar
+    color::Symbol           # default to green
+    output::IO              # output stream into which the progress is written
 
     function Progress(n::Integer;
                       dt::Real=0.1,
                       desc::AbstractString="Progress: ",
                       color::Symbol=:green,
                       output::IO=STDOUT,
-                      barlen::Integer=tty_width(desc))
+                      barlen::Integer=tty_width(desc),
+                      barspec::AbstractString="|██ |")
         counter = 0
         tfirst = tlast = time()
         printed = false
-        new(n, dt, counter, tfirst, tlast, printed, desc, barlen, color, output)
+        new(n, dt, counter, tfirst, tlast, printed, desc, barlen, barspec, color, output)
     end
 end
 
@@ -108,7 +110,7 @@ function updateProgress!(p::Progress)
     if p.counter >= p.n
         if p.counter == p.n && p.printed
             percentage_complete = 100.0 * p.counter / p.n
-            bar = barstring(p.barlen, percentage_complete)
+            bar = barstring(p.barlen, percentage_complete, barspec=p.barspec)
             dur = durationstring(t-p.tfirst)
             msg = @sprintf "%s%3u%%%s Time: %s" p.desc round(Int, percentage_complete) bar dur
             printover(p.output, msg, p.color)
@@ -119,7 +121,7 @@ function updateProgress!(p::Progress)
 
     if t > p.tlast+p.dt
         percentage_complete = 100.0 * p.counter / p.n
-        bar = barstring(p.barlen, percentage_complete)
+        bar = barstring(p.barlen, percentage_complete, barspec=p.barspec)
         elapsed_time = t - p.tfirst
         est_total_time = 100 * elapsed_time / percentage_complete
         eta_sec = round(Int, est_total_time - elapsed_time )
@@ -252,12 +254,29 @@ function printover(io::IO, s::AbstractString, color::Symbol = :color_normal)
     end
 end
 
-function barstring(barlen, percentage_complete; solidglyph="█", emptyglyph=" ")
+function barstring(barlen, percentage_complete; barspec::AbstractString="|██ |")
     bar = ""
+    local leftglyph, solidglyph, frontglyph, emptyglyph, rightglyph
+    try
+        glyphs = collect(graphemes(barspec))
+        @assert length(glyphs) == 5
+        leftglyph = glyphs[1]
+        solidglyph = glyphs[2]
+        frontglyph = glyphs[3]
+        emptyglyph = glyphs[4]
+        rightglyph = glyphs[5]
+    catch ex
+        error("""
+            Invalid ProgressMeter barspec.
+            You supplied "$barspec".
+            Note barspec must be exactly 5 characters (technically, graphemes) long, e.g. "[=> ]".
+            (Original exception was $ex)
+        """)
+    end
     if barlen>0
         nsolid = round(Int, barlen * percentage_complete / 100)
         nempty = barlen - nsolid
-        bar = string("|", repeat(solidglyph, nsolid), repeat(emptyglyph, nempty), "|")
+        bar = string(leftglyph, repeat(solidglyph, max(0,nsolid-1)), nsolid>0?frontglyph:"", repeat(emptyglyph, nempty), rightglyph)
     end
     bar
 end
