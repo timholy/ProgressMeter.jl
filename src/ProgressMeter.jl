@@ -256,12 +256,23 @@ end
 
 function barstring(barlen, percentage_complete; barspec::AbstractString="|██ |")
     bar = ""
-    glyphs = collect(graphemes(barspec))
-    leftglyph = glyphs[1]
-    solidglyph = glyphs[2]
-    frontglyph = glyphs[3]
-    emptyglyph = glyphs[4]
-    rightglyph = glyphs[5]
+    local leftglyph, solidglyph, frontglyph, emptyglyph, rightglyph
+    try
+        glyphs = collect(graphemes(barspec))
+        @assert length(glyphs) == 5
+        leftglyph = glyphs[1]
+        solidglyph = glyphs[2]
+        frontglyph = glyphs[3]
+        emptyglyph = glyphs[4]
+        rightglyph = glyphs[5]
+    catch ex
+        error("""
+            Invalid ProgressMeter barspec.
+            You supplied "$barspec".
+            Note barspec must be exactly 5 characters (technically, graphemes) long, e.g. "[=> ]".
+            (Original exception was $ex)
+        """)
+    end
     if barlen>0
         nsolid = round(Int, barlen * percentage_complete / 100)
         nempty = barlen - nsolid

@@ -1,5 +1,6 @@
 import ProgressMeter
 import Base.Test.@test
+import Base.Test.@test_throws
 
 using Compat
 
@@ -226,24 +227,22 @@ function testfunc13()
     end
 end
 
-println("Testing keyword arguments and barspec")
+println("Testing keyword arguments")
 testfunc13()
 
-function testfunc14()
+function testfunc14(barspec)
     n = 30
-    # no keyword arguments
-    p = ProgressMeter.Progress(n)
-    for n in 1:n
-        sleep(0.1)
-        ProgressMeter.next!(p)
-    end
     # full keyword argumetns
-    p = ProgressMeter.Progress(n, dt=0.01, desc="", color=:red, output=STDERR, barlen=40, barspec="[=> ]")
+    p = ProgressMeter.Progress(n, barspec=barspec)
     for n in 1:n
         sleep(0.1)
         ProgressMeter.next!(p)
     end
 end
+
+println("Testing barspec")
+testfunc14("[=> ]")
+@test_throws ErrorException testfunc14("gklelt")
 
 # Threshold-based progress reports
 println("Testing threshold-based progress")
