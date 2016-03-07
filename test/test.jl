@@ -226,8 +226,24 @@ function testfunc13()
     end
 end
 
-println("Testing keyword arguments")
+println("Testing keyword arguments and barspec")
 testfunc13()
+
+function testfunc14()
+    n = 30
+    # no keyword arguments
+    p = ProgressMeter.Progress(n)
+    for n in 1:n
+        sleep(0.1)
+        ProgressMeter.next!(p)
+    end
+    # full keyword argumetns
+    p = ProgressMeter.Progress(n, dt=0.01, desc="", color=:red, output=STDERR, barlen=40, barspec="[=> ]")
+    for n in 1:n
+        sleep(0.1)
+        ProgressMeter.next!(p)
+    end
+end
 
 # Threshold-based progress reports
 println("Testing threshold-based progress")
