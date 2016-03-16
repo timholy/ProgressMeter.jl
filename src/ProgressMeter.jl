@@ -4,7 +4,7 @@ module ProgressMeter
 
 using Compat
 
-export Progress, ProgressThresh, next!, update!, cancel, finish!, @showprogress
+export Progress, ProgressThresh, BarGlyphs, next!, update!, cancel, finish!, @showprogress
 
 """
 `ProgressMeter` contains a suite of utilities for displaying progress
@@ -20,6 +20,33 @@ are:
 ProgressMeter
 
 abstract AbstractProgress
+
+
+
+"""
+Holds the five characters that will be used to generate the progress bar.
+"""
+type BarGlyphs
+    leftend::Char
+    fill::Char
+    front::Char
+    empty::Char
+    rightend::Char
+end
+"""
+String constructor for BarGlyphs - will split the string into 5 chars
+"""
+function BarGlyphs(s::AbstractString)
+    glyphs = (s...)
+    if !isa(glyphs, NTuple{5,Char}) 
+        error("""
+            Invalid string in BarGlyphs constructor.
+            You supplied "$s".
+            Note: string argument must be exactly 5 characters long, e.g. "[=> ]".
+        """)
+    end
+    return BarGlyphs(glyphs...)
+end
 
 """
 `prog = Progress(n; dt=0.1, desc="Progress: ", color=:green,
@@ -38,7 +65,7 @@ type Progress <: AbstractProgress
     printed::Bool           # true if we have issued at least one status update
     desc::AbstractString    # prefix to the percentage, e.g.  "Computing..."
     barlen::Int             # progress bar size (default is available terminal width)
-    barspec::AbstractString # string specifying the characters to be used in the bar
+    barglyphs::BarGlyphs    # the characters to be used in the bar
     color::Symbol           # default to green
     output::IO              # output stream into which the progress is written
 
@@ -48,11 +75,11 @@ type Progress <: AbstractProgress
                       color::Symbol=:green,
                       output::IO=STDOUT,
                       barlen::Integer=tty_width(desc),
-                      barspec::AbstractString="|██ |")
+                      barglyphs::BarGlyphs=BarGlyphs("|██ |"))
         counter = 0
         tfirst = tlast = time()
         printed = false
-        new(n, dt, counter, tfirst, tlast, printed, desc, barlen, barspec, color, output)
+        new(n, dt, counter, tfirst, tlast, printed, desc, barlen, barglyphs, color, output)
     end
 end
 
@@ -110,7 +137,7 @@ function updateProgress!(p::Progress)
     if p.counter >= p.n
         if p.counter == p.n && p.printed
             percentage_complete = 100.0 * p.counter / p.n
-            bar = barstring(p.barlen, percentage_complete, barspec=p.barspec)
+            bar = barstring(p.barlen, percentage_complete, barglyphs=p.barglyphs)
             dur = durationstring(t-p.tfirst)
             msg = @sprintf "%s%3u%%%s Time: %s" p.desc round(Int, percentage_complete) bar dur
             printover(p.output, msg, p.color)
@@ -121,7 +148,7 @@ function updateProgress!(p::Progress)
 
     if t > p.tlast+p.dt
         percentage_complete = 100.0 * p.counter / p.n
-        bar = barstring(p.barlen, percentage_complete, barspec=p.barspec)
+        bar = barstring(p.barlen, percentage_complete, barglyphs=p.barglyphs)
         elapsed_time = t - p.tfirst
         est_total_time = 100 * elapsed_time / percentage_complete
         eta_sec = round(Int, est_total_time - elapsed_time )
@@ -254,29 +281,20 @@ function printover(io::IO, s::AbstractString, color::Symbol = :color_normal)
     end
 end
 
-function barstring(barlen, percentage_complete; barspec::AbstractString="|██ |")
+function barstring(barlen, percentage_complete; barglyphs::BarGlyphs=BarGlyphs('|','█','█',' ','|'))
     bar = ""
-    local leftglyph, solidglyph, frontglyph, emptyglyph, rightglyph
-    try
-        glyphs = collect(graphemes(barspec))
-        @assert length(glyphs) == 5
-        leftglyph = glyphs[1]
-        solidglyph = glyphs[2]
-        frontglyph = glyphs[3]
-        emptyglyph = glyphs[4]
-        rightglyph = glyphs[5]
-    catch ex
-        error("""
-            Invalid ProgressMeter barspec.
-            You supplied "$barspec".
-            Note barspec must be exactly 5 characters (technically, graphemes) long, e.g. "[=> ]".
-            (Original exception was $ex)
-        """)
-    end
     if barlen>0
-        nsolid = round(Int, barlen * percentage_complete / 100)
-        nempty = barlen - nsolid
-        bar = string(leftglyph, repeat(solidglyph, max(0,nsolid-1)), nsolid>0?frontglyph:"", repeat(emptyglyph, nempty), rightglyph)
+        if percentage_complete == 100 # if we're done, don't use the "front" character
+            bar = string(barglyphs.leftend, repeat(string(barglyphs.fill), barlen), barglyphs.rightend)
+        else
+            nsolid = round(Int, barlen * percentage_complete / 100)
+            nempty = barlen - nsolid
+            bar = string(barglyphs.leftend,
+                         repeat(string(barglyphs.fill), max(0,nsolid-1)),
+                         nsolid>0 ? barglyphs.front : "",
+                         repeat(string(barglyphs.empty), nempty),
+                         barglyphs.rightend)
+        end
     end
     bar
 end

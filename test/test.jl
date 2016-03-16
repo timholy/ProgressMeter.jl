@@ -230,17 +230,17 @@ end
 println("Testing keyword arguments")
 testfunc13()
 
-function testfunc14(barspec)
+function testfunc14(barglyphs)
     n = 30
     # full keyword argumetns
-    p = ProgressMeter.Progress(n, barspec=barspec)
+    p = ProgressMeter.Progress(n, barglyphs=ProgressMeter.BarGlyphs(barglyphs))
     for n in 1:n
         sleep(0.1)
         ProgressMeter.next!(p)
     end
 end
 
-println("Testing barspec")
+println("Testing custom bar glyphs")
 testfunc14("[=> ]")
 @test_throws ErrorException testfunc14("gklelt")
 
