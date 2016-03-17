@@ -74,10 +74,22 @@ p = Progress(n, 1, "Computing initial pass...", 50)
 will yield
 
 ```
-Computing initial pass...53%|###########################                       |  ETA: 0:09:02
+Computing initial pass...53%|███████████████████████████                       |  ETA: 0:09:02
 ```
 
 in a manner similar to [python-progressbar](https://code.google.com/p/python-progressbar/).
+
+Also, the glyphs used in the bar may be specified by passing a `BarGlyphs` object as the keyword argument `barglyphs`. The `BarGlyphs` constructor can either take 5 characters as arguments or a single 5 character string. E.g.
+
+```julia
+p = Progress(n, 1, barglyphs=BarGlyphs("[=> ]"), 50)
+```
+
+will yield
+
+```
+Progress: 53%[==========================>                       ]  ETA: 0:09:02
+```
 
 ### Progress meters for tasks with an unknown number of steps
 

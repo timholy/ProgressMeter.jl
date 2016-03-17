@@ -75,7 +75,7 @@ type Progress <: AbstractProgress
                       color::Symbol=:green,
                       output::IO=STDOUT,
                       barlen::Integer=tty_width(desc),
-                      barglyphs::BarGlyphs=BarGlyphs("|██ |"))
+                      barglyphs::BarGlyphs=BarGlyphs('|','█','█',' ','|'))
         counter = 0
         tfirst = tlast = time()
         printed = false
