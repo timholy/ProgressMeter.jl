@@ -129,7 +129,7 @@ ProgressThresh(thresh::Real, dt::Real=0.1, desc::AbstractString="Progress: ",
 ProgressThresh(thresh::Real, desc::AbstractString) = ProgressThresh{typeof(thresh)}(thresh, desc=desc)
 
 #...length of percentage and ETA string with days is 29 characters
-tty_width(desc) = max(0, Base.tty_size()[2] - (length(desc) + 29))
+tty_width(desc) = max(0, displaysize(STDOUT)[2] - (length(desc) + 29))
 
 # update progress display
 function updateProgress!(p::Progress)
