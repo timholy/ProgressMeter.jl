@@ -38,7 +38,7 @@ String constructor for BarGlyphs - will split the string into 5 chars
 """
 function BarGlyphs(s::AbstractString)
     glyphs = (s...)
-    if !isa(glyphs, NTuple{5,Char}) 
+    if !isa(glyphs, NTuple{5,Char})
         error("""
             Invalid string in BarGlyphs constructor.
             You supplied "$s".
@@ -83,7 +83,7 @@ type Progress <: AbstractProgress
     end
 end
 
-Progress(n::Integer, dt::Real=0.1, desc::AbstractString="Progress: ",
+Progress(n::Integer, dt::Real, desc::AbstractString="Progress: ",
          barlen::Integer=0, color::Symbol=:green, output::IO=STDOUT) =
     Progress(n, dt=dt, desc=desc, barlen=barlen, color=color, output=output)
 
@@ -129,7 +129,7 @@ ProgressThresh(thresh::Real, dt::Real=0.1, desc::AbstractString="Progress: ",
 ProgressThresh(thresh::Real, desc::AbstractString) = ProgressThresh{typeof(thresh)}(thresh, desc=desc)
 
 #...length of percentage and ETA string with days is 29 characters
-tty_width(desc) = max(0, Base.tty_size()[2] - (length(desc) + 29))
+tty_width(desc) = max(0, displaysize()[2] - (length(desc) + 29))
 
 # update progress display
 function updateProgress!(p::Progress)
@@ -339,8 +339,6 @@ immutable ProgressWrapper{T}
     obj::T
     meter::Progress
 end
-
-ProgressWrapper{T}(obj::T, meter::Progress) = ProgressWrapper{T}(obj, meter)
 
 Base.length(wrap::ProgressWrapper) = Base.length(wrap.obj)
 Base.start(wrap::ProgressWrapper) = (Base.start(wrap.obj), true)
