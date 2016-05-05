@@ -50,3 +50,10 @@ function testfunc5(n, dt, tsleep, desc, barlen)
     end
 end
 testfunc5(30, 1, 0.2, "progress  ", 60)
+
+println("Testing showvalues with threshold-based progress")
+prog = ProgressMeter.ProgressThresh(1e-5, "Minimizing:")
+for val in logspace(2, -6, 20)
+    ProgressMeter.update!(prog, val; showvalues = Dict(:margin => abs(val - 1e-5)))
+    sleep(0.1)
+end
