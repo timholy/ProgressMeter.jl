@@ -284,9 +284,7 @@ end
 
 # Internal method to print additional values below progress bar
 function printvalues!(p::AbstractProgress, showvalues; color = false)
-    if length(showvalues) == 0
-        return
-    end
+    length(showvalues) == 0 && return
     maxwidth = maximum(Int[length(string(name)) for (name, _) in showvalues])
     for (name, value) in showvalues
         msg = "\n  " * rpad(string(name) * ": ", maxwidth+2+1) * string(value)

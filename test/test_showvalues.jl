@@ -49,7 +49,7 @@ function testfunc5(n, dt, tsleep, desc, barlen)
         ProgressMeter.next!(p; showvalues = [(:large, 2^i)], valuecolor = :yellow)
     end
 end
-testfunc5(30, 1, 0.2, "progress  ", 60)
+testfunc5(10, 1, 0.2, "progress  ", 40)
 
 println("Testing showvalues with threshold-based progress")
 prog = ProgressMeter.ProgressThresh(1e-5, "Minimizing:")
@@ -57,3 +57,12 @@ for val in logspace(2, -6, 20)
     ProgressMeter.update!(prog, val; showvalues = Dict(:margin => abs(val - 1e-5)))
     sleep(0.1)
 end
+
+
+println("Testing showvalues with early cancel")
+prog = ProgressMeter.Progress(100, 1, "progress: ", 70)
+for i in 1:50
+    ProgressMeter.update!(prog, i; showvalues = Dict(:left => 100 - i))
+    sleep(0.1)
+end
+ProgressMeter.cancel(prog)
