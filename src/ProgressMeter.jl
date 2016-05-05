@@ -261,8 +261,8 @@ function cancel(p::AbstractProgress, msg::AbstractString = "Aborted before all t
     if p.printed
         move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
         printover(p.output, msg, color)
-        println(p.output)
         printvalues!(p, showvalues; color = valuecolor)
+        println(p.output)
     end
     return
 end
