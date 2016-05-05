@@ -142,7 +142,8 @@ function updateProgress!(p::Progress; showvalues = Any[], valuecolor = :blue)
             bar = barstring(p.barlen, percentage_complete, barglyphs=p.barglyphs)
             dur = durationstring(t-p.tfirst)
             msg = @sprintf "%s%3u%%%s Time: %s" p.desc round(Int, percentage_complete) bar dur
-            printover(p.output, msg, p.color, p.numprintedvalues)
+            move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
+            printover(p.output, msg, p.color)
             printvalues!(p, showvalues; color = valuecolor)
             println(p.output)
         end
@@ -157,7 +158,8 @@ function updateProgress!(p::Progress; showvalues = Any[], valuecolor = :blue)
         eta_sec = round(Int, est_total_time - elapsed_time )
         eta = durationstring(eta_sec)
         msg = @sprintf "%s%3u%%%s  ETA: %s" p.desc round(Int, percentage_complete) bar eta
-        printover(p.output, msg, p.color, p.numprintedvalues)
+        move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
+        printover(p.output, msg, p.color)
         printvalues!(p, showvalues; color = valuecolor)
         # Compensate for any overhead of printing. This can be
         # especially important if you're running over a slow network
@@ -175,7 +177,8 @@ function updateProgress!(p::ProgressThresh; showvalues = Any[], valuecolor = :bl
             p.triggered = true
             dur = durationstring(t-p.tfirst)
             msg = @sprintf "%s Time: %s (%d iterations)" p.desc dur p.counter
-            printover(p.output, msg, p.color, p.numprintedvalues)
+            move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
+            printover(p.output, msg, p.color)
             printvalues!(p, showvalues; color = valuecolor)
             println(p.output)
         end
@@ -185,7 +188,8 @@ function updateProgress!(p::ProgressThresh; showvalues = Any[], valuecolor = :bl
     if t > p.tlast+p.dt && !p.triggered
         elapsed_time = t - p.tfirst
         msg = @sprintf "%s (thresh = %g, value = %g)" p.desc p.thresh p.val
-        printover(p.output, msg, p.color, p.numprintedvalues)
+        move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
+        printover(p.output, msg, p.color)
         printvalues!(p, showvalues; color = valuecolor)
         # Compensate for any overhead of printing. This can be
         # especially important if you're running over a slow network
@@ -255,7 +259,8 @@ See also `finish!`.
 """
 function cancel(p::AbstractProgress, msg::AbstractString = "Aborted before all tasks were completed", color = :red; showvalues = Any[], valuecolor = :blue)
     if p.printed
-        printover(p.output, msg, color, p.numprintedvalues)
+        move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
+        printover(p.output, msg, color)
         println(p.output)
         printvalues!(p, showvalues; color = valuecolor)
     end
@@ -291,11 +296,14 @@ function printvalues!(p::AbstractProgress, showvalues; color = false)
     p.numprintedvalues = length(showvalues)
 end
 
-function printover(io::IO, s::AbstractString, color::Symbol = :color_normal, numlinesup = 0)
+function move_cursor_up_while_clearing_lines(io, numlinesup)
+    [print(io, "\u1b[1G\u1b[K\u1b[A") for _ in 1:numlinesup]
+end
+
+function printover(io::IO, s::AbstractString, color::Symbol = :color_normal)
     if isdefined(Main, :IJulia) || isdefined(Main, :ESS)
         print(io, "\r" * s)
     else
-        [print(io, "\u1b[1G\u1b[K\u1b[A") for _ in 1:numlinesup] # Clear the last printvalues lines
         print(io, "\u1b[1G")   # go to first column
         print_with_color(color, io, s)
         print(io, "\u1b[K")    # clear the rest of the line
