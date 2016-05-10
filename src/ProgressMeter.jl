@@ -68,6 +68,7 @@ type Progress <: AbstractProgress
     barglyphs::BarGlyphs    # the characters to be used in the bar
     color::Symbol           # default to green
     output::IO              # output stream into which the progress is written
+    numprintedvalues::Int   # num values printed below progress in last iteration
 
     function Progress(n::Integer;
                       dt::Real=0.1,
@@ -79,7 +80,7 @@ type Progress <: AbstractProgress
         counter = 0
         tfirst = tlast = time()
         printed = false
-        new(n, dt, counter, tfirst, tlast, printed, desc, barlen, barglyphs, color, output)
+        new(n, dt, counter, tfirst, tlast, printed, desc, barlen, barglyphs, color, output, 0)
     end
 end
 
@@ -110,6 +111,7 @@ type ProgressThresh{T<:Real} <: AbstractProgress
     desc::AbstractString # prefix to the percentage, e.g.  "Computing..."
     color::Symbol        # default to green
     output::IO           # output stream into which the progress is written
+    numprintedvalues::Int   # num values printed below progress in last iteration
 
     function ProgressThresh(thresh;
                             dt::Real=0.1,
@@ -118,7 +120,7 @@ type ProgressThresh{T<:Real} <: AbstractProgress
                             output::IO=STDOUT)
         tfirst = tlast = time()
         printed = false
-        new(thresh, dt, typemax(T), 0, false, tfirst, tlast, printed, desc, color, output)
+        new(thresh, dt, typemax(T), 0, false, tfirst, tlast, printed, desc, color, output, 0)
     end
 end
 
@@ -132,7 +134,7 @@ ProgressThresh(thresh::Real, desc::AbstractString) = ProgressThresh{typeof(thres
 tty_width(desc) = max(0, displaysize()[2] - (length(desc) + 29))
 
 # update progress display
-function updateProgress!(p::Progress)
+function updateProgress!(p::Progress; showvalues = Any[], valuecolor = :blue)
     t = time()
     if p.counter >= p.n
         if p.counter == p.n && p.printed
@@ -140,7 +142,9 @@ function updateProgress!(p::Progress)
             bar = barstring(p.barlen, percentage_complete, barglyphs=p.barglyphs)
             dur = durationstring(t-p.tfirst)
             msg = @sprintf "%s%3u%%%s Time: %s" p.desc round(Int, percentage_complete) bar dur
+            move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             printover(p.output, msg, p.color)
+            printvalues!(p, showvalues; color = valuecolor)
             println(p.output)
         end
         return
@@ -154,7 +158,9 @@ function updateProgress!(p::Progress)
         eta_sec = round(Int, est_total_time - elapsed_time )
         eta = durationstring(eta_sec)
         msg = @sprintf "%s%3u%%%s  ETA: %s" p.desc round(Int, percentage_complete) bar eta
+        move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
         printover(p.output, msg, p.color)
+        printvalues!(p, showvalues; color = valuecolor)
         # Compensate for any overhead of printing. This can be
         # especially important if you're running over a slow network
         # connection.
@@ -163,7 +169,7 @@ function updateProgress!(p::Progress)
     end
 end
 
-function updateProgress!(p::ProgressThresh)
+function updateProgress!(p::ProgressThresh; showvalues = Any[], valuecolor = :blue)
     t = time()
     if p.val <= p.thresh && !p.triggered
         p.triggered = true
@@ -171,7 +177,9 @@ function updateProgress!(p::ProgressThresh)
             p.triggered = true
             dur = durationstring(t-p.tfirst)
             msg = @sprintf "%s Time: %s (%d iterations)" p.desc dur p.counter
+            move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             printover(p.output, msg, p.color)
+            printvalues!(p, showvalues; color = valuecolor)
             println(p.output)
         end
         return
@@ -180,7 +188,9 @@ function updateProgress!(p::ProgressThresh)
     if t > p.tlast+p.dt && !p.triggered
         elapsed_time = t - p.tfirst
         msg = @sprintf "%s (thresh = %g, value = %g)" p.desc p.thresh p.val
+        move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
         printover(p.output, msg, p.color)
+        printvalues!(p, showvalues; color = valuecolor)
         # Compensate for any overhead of printing. This can be
         # especially important if you're running over a slow network
         # connection.
@@ -197,14 +207,14 @@ or may not result in a change to the display.
 
 You may optionally change the color of the display. See also `update!`.
 """
-function next!(p::Progress)
+function next!(p::Progress; options...)
     p.counter += 1
-    updateProgress!(p)
+    updateProgress!(p; options...)
 end
 
-function next!(p::Progress, color::Symbol)
+function next!(p::Progress, color::Symbol; options...)
     p.color = color
-    next!(p)
+    next!(p; options...)
 end
 
 """
@@ -218,25 +228,25 @@ the current value.
 
 You may optionally change the color of the display. See also `next!`.
 """
-function update!(p::Progress, counter::Int)
+function update!(p::Progress, counter::Int; options...)
     p.counter = counter
-    updateProgress!(p)
+    updateProgress!(p; options...)
 end
 
-function update!(p::Progress, counter::Int, color::Symbol)
+function update!(p::Progress, counter::Int, color::Symbol; options...)
     p.color = color
-    update!(p, counter)
+    update!(p, counter; options...)
 end
 
-function update!(p::ProgressThresh, val)
+function update!(p::ProgressThresh, val; options...)
     p.val = val
     p.counter += 1
-    updateProgress!(p)
+    updateProgress!(p; options...)
 end
 
-function update!(p::ProgressThresh, val, color::Symbol)
+function update!(p::ProgressThresh, val, color::Symbol; options...)
     p.color = color
-    update!(p, val)
+    update!(p, val; options...)
 end
 
 
@@ -247,9 +257,11 @@ message printed and its color.
 
 See also `finish!`.
 """
-function cancel(p::AbstractProgress, msg::AbstractString = "Aborted before all tasks were completed", color = :red)
+function cancel(p::AbstractProgress, msg::AbstractString = "Aborted before all tasks were completed", color = :red; showvalues = Any[], valuecolor = :blue)
     if p.printed
+        move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
         printover(p.output, msg, color)
+        printvalues!(p, showvalues; color = valuecolor)
         println(p.output)
     end
     return
@@ -260,16 +272,31 @@ end
 
 See also `cancel`.
 """
-function finish!(p::Progress)
+function finish!(p::Progress; options...)
     while p.counter < p.n
-        next!(p)
+        next!(p; options...)
     end
 end
 
-function finish!(p::ProgressThresh)
-    update!(p, p.thresh)
+function finish!(p::ProgressThresh; options...)
+    update!(p, p.thresh; options...)
 end
 
+# Internal method to print additional values below progress bar
+function printvalues!(p::AbstractProgress, showvalues; color = false)
+    length(showvalues) == 0 && return
+    maxwidth = maximum(Int[length(string(name)) for (name, _) in showvalues])
+    for (name, value) in showvalues
+        msg = "\n  " * rpad(string(name) * ": ", maxwidth+2+1) * string(value)
+        (color == false) ? print(p.output, msg) : print_with_color(color, p.output, msg)
+    end
+    print(p.output, "\u1b[?25l") # Hide cursor
+    p.numprintedvalues = length(showvalues)
+end
+
+function move_cursor_up_while_clearing_lines(io, numlinesup)
+    [print(io, "\u1b[1G\u1b[K\u1b[A") for _ in 1:numlinesup]
+end
 
 function printover(io::IO, s::AbstractString, color::Symbol = :color_normal)
     if isdefined(Main, :IJulia) || isdefined(Main, :ESS)

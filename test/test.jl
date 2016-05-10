@@ -265,6 +265,3 @@ for val in logspace(2, -6, 20)
     ProgressMeter.update!(prog, val)
     sleep(0.1)
 end
-
-println("")
-println("All tests complete")
