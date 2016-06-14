@@ -335,8 +335,10 @@ function durationstring(nsec)
     seconds = r - 60*minutes
 
     hhmmss = @sprintf "%u:%02u:%02u" hours minutes seconds
-    if days>0
-       return @sprintf "%u days, %s" days hhmmss
+    if days>9
+        return @sprintf "%.2f days" nsec/(60*60*24)
+    elseif days>0
+        return @sprintf "%u days, %s" days hhmmss
     end
     hhmmss
 end
