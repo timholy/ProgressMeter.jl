@@ -3,6 +3,7 @@ import Base.Test.@test
 import Base.Test.@test_throws
 
 using Compat
+using Primes
 
 function testfunc(n, dt, tsleep)
     p = ProgressMeter.Progress(n, dt)
