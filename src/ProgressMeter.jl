@@ -299,7 +299,7 @@ function move_cursor_up_while_clearing_lines(io, numlinesup)
 end
 
 function printover(io::IO, s::AbstractString, color::Symbol = :color_normal)
-    if isdefined(Main, :IJulia) || isdefined(Main, :ESS)
+    if isdefined(Main, :IJulia) || isdefined(Main, :ESS) || isdefined(Main, :Atom)
         print(io, "\r" * s)
     else
         print(io, "\u1b[1G")   # go to first column
