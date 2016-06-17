@@ -3,7 +3,9 @@ import Base.Test.@test
 import Base.Test.@test_throws
 
 using Compat
-using Primes
+
+srand(123)
+
 
 function testfunc(n, dt, tsleep)
     p = ProgressMeter.Progress(n, dt)
@@ -77,7 +79,7 @@ function testfunc6(n, dt, tsleep)
         if i == div(n, 2)
             break
         end
-        if !isprime(i)
+        if rand() < 0.7
             sleep(tsleep)
             continue
         end
@@ -89,7 +91,7 @@ function testfunc6a(n, dt, tsleep)
         if i == div(n, 2)
             break
         end
-        if !isprime(i)
+        if rand() < 0.7
             sleep(tsleep)
             continue
         end
@@ -118,7 +120,7 @@ testfunc7a(5, 0.1, 0.1)
 
 function testfunc8(n, dt, tsleep)
     ProgressMeter.@showprogress dt for i in 1:n
-        if !isprime(i)
+        if rand() < 0.7
             sleep(tsleep)
             continue
         end
