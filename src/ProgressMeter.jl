@@ -290,12 +290,13 @@ function printvalues!(p::AbstractProgress, showvalues; color = false)
         msg = "\n  " * rpad(string(name) * ": ", maxwidth+2+1) * string(value)
         (color == false) ? print(p.output, msg) : print_with_color(color, p.output, msg)
     end
-    print(p.output, "\u1b[?25l") # Hide cursor
     p.numprintedvalues = length(showvalues)
 end
 
 function move_cursor_up_while_clearing_lines(io, numlinesup)
-    [print(io, "\u1b[1G\u1b[K\u1b[A") for _ in 1:numlinesup]
+    for _ in 1:numlinesup
+        print(io, "\u1b[1G\u1b[K\u1b[A")
+    end
 end
 
 function printover(io::IO, s::AbstractString, color::Symbol = :color_normal)
