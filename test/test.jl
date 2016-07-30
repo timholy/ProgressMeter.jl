@@ -196,8 +196,8 @@ end
 
 function testfunc12a(n, dt, tsleep)
     f(x) = (sleep(tsleep); 2x)
-    s = ProgressMeter.@showprogress dt "Calculating..." (@compat(Tuple{Int,Int})=>Int)[(y,z) => f(z) for z in 1:n, y in 1:n]
-    @test s == (@compat(Tuple{Int,Int})=>Int)[(y,z) => 2z for z in 1:n, y in 1:n]
+    s = ProgressMeter.@showprogress dt "Calculating..." (Tuple{Int,Int}=>Int)[(y,z) => f(z) for z in 1:n, y in 1:n]
+    @test s == (Tuple{Int,Int}=>Int)[(y,z) => 2z for z in 1:n, y in 1:n]
 end
 
 println("Testing @showprogress macro on typed dict comprehension")
