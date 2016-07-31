@@ -405,6 +405,7 @@ macro showprogress(args...)
     end
     progressargs = args[1:end-1]
     loop = args[end]
+    origloop = loop = copy(loop)
     metersym = gensym("meter")
 
     if isa(loop, Expr) && loop.head === :for
@@ -420,7 +421,14 @@ macro showprogress(args...)
         throw(ArgumentError("Final argument to @showprogress must be a for loop or comprehension."))
     end
 
-    loop = copy(loop)
+    # In julia 0.5, a comprehension's "loop" is actually one level deeper in the syntax tree.
+    if VERSION >= v"0.5.0-dev+5297" && loop.head !== :for
+        @assert length(loop.args) == loopbodyidx
+        loop = loop.args[outerassignidx] = copy(loop.args[outerassignidx])
+        @assert loop.head === :generator
+        outerassignidx = endof(loop.args)
+        loopbodyidx = 1
+    end
 
     # Transform the first loop assignment
     loopassign = loop.args[outerassignidx] = copy(loop.args[outerassignidx])
@@ -447,6 +455,12 @@ macro showprogress(args...)
             loop.args[i] = esc(loop.args[i])
         end
     end
+    if origloop !== loop
+        # We have additional escaping to do; this will occur for comprehensions with julia 0.5 or later.
+        for i in 1:length(origloop.args)-1
+            origloop.args[i] = esc(origloop.args[i])
+        end
+    end
 
     setup = quote
         iterable = $(esc(obj))
@@ -463,7 +477,7 @@ macro showprogress(args...)
         return quote
             begin
                 $setup
-                rv = $loop
+                rv = $origloop
                 next!($(esc(metersym)))
                 rv
             end
