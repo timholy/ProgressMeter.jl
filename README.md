@@ -107,6 +107,22 @@ end
 
 This will display progress until `val` drops below the threshold value (1e-5).
 
+### Printing additional information
+
+You can also print and update information related to the computation by using
+the `showvalues` keyword. The following example displays the iteration counter
+and the value of a dummy variable `x` below the progress meter:
+
+```julia
+x,n = 1,10
+p = Progress(n)
+for iter = 1:10
+    x *= 2
+    sleep(0.5)
+    ProgressMeter.next!(p; showvalues = [(:iter,iter), (:x,x)])
+end
+```
+
 ## Credits
 
 Thanks to Alan Bahm, Andrew Burroughs, and Jim Garrison for major enhancements to this package.
