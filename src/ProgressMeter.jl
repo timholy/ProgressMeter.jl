@@ -50,7 +50,7 @@ end
 
 """
 `prog = Progress(n; dt=0.1, desc="Progress: ", color=:green,
-output=STDOUT, barlen=tty_width(desc))` creates a progress meter for a
+output=STDERR, barlen=tty_width(desc))` creates a progress meter for a
 task with `n` iterations or stages. Output will be generated at
 intervals at least `dt` seconds apart, and perhaps longer if each
 iteration takes longer than `dt`. `desc` is a description of
@@ -74,7 +74,7 @@ type Progress <: AbstractProgress
                       dt::Real=0.1,
                       desc::AbstractString="Progress: ",
                       color::Symbol=:green,
-                      output::IO=STDOUT,
+                      output::IO=STDERR,
                       barlen::Integer=tty_width(desc),
                       barglyphs::BarGlyphs=BarGlyphs('|','█','█',' ','|'))
         counter = 0
@@ -85,7 +85,7 @@ type Progress <: AbstractProgress
 end
 
 Progress(n::Integer, dt::Real, desc::AbstractString="Progress: ",
-         barlen::Integer=0, color::Symbol=:green, output::IO=STDOUT) =
+         barlen::Integer=0, color::Symbol=:green, output::IO=STDERR) =
     Progress(n, dt=dt, desc=desc, barlen=barlen, color=color, output=output)
 
 Progress(n::Integer, desc::AbstractString) = Progress(n, desc=desc)
@@ -93,7 +93,7 @@ Progress(n::Integer, desc::AbstractString) = Progress(n, desc=desc)
 
 """
 `prog = ProgressThresh(thresh; dt=0.1, desc="Progress: ",
-color=:green, output=STDOUT)` creates a progress meter for a task
+color=:green, output=STDERR)` creates a progress meter for a task
 which will terminate once a value less than or equal to `thresh` is
 reached. Output will be generated at intervals at least `dt` seconds
 apart, and perhaps longer if each iteration takes longer than
@@ -117,7 +117,7 @@ type ProgressThresh{T<:Real} <: AbstractProgress
                             dt::Real=0.1,
                             desc::AbstractString="Progress: ",
                             color::Symbol=:green,
-                            output::IO=STDOUT)
+                            output::IO=STDERR)
         tfirst = tlast = time()
         printed = false
         new(thresh, dt, typemax(T), 0, false, tfirst, tlast, printed, desc, color, output, 0)
