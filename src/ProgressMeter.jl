@@ -125,7 +125,7 @@ type ProgressThresh{T<:Real} <: AbstractProgress
 end
 
 ProgressThresh(thresh::Real, dt::Real=0.1, desc::AbstractString="Progress: ",
-         color::Symbol=:green, output::IO=STDOUT) =
+         color::Symbol=:green, output::IO=STDERR) =
     ProgressThresh{typeof(thresh)}(thresh, dt=dt, desc=desc, color=color, output=output)
 
 ProgressThresh(thresh::Real, desc::AbstractString) = ProgressThresh{typeof(thresh)}(thresh, desc=desc)
