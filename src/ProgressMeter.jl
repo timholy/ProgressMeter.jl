@@ -408,6 +408,7 @@ macro showprogress(args...)
     origloop = loop = copy(loop)
     metersym = gensym("meter")
 
+    # NOTE: dict_comprehension and typed_dict_comprehension are gone as of julia 0.6.
     if isa(loop, Expr) && loop.head === :for
         outerassignidx = 1
         loopbodyidx = endof(loop.args)
