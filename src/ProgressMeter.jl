@@ -19,7 +19,7 @@ are:
 """
 ProgressMeter
 
-abstract AbstractProgress
+@compat abstract type AbstractProgress end
 
 
 
@@ -113,14 +113,14 @@ type ProgressThresh{T<:Real} <: AbstractProgress
     output::IO           # output stream into which the progress is written
     numprintedvalues::Int   # num values printed below progress in last iteration
 
-    function ProgressThresh(thresh;
+    @compat function (::Type{ProgressThresh{T}}){T}(thresh;
                             dt::Real=0.1,
                             desc::AbstractString="Progress: ",
                             color::Symbol=:green,
                             output::IO=STDERR)
         tfirst = tlast = time()
         printed = false
-        new(thresh, dt, typemax(T), 0, false, tfirst, tlast, printed, desc, color, output, 0)
+        new{T}(thresh, dt, typemax(T), 0, false, tfirst, tlast, printed, desc, color, output, 0)
     end
 end
 
