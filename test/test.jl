@@ -183,9 +183,11 @@ function testfunc11a(n, dt, tsleep)
     @test s == [(y,z) => 2z for z in 1:n, y in 1:n]
 end
 
-println("Testing @showprogress macro on dict comprehension")
-testfunc11(100, 0.1, 0.1)
-testfunc11a(10, 0.1, 0.1)
+if VERSION < v"0.6.0-pre"
+    println("Testing @showprogress macro on dict comprehension")
+    testfunc11(100, 0.1, 0.1)
+    testfunc11a(10, 0.1, 0.1)
+end
 
 
 function testfunc12(n, dt, tsleep)
@@ -200,9 +202,11 @@ function testfunc12a(n, dt, tsleep)
     @test s == (Tuple{Int,Int}=>Int)[(y,z) => 2z for z in 1:n, y in 1:n]
 end
 
-println("Testing @showprogress macro on typed dict comprehension")
-testfunc12(100, 0.1, 0.1)
-testfunc12a(10, 0.1, 0.1)
+if VERSION < v"0.6.0-pre"
+    println("Testing @showprogress macro on typed dict comprehension")
+    testfunc12(100, 0.1, 0.1)
+    testfunc12a(10, 0.1, 0.1)
+end
 
 
 function testfunc13()
