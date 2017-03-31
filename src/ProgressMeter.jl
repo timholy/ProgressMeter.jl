@@ -3,6 +3,7 @@ VERSION >= v"0.4.0-dev+6521" && __precompile__()
 module ProgressMeter
 
 using Compat
+import Base.text_colors
 
 export Progress, ProgressThresh, BarGlyphs, next!, update!, cancel, finish!, @showprogress
 
@@ -288,7 +289,12 @@ function printvalues!(p::AbstractProgress, showvalues; color = false)
     maxwidth = maximum(Int[length(string(name)) for (name, _) in showvalues])
     for (name, value) in showvalues
         msg = "\n  " * rpad(string(name) * ": ", maxwidth+2+1) * string(value)
-        (color == false) ? print(p.output, msg) : print_with_color(color, p.output, msg)
+        if color == false
+            print(p.output, msg)
+        else
+            isdefined(Main, :Atom) ? print(get(text_colors, color, ""), "\n", p.output, msg) :
+            print_with_color(color, p.output, msg)
+        end
     end
     p.numprintedvalues = length(showvalues)
 end
@@ -301,7 +307,8 @@ end
 
 function printover(io::IO, s::AbstractString, color::Symbol = :color_normal)
     if isdefined(Main, :IJulia) || isdefined(Main, :ESS) || isdefined(Main, :Atom)
-        print(io, "\r" * s)
+        c = get(text_colors, color, "")
+        print(c, io, "\r" * s)
     else
         print(io, "\u1b[1G")   # go to first column
         print_with_color(color, io, s)
