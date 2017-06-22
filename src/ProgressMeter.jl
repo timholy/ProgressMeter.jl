@@ -85,7 +85,7 @@ type Progress <: AbstractProgress
 end
 
 Progress(n::Integer, dt::Real, desc::AbstractString="Progress: ",
-         barlen::Integer=0, color::Symbol=:green, output::IO=STDERR) =
+         barlen::Integer=tty_width(desc), color::Symbol=:green, output::IO=STDERR) =
     Progress(n, dt=dt, desc=desc, barlen=barlen, color=color, output=output)
 
 Progress(n::Integer, desc::AbstractString) = Progress(n, desc=desc)
