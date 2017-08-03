@@ -79,10 +79,10 @@ Computing initial pass...53%|█████████████████
 
 in a manner similar to [python-progressbar](https://code.google.com/p/python-progressbar/).
 
-Also, the glyphs used in the bar may be specified by passing a `BarGlyphs` object as the keyword argument `barglyphs`. The `BarGlyphs` constructor can either take 5 characters as arguments or a single 5 character string. E.g.
+Also, other properties can be modified through keywords. The glyphs used in the bar may be specified by passing a `BarGlyphs` object as the keyword argument `barglyphs`. The `BarGlyphs` constructor can either take 5 characters as arguments or a single 5 character string. E.g.
 
 ```julia
-p = Progress(n, 1, barglyphs=BarGlyphs("[=> ]"), 50)
+p = Progress(n, dt=0.5, barglyphs=BarGlyphs("[=> ]"), barlen=50, color=:yellow)
 ```
 
 will yield
