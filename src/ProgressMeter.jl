@@ -300,8 +300,12 @@ function move_cursor_up_while_clearing_lines(io, numlinesup)
 end
 
 function printover(io::IO, s::AbstractString, color::Symbol = :color_normal)
-    if isdefined(Main, :IJulia) || isdefined(Main, :ESS) || isdefined(Main, :Atom)
-        print(io, "\r" * s)
+    if isdefined(Main, :ESS) || isdefined(Main, :Atom)
+        print(io, '\r', s)
+    elseif isdefined(Main, :IJulia)
+        print(io, '\r')
+        print_with_color(color, io, s) # Jupyter notebooks support ANSI color codes
+        Main.IJulia.stdio_bytes[] = 0 # issue #76: circumvent IJulia I/O throttling
     else
         print(io, "\u1b[1G")   # go to first column
         print_with_color(color, io, s)
