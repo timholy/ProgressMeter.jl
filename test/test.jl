@@ -2,8 +2,6 @@ import ProgressMeter
 import Base.Test.@test
 import Base.Test.@test_throws
 
-using Compat
-
 srand(123)
 
 
@@ -222,13 +220,13 @@ function testfunc13()
     n = 30
     # no keyword arguments
     p = ProgressMeter.Progress(n)
-    for n in 1:n
+    for i in 1:n
         sleep(0.1)
         ProgressMeter.next!(p)
     end
     # full keyword argumetns
     p = ProgressMeter.Progress(n, dt=0.01, desc="", color=:red, output=STDERR, barlen=40)
-    for n in 1:n
+    for i in 1:n
         sleep(0.1)
         ProgressMeter.next!(p)
     end
@@ -241,21 +239,21 @@ function testfunc14(barglyphs)
     n = 30
     # with the string constructor
     p = ProgressMeter.Progress(n, barglyphs=ProgressMeter.BarGlyphs(barglyphs))
-    for n in 1:n
+    for i in 1:n
         sleep(0.1)
         ProgressMeter.next!(p)
     end
     # with the 5 char constructor
     chars = (barglyphs...)
     p = ProgressMeter.Progress(n, barglyphs=ProgressMeter.BarGlyphs(chars...))
-    for n in 1:n
+    for i in 1:n
         sleep(0.1)
         ProgressMeter.next!(p)
     end
     p = ProgressMeter.Progress(n, dt=0.01, desc="",
                                color=:red, output=STDERR, barlen=40,
                                barglyphs=ProgressMeter.BarGlyphs(barglyphs))
-    for n in 1:n
+    for i in 1:n
         sleep(0.1)
         ProgressMeter.next!(p)
     end
