@@ -410,22 +410,21 @@ macro showprogress(args...)
     origloop = loop = copy(loop)
     metersym = gensym("meter")
 
-    # NOTE: dict_comprehension and typed_dict_comprehension are gone as of julia 0.6.
     if isa(loop, Expr) && loop.head === :for
         outerassignidx = 1
         loopbodyidx = endof(loop.args)
-    elseif isa(loop, Expr) && loop.head in (:comprehension, :dict_comprehension)
+    elseif isa(loop, Expr) && loop.head === :comprehension
         outerassignidx = endof(loop.args)
         loopbodyidx = 1
-    elseif isa(loop, Expr) && loop.head in (:typed_comprehension, :typed_dict_comprehension)
+    elseif isa(loop, Expr) && loop.head === :typed_comprehension
         outerassignidx = endof(loop.args)
         loopbodyidx = 2
     else
         throw(ArgumentError("Final argument to @showprogress must be a for loop or comprehension."))
     end
 
-    # In julia 0.5, a comprehension's "loop" is actually one level deeper in the syntax tree.
-    if VERSION >= v"0.5.0-dev+5297" && loop.head !== :for
+    # As of julia 0.5, a comprehension's "loop" is actually one level deeper in the syntax tree.
+    if loop.head !== :for
         @assert length(loop.args) == loopbodyidx
         loop = loop.args[outerassignidx] = copy(loop.args[outerassignidx])
         @assert loop.head === :generator

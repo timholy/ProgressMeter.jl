@@ -169,44 +169,6 @@ println("Testing over-shooting progress with finish!...")
 testfunc10(107, 111, 0.01, 0.01)
 
 
-function testfunc11(n, dt, tsleep)
-    f(x) = (sleep(tsleep); 2x)
-    s = ProgressMeter.@showprogress dt "Calculating..." [z => f(z) for z in 1:n]
-    @test s == [z => 2z for z in 1:n]
-end
-
-function testfunc11a(n, dt, tsleep)
-    f(x) = (sleep(tsleep); 2x)
-    s = ProgressMeter.@showprogress dt "Calculating..." [(y,z) => f(z) for z in 1:n, y in 1:n]
-    @test s == [(y,z) => 2z for z in 1:n, y in 1:n]
-end
-
-if VERSION < v"0.6.0-pre"
-    println("Testing @showprogress macro on dict comprehension")
-    testfunc11(100, 0.1, 0.1)
-    testfunc11a(10, 0.1, 0.1)
-end
-
-
-function testfunc12(n, dt, tsleep)
-    f(x) = (sleep(tsleep); 2x)
-    s = ProgressMeter.@showprogress dt "Calculating..." (Int=>Int)[z => f(z) for z in 1:n]
-    @test s == (Int=>Int)[z => 2z for z in 1:n]
-end
-
-function testfunc12a(n, dt, tsleep)
-    f(x) = (sleep(tsleep); 2x)
-    s = ProgressMeter.@showprogress dt "Calculating..." (Tuple{Int,Int}=>Int)[(y,z) => f(z) for z in 1:n, y in 1:n]
-    @test s == (Tuple{Int,Int}=>Int)[(y,z) => 2z for z in 1:n, y in 1:n]
-end
-
-if VERSION < v"0.6.0-pre"
-    println("Testing @showprogress macro on typed dict comprehension")
-    testfunc12(100, 0.1, 0.1)
-    testfunc12a(10, 0.1, 0.1)
-end
-
-
 function testfunc13()
     ProgressMeter.@showprogress 1 for i=1:10
         return
