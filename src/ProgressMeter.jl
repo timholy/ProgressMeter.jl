@@ -21,16 +21,19 @@ abstract type AbstractProgress end
 
 
 
+eval(quote
 """
 Holds the five characters that will be used to generate the progress bar.
 """
-type BarGlyphs
+$(Expr(:type, true, :BarGlyphs, quote
+#mutable struct BarGlyphs
     leftend::Char
     fill::Char
     front::Char
     empty::Char
     rightend::Char
-end
+end))
+end)
 """
 String constructor for BarGlyphs - will split the string into 5 chars
 """
@@ -46,6 +49,7 @@ function BarGlyphs(s::AbstractString)
     return BarGlyphs(glyphs...)
 end
 
+eval(quote
 """
 `prog = Progress(n; dt=0.1, desc="Progress: ", color=:green,
 output=STDERR, barlen=tty_width(desc))` creates a progress meter for a
@@ -54,7 +58,8 @@ intervals at least `dt` seconds apart, and perhaps longer if each
 iteration takes longer than `dt`. `desc` is a description of
 the current task.
 """
-type Progress <: AbstractProgress
+$(Expr(:type, true, Expr(:<:, :Progress, :AbstractProgress), quote
+#mutable struct Progress <: AbstractProgress
     n::Int
     dt::Float64
     counter::Int
@@ -80,7 +85,8 @@ type Progress <: AbstractProgress
         printed = false
         new(n, dt, counter, tfirst, tlast, printed, desc, barlen, barglyphs, color, output, 0)
     end
-end
+end))
+end)
 
 Progress(n::Integer, dt::Real, desc::AbstractString="Progress: ",
          barlen::Integer=tty_width(desc), color::Symbol=:green, output::IO=STDERR) =
@@ -89,6 +95,7 @@ Progress(n::Integer, dt::Real, desc::AbstractString="Progress: ",
 Progress(n::Integer, desc::AbstractString) = Progress(n, desc=desc)
 
 
+eval(quote
 """
 `prog = ProgressThresh(thresh; dt=0.1, desc="Progress: ",
 color=:green, output=STDERR)` creates a progress meter for a task
@@ -97,7 +104,8 @@ reached. Output will be generated at intervals at least `dt` seconds
 apart, and perhaps longer if each iteration takes longer than
 `dt`. `desc` is a description of the current task.
 """
-type ProgressThresh{T<:Real} <: AbstractProgress
+$(Expr(:type, true, Expr(:<:, :(ProgressThresh{T<:Real}), :AbstractProgress), quote
+#mutable struct ProgressThresh{T<:Real} <: AbstractProgress
     thresh::T
     dt::Float64
     val::T
@@ -120,7 +128,8 @@ type ProgressThresh{T<:Real} <: AbstractProgress
         printed = false
         new{T}(thresh, dt, typemax(T), 0, false, tfirst, tlast, printed, desc, color, output, 0)
     end
-end
+end))
+end)
 
 ProgressThresh(thresh::Real, dt::Real=0.1, desc::AbstractString="Progress: ",
          color::Symbol=:green, output::IO=STDERR) =
@@ -367,10 +376,11 @@ function showprogress_process_expr(node, metersym)
     end
 end
 
-immutable ProgressWrapper{T}
+eval(Expr(:type, false, :(ProgressWrapper{T}), quote
+#struct ProgressWrapper{T}
     obj::T
     meter::Progress
-end
+end))
 
 Base.length(wrap::ProgressWrapper) = Base.length(wrap.obj)
 Base.start(wrap::ProgressWrapper) = (Base.start(wrap.obj), true)
