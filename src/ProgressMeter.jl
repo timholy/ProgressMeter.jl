@@ -24,7 +24,7 @@ abstract type AbstractProgress end
 """
 Holds the five characters that will be used to generate the progress bar.
 """
-type BarGlyphs
+mutable struct BarGlyphs
     leftend::Char
     fill::Char
     front::Char
@@ -54,7 +54,7 @@ intervals at least `dt` seconds apart, and perhaps longer if each
 iteration takes longer than `dt`. `desc` is a description of
 the current task.
 """
-type Progress <: AbstractProgress
+mutable struct Progress <: AbstractProgress
     n::Int
     dt::Float64
     counter::Int
@@ -97,7 +97,7 @@ reached. Output will be generated at intervals at least `dt` seconds
 apart, and perhaps longer if each iteration takes longer than
 `dt`. `desc` is a description of the current task.
 """
-type ProgressThresh{T<:Real} <: AbstractProgress
+mutable struct ProgressThresh{T<:Real} <: AbstractProgress
     thresh::T
     dt::Float64
     val::T
@@ -111,11 +111,11 @@ type ProgressThresh{T<:Real} <: AbstractProgress
     output::IO           # output stream into which the progress is written
     numprintedvalues::Int   # num values printed below progress in last iteration
 
-    function (::Type{ProgressThresh{T}}){T}(thresh;
-                                            dt::Real=0.1,
-                                            desc::AbstractString="Progress: ",
-                                            color::Symbol=:green,
-                                            output::IO=STDERR)
+    function ProgressThresh{T}(thresh;
+                               dt::Real=0.1,
+                               desc::AbstractString="Progress: ",
+                               color::Symbol=:green,
+                               output::IO=STDERR) where T
         tfirst = tlast = time()
         printed = false
         new{T}(thresh, dt, typemax(T), 0, false, tfirst, tlast, printed, desc, color, output, 0)
@@ -367,7 +367,7 @@ function showprogress_process_expr(node, metersym)
     end
 end
 
-immutable ProgressWrapper{T}
+struct ProgressWrapper{T}
     obj::T
     meter::Progress
 end
