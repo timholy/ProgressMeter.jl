@@ -487,4 +487,55 @@ macro showprogress(args...)
     end
 end
 
+# global meter references for pmap 
+const global_meters = Dict{String, AbstractProgress}()
+const global_progress = Dict{String, Int}()
+const global_print_lock = Dict{String, ReentrantLock}()
+
+"""
+    pmap(f::Function, p::ProgressMeter, c...; passcallback=false, kwargs...)
+
+`pmap` with a progress meter. If the keyword argument passcallback is true, then passes an additional first argument to the function which is a callback taking one argument, n, to add n to the progress meter. If it is false, then updates the progress meter by 1 every time a parallel call finishes.
+"""
+function Base.pmap(f::Function, p::Progress, values...; kwargs...)
+    global global_meters
+    global global_progress
+    global global_print_lock
+
+    id = randstring(50)
+    global_meters[id] = p
+    global_progress[id] = 0
+    global_print_lock[id] = ReentrantLock()
+
+    kwa = Dict(kwargs)
+    passcallback = get(kwa, :passcallback, false)
+    delete!(kwa, :passcallback)
+
+    out = pmap(values...; kwa...) do x...
+        if passcallback
+          v = f(n -> remotecall(update_global_meter, 1, id, n), x...)
+        else
+          v = f(x...)
+          wait(remotecall(update_global_meter, 1, id, 1))
+        end
+        v
+    end
+
+    delete!(global_meters, id)
+    out
+end
+
+# remote-called by all the workers to update the progress in pmap
+function update_global_meter(id, n)
+    global global_meters
+    global global_progress
+    global global_print_lock
+
+    lock(global_print_lock[id])
+    global_progress[id] += n
+    update!(global_meters[id], global_progress[id])
+    unlock(global_print_lock[id])
+end
+
+
 end
