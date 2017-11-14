@@ -293,7 +293,7 @@ end
 
 function move_cursor_up_while_clearing_lines(io, numlinesup)
     for _ in 1:numlinesup
-        print(io, "\u1b[1G\u1b[K\u1b[A")
+        print(io, "\r\u1b[K\u1b[A")
     end
 end
 
@@ -305,9 +305,9 @@ function printover(io::IO, s::AbstractString, color::Symbol = :color_normal)
         print_with_color(color, io, s) # Jupyter notebooks support ANSI color codes
         Main.IJulia.stdio_bytes[] = 0 # issue #76: circumvent IJulia I/O throttling
     else
-        print(io, "\u1b[1G")   # go to first column
+        print(io, "\r")         # go to first column
         print_with_color(color, io, s)
-        print(io, "\u1b[K")    # clear the rest of the line
+        print(io, "\u1b[K")     # clear the rest of the line
     end
 end
 
