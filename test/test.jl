@@ -1,6 +1,5 @@
 import ProgressMeter
-import Base.Test.@test
-import Base.Test.@test_throws
+using Base.Test
 
 srand(123)
 
