@@ -35,7 +35,7 @@ end
 String constructor for BarGlyphs - will split the string into 5 chars
 """
 function BarGlyphs(s::AbstractString)
-    glyphs = (s...)
+    glyphs = (s...,)
     if !isa(glyphs, NTuple{5,Char})
         error("""
             Invalid string in BarGlyphs constructor.
