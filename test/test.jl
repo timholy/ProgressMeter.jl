@@ -205,7 +205,7 @@ function testfunc14(barglyphs)
         ProgressMeter.next!(p)
     end
     # with the 5 char constructor
-    chars = (barglyphs...)
+    chars = (barglyphs...,)
     p = ProgressMeter.Progress(n, barglyphs=ProgressMeter.BarGlyphs(chars...))
     for i in 1:n
         sleep(0.1)
