@@ -2,6 +2,8 @@ __precompile__()
 
 module ProgressMeter
 
+using Compat.Printf: @sprintf
+
 export Progress, ProgressThresh, BarGlyphs, next!, update!, cancel, finish!, @showprogress
 
 """
