@@ -1,5 +1,6 @@
 import ProgressMeter
 using Compat.Test
+using Compat.Random
 
 srand(123)
 
