@@ -2,6 +2,7 @@ __precompile__()
 
 module ProgressMeter
 
+using Compat: lastindex
 using Compat.Printf: @sprintf
 
 export Progress, ProgressThresh, BarGlyphs, next!, update!, cancel, finish!, @showprogress
@@ -414,12 +415,12 @@ macro showprogress(args...)
 
     if isa(loop, Expr) && loop.head === :for
         outerassignidx = 1
-        loopbodyidx = endof(loop.args)
+        loopbodyidx = lastindex(loop.args)
     elseif isa(loop, Expr) && loop.head === :comprehension
-        outerassignidx = endof(loop.args)
+        outerassignidx = lastindex(loop.args)
         loopbodyidx = 1
     elseif isa(loop, Expr) && loop.head === :typed_comprehension
-        outerassignidx = endof(loop.args)
+        outerassignidx = lastindex(loop.args)
         loopbodyidx = 2
     else
         throw(ArgumentError("Final argument to @showprogress must be a for loop or comprehension."))
@@ -430,7 +431,7 @@ macro showprogress(args...)
         @assert length(loop.args) == loopbodyidx
         loop = loop.args[outerassignidx] = copy(loop.args[outerassignidx])
         @assert loop.head === :generator
-        outerassignidx = endof(loop.args)
+        outerassignidx = lastindex(loop.args)
         loopbodyidx = 1
     end
 
