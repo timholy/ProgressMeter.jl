@@ -2,7 +2,7 @@ __precompile__()
 
 module ProgressMeter
 
-using Compat: lastindex
+using Compat: lastindex, printstyled
 using Compat.Printf: @sprintf
 
 export Progress, ProgressThresh, BarGlyphs, next!, update!, cancel, finish!, @showprogress
@@ -289,7 +289,7 @@ function printvalues!(p::AbstractProgress, showvalues; color = false)
     maxwidth = maximum(Int[length(string(name)) for (name, _) in showvalues])
     for (name, value) in showvalues
         msg = "\n  " * rpad(string(name) * ": ", maxwidth+2+1) * string(value)
-        (color == false) ? print(p.output, msg) : print_with_color(color, p.output, msg)
+        (color == false) ? print(p.output, msg) : printstyled(p.output, msg; color=color)
     end
     p.numprintedvalues = length(showvalues)
 end
@@ -305,11 +305,11 @@ function printover(io::IO, s::AbstractString, color::Symbol = :color_normal)
         print(io, '\r', s)
     elseif isdefined(Main, :IJulia)
         print(io, '\r')
-        print_with_color(color, io, s) # Jupyter notebooks support ANSI color codes
+        printstyled(io, s; color=color) # Jupyter notebooks support ANSI color codes
         Main.IJulia.stdio_bytes[] = 0 # issue #76: circumvent IJulia I/O throttling
     else
         print(io, "\r")         # go to first column
-        print_with_color(color, io, s)
+        printstyled(io, s; color=color)
         print(io, "\u1b[K")     # clear the rest of the line
     end
 end
