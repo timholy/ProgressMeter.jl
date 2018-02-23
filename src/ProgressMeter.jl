@@ -2,7 +2,7 @@ __precompile__()
 
 module ProgressMeter
 
-using Compat: lastindex, printstyled
+using Compat: stderr, lastindex, printstyled
 using Compat.Printf: @sprintf
 
 export Progress, ProgressThresh, BarGlyphs, next!, update!, cancel, finish!, @showprogress
@@ -51,7 +51,7 @@ end
 
 """
 `prog = Progress(n; dt=0.1, desc="Progress: ", color=:green,
-output=STDERR, barlen=tty_width(desc))` creates a progress meter for a
+output=stderr, barlen=tty_width(desc))` creates a progress meter for a
 task with `n` iterations or stages. Output will be generated at
 intervals at least `dt` seconds apart, and perhaps longer if each
 iteration takes longer than `dt`. `desc` is a description of
@@ -75,7 +75,7 @@ mutable struct Progress <: AbstractProgress
                       dt::Real=0.1,
                       desc::AbstractString="Progress: ",
                       color::Symbol=:green,
-                      output::IO=STDERR,
+                      output::IO=stderr,
                       barlen::Integer=tty_width(desc),
                       barglyphs::BarGlyphs=BarGlyphs('|','█','█',' ','|'))
         counter = 0
@@ -86,7 +86,7 @@ mutable struct Progress <: AbstractProgress
 end
 
 Progress(n::Integer, dt::Real, desc::AbstractString="Progress: ",
-         barlen::Integer=tty_width(desc), color::Symbol=:green, output::IO=STDERR) =
+         barlen::Integer=tty_width(desc), color::Symbol=:green, output::IO=stderr) =
     Progress(n, dt=dt, desc=desc, barlen=barlen, color=color, output=output)
 
 Progress(n::Integer, desc::AbstractString) = Progress(n, desc=desc)
@@ -94,7 +94,7 @@ Progress(n::Integer, desc::AbstractString) = Progress(n, desc=desc)
 
 """
 `prog = ProgressThresh(thresh; dt=0.1, desc="Progress: ",
-color=:green, output=STDERR)` creates a progress meter for a task
+color=:green, output=stderr)` creates a progress meter for a task
 which will terminate once a value less than or equal to `thresh` is
 reached. Output will be generated at intervals at least `dt` seconds
 apart, and perhaps longer if each iteration takes longer than
@@ -118,7 +118,7 @@ mutable struct ProgressThresh{T<:Real} <: AbstractProgress
                                dt::Real=0.1,
                                desc::AbstractString="Progress: ",
                                color::Symbol=:green,
-                               output::IO=STDERR) where T
+                               output::IO=stderr) where T
         tfirst = tlast = time()
         printed = false
         new{T}(thresh, dt, typemax(T), 0, false, tfirst, tlast, printed, desc, color, output, 0)
@@ -126,7 +126,7 @@ mutable struct ProgressThresh{T<:Real} <: AbstractProgress
 end
 
 ProgressThresh(thresh::Real, dt::Real=0.1, desc::AbstractString="Progress: ",
-         color::Symbol=:green, output::IO=STDERR) =
+         color::Symbol=:green, output::IO=stderr) =
     ProgressThresh{typeof(thresh)}(thresh, dt=dt, desc=desc, color=color, output=output)
 
 ProgressThresh(thresh::Real, desc::AbstractString) = ProgressThresh{typeof(thresh)}(thresh, desc=desc)
