@@ -1,9 +1,9 @@
 import ProgressMeter
 using Compat.Test
 using Compat.Random
+using Compat: stderr
 
 srand(123)
-
 
 function testfunc(n, dt, tsleep)
     p = ProgressMeter.Progress(n, dt)
@@ -187,7 +187,7 @@ function testfunc13()
         ProgressMeter.next!(p)
     end
     # full keyword argumetns
-    p = ProgressMeter.Progress(n, dt=0.01, desc="", color=:red, output=STDERR, barlen=40)
+    p = ProgressMeter.Progress(n, dt=0.01, desc="", color=:red, output=stderr, barlen=40)
     for i in 1:n
         sleep(0.1)
         ProgressMeter.next!(p)
@@ -213,7 +213,7 @@ function testfunc14(barglyphs)
         ProgressMeter.next!(p)
     end
     p = ProgressMeter.Progress(n, dt=0.01, desc="",
-                               color=:red, output=STDERR, barlen=40,
+                               color=:red, output=stderr, barlen=40,
                                barglyphs=ProgressMeter.BarGlyphs(barglyphs))
     for i in 1:n
         sleep(0.1)
