@@ -5,7 +5,7 @@ module ProgressMeter
 using Compat: stderr, lastindex, printstyled
 using Compat.Printf: @sprintf
 
-export Progress, ProgressThresh, BarGlyphs, next!, update!, cancel, finish!, @showprogress
+export Progress, ProgressThresh, BarGlyphs, start!, next!, update!, cancel, finish!, @showprogress
 
 """
 `ProgressMeter` contains a suite of utilities for displaying progress
@@ -155,8 +155,13 @@ function updateProgress!(p::Progress; showvalues = Any[], valuecolor = :blue)
         percentage_complete = 100.0 * p.counter / p.n
         bar = barstring(p.barlen, percentage_complete, barglyphs=p.barglyphs)
         elapsed_time = t - p.tfirst
-        est_total_time = 100 * elapsed_time / percentage_complete
-        eta_sec = round(Int, est_total_time - elapsed_time )
+        if iszero(percentage_complete)
+            est_total_time = 0.0
+            eta_sec = Nullable{Int}()
+        else
+            est_total_time = 100 * elapsed_time / percentage_complete
+            eta_sec = Nullable(round(Int, est_total_time - elapsed_time)) 
+        end
         eta = durationstring(eta_sec)
         msg = @sprintf "%s%3u%%%s  ETA: %s" p.desc round(Int, percentage_complete) bar eta
         move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
@@ -201,6 +206,22 @@ function updateProgress!(p::ProgressThresh; showvalues = Any[], valuecolor = :bl
 end
 
 # update progress display
+"""
+`start!(prog, [color])` resets the bar and prints the bar with 0 progress.
+
+You may optionally change the color of the display, See also `update!`.
+"""
+function start!(p::Progress; options...)
+    p.counter = 0
+    p.tfirst = p.tlast = time()
+    updateProgress!(p; options...)
+end
+
+function start!(p::Progress, color::Symbol; options...)
+    p.color = color
+    first!(p; options...)
+end
+
 """
 `next!(prog, [color])` reports that one unit of progress has been
 made. Depending on the time interval since the last update, this may
@@ -349,6 +370,13 @@ function durationstring(nsec)
     hhmmss
 end
 
+function durationstring(null_nsec::Nullable)
+    if isnull(null_nsec)
+        return "N/A"
+    else
+        return durationstring(get(null_nsec))
+    end
+end
 function showprogress_process_expr(node, metersym)
     if !isa(node, Expr)
         node
