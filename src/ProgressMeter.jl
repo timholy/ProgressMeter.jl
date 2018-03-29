@@ -294,7 +294,7 @@ function printvalues!(p::AbstractProgress, showvalues; color = false)
 end
 
 function move_cursor_up_while_clearing_lines(io, numlinesup)
-    if isdefined(Main, :IJulia)
+    if isdefined(Main, :IJulia) && numlinesup > 0
         Main.IJulia.clear_output()
     else
         for _ in 1:numlinesup
