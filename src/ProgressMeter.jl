@@ -294,8 +294,12 @@ function printvalues!(p::AbstractProgress, showvalues; color = false)
 end
 
 function move_cursor_up_while_clearing_lines(io, numlinesup)
-    for _ in 1:numlinesup
-        print(io, "\r\u1b[K\u1b[A")
+    if isdefined(Main, :IJulia)
+        Main.IJulia.clear_output()
+    else
+        for _ in 1:numlinesup
+            print(io, "\r\u1b[K\u1b[A")
+        end
     end
 end
 
