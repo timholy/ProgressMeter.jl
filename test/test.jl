@@ -300,3 +300,15 @@ end
 
 println("Testing @showprogress macro on distributed for loop without reducer")
 testfunc15(3000, 0.01, 0.002)
+
+function testfunc17()
+    n = 30
+    p = ProgressMeter.Progress(n, counterfirst=15)
+    for i in 15+1:30
+        sleep(0.1)
+        ProgressMeter.next!(p)
+    end
+end
+testfunc17()
+
+println("Testing counterfirst")

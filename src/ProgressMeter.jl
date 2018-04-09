@@ -70,6 +70,7 @@ mutable struct Progress <: AbstractProgress
     output::IO              # output stream into which the progress is written
     offset::Int             # position offset of progress bar (default is 0)
     numprintedvalues::Int   # num values printed below progress in last iteration
+    counterfirst::Int       # which iteration to continue progress from
 
     function Progress(n::Integer;
                       dt::Real=0.1,
@@ -79,12 +80,13 @@ mutable struct Progress <: AbstractProgress
                       barlen::Integer=tty_width(desc),
                       barglyphs::BarGlyphs=BarGlyphs('|','█', Sys.iswindows() ? '█' : ['▏','▎','▍','▌','▋','▊','▉'],' ','|',),
                       offset::Int=0,
+                      counterfirst::Integer=0
                      )
         spinlocker = Threads.SpinLock()
-        counter = 0
+        counter = counterfirst
         tfirst = tlast = time()
         printed = false
-        new(n, spinlocker, dt, counter, tfirst, tlast, printed, desc, barlen, barglyphs, color, output, offset, 0)
+        new(n, spinlocker, dt, counter, tfirst, tlast, printed, desc, barlen, barglyphs, color, output, offset, 0, counterfirst)
     end
 end
 
@@ -207,7 +209,7 @@ function updateProgress!(p::Progress; showvalues = (), valuecolor = :blue, offse
         percentage_complete = 100.0 * p.counter / p.n
         bar = barstring(p.barlen, percentage_complete, barglyphs=p.barglyphs)
         elapsed_time = t - p.tfirst
-        est_total_time = 100 * elapsed_time / percentage_complete
+        est_total_time = elapsed_time * (p.n - p.counterfirst) / (p.counter - p.counterfirst)
         if 0 <= est_total_time <= typemax(Int)
             eta_sec = round(Int, est_total_time - elapsed_time )
             eta = durationstring(eta_sec)
