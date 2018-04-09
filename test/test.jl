@@ -309,6 +309,6 @@ function testfunc17()
         ProgressMeter.next!(p)
     end
 end
-testfunc17()
 
-println("Testing counterfirst")
+println("Testing start offset")
+testfunc17()
