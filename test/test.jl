@@ -55,7 +55,6 @@ end
 println("Testing that not even 1% required...")
 testfunc4()
 
-
 function testfunc5(n, dt, tsleep, desc, barlen)
     p = ProgressMeter.Progress(n, dt, desc, barlen)
     for i = 1:round(Int, floor(n/2))
@@ -168,6 +167,21 @@ testfunc10(107, 105, 0.01, 0.01)
 println("Testing over-shooting progress with finish!...")
 testfunc10(107, 111, 0.01, 0.01)
 
+function testfunc11(n, dt, tsleep)
+    p = ProgressMeter.Progress(n, dt)
+    for i = 1:n÷2
+        sleep(tsleep)
+        ProgressMeter.next!(p)
+    end
+    sleep(tsleep)
+    ProgressMeter.update!(p, 0)
+    for i = 1:n
+        sleep(tsleep)
+        ProgressMeter.next!(p)
+    end
+end
+println("Testing update! to 0...")
+testfunc11(6, 0.01, 0.3)
 
 function testfunc13()
     ProgressMeter.@showprogress 1 for i=1:10
