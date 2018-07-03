@@ -228,7 +228,7 @@ testfunc14("[=> ]")
 # Threshold-based progress reports
 println("Testing threshold-based progress")
 prog = ProgressMeter.ProgressThresh(1e-5, "Minimizing:")
-for val in logspace(2, -6, 20)
+for val in 10 .^ range(2, stop=-6, length=20)
     ProgressMeter.update!(prog, val)
     sleep(0.1)
 end

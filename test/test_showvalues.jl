@@ -25,7 +25,7 @@ function testfunc3(n, dt, tsleep, desc, barlen)
     for i = 1:n
         sleep(tsleep)
         ProgressMeter.next!(p; showvalues = [(:i, i*10), ("constant", "foo"), 
-            ("foobar", round(i*tsleep, 4))])
+            ("foobar", round(i*tsleep, digits=4))])
     end
 end
 testfunc3(30, 1, 0.2, "progress  ", 70)
@@ -35,7 +35,7 @@ function testfunc4(n, dt, tsleep, desc, barlen)
     p = ProgressMeter.Progress(n, dt, desc, barlen)
     for i = 1:n
         sleep(tsleep)
-        values = [(:i, i*10), ("constant", "foo"), ("foobar", round(i*tsleep, 4))]
+        values = [(:i, i*10), ("constant", "foo"), ("foobar", round(i*tsleep, digits=4))]
         ProgressMeter.next!(p; showvalues = values[randn(3) .< 0.5])
     end
 end
@@ -53,7 +53,7 @@ testfunc5(10, 1, 0.2, "progress  ", 40)
 
 println("Testing showvalues with threshold-based progress")
 prog = ProgressMeter.ProgressThresh(1e-5, "Minimizing:")
-for val in logspace(2, -6, 20)
+for val in 10 .^ range(2, stop=-6, length=20)
     ProgressMeter.update!(prog, val; showvalues = Dict(:margin => abs(val - 1e-5)))
     sleep(0.1)
 end
