@@ -148,7 +148,7 @@ function updateProgress!(p::Progress; showvalues = Any[], valuecolor = :blue)
             printvalues!(p, showvalues; color = valuecolor)
             println(p.output)
         end
-        return
+        return nothing
     end
 
     if t > p.tlast+p.dt
@@ -156,8 +156,12 @@ function updateProgress!(p::Progress; showvalues = Any[], valuecolor = :blue)
         bar = barstring(p.barlen, percentage_complete, barglyphs=p.barglyphs)
         elapsed_time = t - p.tfirst
         est_total_time = 100 * elapsed_time / percentage_complete
-        eta_sec = round(Int, est_total_time - elapsed_time )
-        eta = durationstring(eta_sec)
+        if 0 <= est_total_time <= typemax(Int)
+            eta_sec = round(Int, est_total_time - elapsed_time )
+            eta = durationstring(eta_sec)
+        else
+            eta = "N/A"
+        end
         msg = @sprintf "%s%3u%%%s  ETA: %s" p.desc round(Int, percentage_complete) bar eta
         move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
         printover(p.output, msg, p.color)
@@ -168,6 +172,7 @@ function updateProgress!(p::Progress; showvalues = Any[], valuecolor = :blue)
         p.tlast = t + 2*(time()-t)
         p.printed = true
     end
+    return nothing
 end
 
 function updateProgress!(p::ProgressThresh; showvalues = Any[], valuecolor = :blue)
