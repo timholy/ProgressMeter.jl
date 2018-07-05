@@ -1,7 +1,6 @@
 import ProgressMeter
-using Compat.Test
-using Compat.Random
-using Compat: stderr
+using Random: srand
+using Test
 
 srand(123)
 
@@ -68,7 +67,7 @@ function testfunc5(n, dt, tsleep, desc, barlen)
     end
 end
 
-println("Testing changing the bar color")
+println("\nTesting changing the bar color")
 testfunc5(107, 0.01, 0.01, "Computing...", 50)
 
 
