@@ -2,8 +2,7 @@ __precompile__()
 
 module ProgressMeter
 
-using Compat: stderr, lastindex, printstyled
-using Compat.Printf: @sprintf
+using Printf: @sprintf
 
 export Progress, ProgressThresh, BarGlyphs, next!, update!, cancel, finish!, @showprogress
 
