@@ -3,6 +3,7 @@ __precompile__()
 module ProgressMeter
 
 using Printf: @sprintf
+using Distributed
 
 export Progress, ProgressThresh, BarGlyphs, next!, update!, cancel, finish!, @showprogress
 
@@ -491,6 +492,52 @@ macro showprogress(args...)
                 rv
             end
         end
+    end
+end
+
+function progress_map(args...; mapfun=map, progress=Progress(ncalls(mapfun, args)), kwargs...)
+    f = first(args)
+    other_args = args[2:end]
+    channel = RemoteChannel(()->Channel{Bool}(ncalls(mapfun, args)), 1)
+    @sync begin
+        # map task
+        @async begin
+            vals = mapfun(other_args...; kwargs) do x
+                try
+                    val = f(x)
+                    put!(channel, True)
+                catch ex
+                    put!(channel, False)
+                    rethrow(ex)
+                end
+                return val
+            end
+        end
+
+        # display task
+        @async begin
+            while take!(channel)            
+                next!(progress)
+            end
+            finish!(progress)
+        end
+    end
+    return vals
+end
+
+"""
+Infer the number of calls to the mapped function (i.e. the length of the returned array) given the input arguments to map or pmap.
+"""
+function ncalls(mapfun::Function=map, map_args)
+    if mapfun == pmap && length(map_args) >= 2 && isa(map_args[2], AbstractWorkerPool) # 
+        relevant = map_args[3:end]
+    else
+        relevant = map_args[2:end]
+    end
+    if isempty(relevant)
+        error("Unable to determine number of calls in $mapfun. Too few arguments?")
+    else
+        return maximum(length(arg) for arg in relevant)
     end
 end
 
