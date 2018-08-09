@@ -1,8 +1,8 @@
 import ProgressMeter
-using Random: srand
+using Random: seed!
 using Test
 
-srand(123)
+seed!(123)
 
 function testfunc(n, dt, tsleep)
     p = ProgressMeter.Progress(n, dt)

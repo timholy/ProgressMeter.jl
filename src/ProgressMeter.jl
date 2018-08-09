@@ -380,19 +380,17 @@ struct ProgressWrapper{T}
 end
 
 Base.length(wrap::ProgressWrapper) = Base.length(wrap.obj)
-Base.start(wrap::ProgressWrapper) = (Base.start(wrap.obj), true)
 
-function Base.done(wrap::ProgressWrapper, state)
-    done = Base.done(wrap.obj, state[1])
-    done && finish!(wrap.meter)
-    return done
-end
+function Base.iterate(wrap::ProgressWrapper, state...)
+    ir = iterate(wrap.obj, state...)
 
-function Base.next(wrap::ProgressWrapper, state)
-    st, firstiteration = state
-    firstiteration || next!(wrap.meter)
-    i, st = Base.next(wrap.obj, st)
-    return (i, (st, false))
+    if ir === nothing
+        finish!(wrap.meter)
+    elseif !isempty(state)
+        next!(wrap.meter)
+    end
+
+    ir
 end
 
 """
