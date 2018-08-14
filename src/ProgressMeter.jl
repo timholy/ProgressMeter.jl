@@ -5,7 +5,7 @@ module ProgressMeter
 using Printf: @sprintf
 using Distributed
 
-export Progress, ProgressThresh, BarGlyphs, next!, update!, cancel, finish!, @showprogress
+export Progress, ProgressThresh, BarGlyphs, next!, update!, cancel, finish!, @showprogress, progress_map
 
 """
 `ProgressMeter` contains a suite of utilities for displaying progress
