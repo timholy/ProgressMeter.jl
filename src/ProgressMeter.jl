@@ -495,31 +495,33 @@ macro showprogress(args...)
     end
 end
 
-function progress_map(args...; mapfun=map, progress=Progress(ncalls(mapfun, args)), kwargs...)
+function progress_map(args...; mapfun=map,
+                               progress=Progress(ncalls(mapfun, args)),
+                               channel_bufflen=min(1000, ncalls(mapfun, args)),
+                               kwargs...)
     f = first(args)
     other_args = args[2:end]
-    channel = RemoteChannel(()->Channel{Bool}(ncalls(mapfun, args)), 1)
+    channel = RemoteChannel(()->Channel{Bool}(channel_bufflen), 1)
+    local vals
     @sync begin
-        # map task
-        @async begin
-            vals = mapfun(other_args...; kwargs) do x
-                try
-                    val = f(x)
-                    put!(channel, True)
-                catch ex
-                    put!(channel, False)
-                    rethrow(ex)
-                end
-                return val
-            end
+        # display task
+        @async while take!(channel)            
+            next!(progress)
         end
 
-        # display task
+        # map task
         @async begin
-            while take!(channel)            
-                next!(progress)
+            vals = mapfun(other_args...; kwargs...) do x
+                try
+                    val = f(x)
+                    put!(channel, true)
+                    return val
+                catch ex
+                    put!(channel, false)
+                    rethrow(ex)
+                end
             end
-            finish!(progress)
+            put!(channel, false)
         end
     end
     return vals
@@ -528,7 +530,7 @@ end
 """
 Infer the number of calls to the mapped function (i.e. the length of the returned array) given the input arguments to map or pmap.
 """
-function ncalls(mapfun::Function=map, map_args)
+function ncalls(mapfun::Function, map_args)
     if mapfun == pmap && length(map_args) >= 2 && isa(map_args[2], AbstractWorkerPool) # 
         relevant = map_args[3:end]
     else
