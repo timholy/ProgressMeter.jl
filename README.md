@@ -123,6 +123,35 @@ for iter = 1:10
 end
 ```
 
+### Tips for parallel programming
+
+When multiple processes or tasks are being used for a computation, the workers should communicate back to a single task for displaying the progress bar. This can be accomplished with a `RemoteChannel`:
+
+```julia
+using ProgressMeter
+using Distributed
+
+p = Progress(10)
+channel = RemoteChannel(()->Channel{Bool}(10), 1)
+
+@sync begin
+    # this task prints the progress bar
+    @async while take!(channel)
+        next!(p)
+    end
+
+    # this task does the computation
+    @async begin
+        @distributed (+) for i in 1:10
+            sleep(0.1)
+            put!(channel, true)
+            i^2
+        end
+        put!(channel, false) # this tells the printing task to finish
+    end
+end
+```
+
 ## Credits
 
 Thanks to Alan Bahm, Andrew Burroughs, and Jim Garrison for major enhancements to this package.
