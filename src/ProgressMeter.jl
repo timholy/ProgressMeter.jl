@@ -287,20 +287,20 @@ function printvalues!(p::AbstractProgress, showvalues; color = false)
     length(showvalues) == 0 && return
     maxwidth = maximum(Int[length(string(name)) for (name, _) in showvalues])
     for (name, value) in showvalues
-        msg = "\n  " * rpad(string(name) * ": ", maxwidth+2+1) * string(value)
+        msg = "  |  " * string(name) * ": " * string(value)
         (color == false) ? print(p.output, msg) : print_with_color(color, p.output, msg)
     end
     p.numprintedvalues = length(showvalues)
 end
 
 function move_cursor_up_while_clearing_lines(io, numlinesup)
-    if isdefined(Main, :IJulia) && numlinesup > 0
-        Main.IJulia.clear_output()
-    else
+#    if isdefined(Main, :IJulia) && numlinesup > 0
+#        Main.IJulia.clear_output()
+#    else
         for _ in 1:numlinesup
             print(io, "\r\u1b[K\u1b[A")
         end
-    end
+#    end
 end
 
 function printover(io::IO, s::AbstractString, color::Symbol = :color_normal)
