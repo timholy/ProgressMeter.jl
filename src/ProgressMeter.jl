@@ -3,8 +3,9 @@ __precompile__()
 module ProgressMeter
 
 using Printf: @sprintf
+using Distributed
 
-export Progress, ProgressThresh, BarGlyphs, next!, update!, cancel, finish!, @showprogress
+export Progress, ProgressThresh, BarGlyphs, next!, update!, cancel, finish!, @showprogress, progress_map, progress_pmap
 
 """
 `ProgressMeter` contains a suite of utilities for displaying progress
@@ -398,97 +399,210 @@ end
 @showprogress dt "Computing..." for i = 1:50
     # computation goes here
 end
+
+@showprogress dt "Computing..." pmap(x->x^2, 1:50)
 ```
 displays progress in performing a computation. `dt` is the minimum
 interval between updates to the user. You may optionally supply a
 custom message to be printed that specifies the computation being
 performed.
 
-`@showprogress` works for both loops and comprehensions.
+`@showprogress` works for loops, comprehensions, map, and pmap.
 """
 macro showprogress(args...)
     if length(args) < 1
         throw(ArgumentError("@showprogress requires at least one argument."))
     end
     progressargs = args[1:end-1]
-    loop = args[end]
-    origloop = loop = copy(loop)
+    expr = args[end]
+    orig = expr = copy(expr)
     metersym = gensym("meter")
+    mapfuns = (:map, :pmap)
+    kind = :invalid # :invalid, :loop, or :map
 
-    if isa(loop, Expr) && loop.head === :for
-        outerassignidx = 1
-        loopbodyidx = lastindex(loop.args)
-    elseif isa(loop, Expr) && loop.head === :comprehension
-        outerassignidx = lastindex(loop.args)
-        loopbodyidx = 1
-    elseif isa(loop, Expr) && loop.head === :typed_comprehension
-        outerassignidx = lastindex(loop.args)
-        loopbodyidx = 2
-    else
-        throw(ArgumentError("Final argument to @showprogress must be a for loop or comprehension."))
-    end
-
-    # As of julia 0.5, a comprehension's "loop" is actually one level deeper in the syntax tree.
-    if loop.head !== :for
-        @assert length(loop.args) == loopbodyidx
-        loop = loop.args[outerassignidx] = copy(loop.args[outerassignidx])
-        @assert loop.head === :generator
-        outerassignidx = lastindex(loop.args)
-        loopbodyidx = 1
-    end
-
-    # Transform the first loop assignment
-    loopassign = loop.args[outerassignidx] = copy(loop.args[outerassignidx])
-    if loopassign.head === :block # this will happen in a for loop with multiple iteration variables
-        for i in 2:length(loopassign.args)
-            loopassign.args[i] = esc(loopassign.args[i])
-        end
-        loopassign = loopassign.args[1] = copy(loopassign.args[1])
-    end
-    @assert loopassign.head === :(=)
-    @assert length(loopassign.args) == 2
-    obj = loopassign.args[2]
-    loopassign.args[1] = esc(loopassign.args[1])
-    loopassign.args[2] = :(ProgressWrapper(iterable, $(esc(metersym))))
-
-    # Transform the loop body break and return statements
-    if loop.head === :for
-        loop.args[loopbodyidx] = showprogress_process_expr(loop.args[loopbodyidx], metersym)
-    end
-
-    # Escape all args except the loop assignment, which was already appropriately escaped.
-    for i in 1:length(loop.args)
-        if i != outerassignidx
-            loop.args[i] = esc(loop.args[i])
-        end
-    end
-    if origloop !== loop
-        # We have additional escaping to do; this will occur for comprehensions with julia 0.5 or later.
-        for i in 1:length(origloop.args)-1
-            origloop.args[i] = esc(origloop.args[i])
-        end
-    end
-
-    setup = quote
-        iterable = $(esc(obj))
-        $(esc(metersym)) = Progress(length(iterable), $([esc(arg) for arg in progressargs]...))
-    end
-
-    if loop.head === :for
-        return quote
-            $setup
-            $loop
-        end
-    else
-        # We're dealing with a comprehension
-        return quote
-            begin
-                $setup
-                rv = $origloop
-                next!($(esc(metersym)))
-                rv
+    if isa(expr, Expr)
+        if expr.head == :for
+            outerassignidx = 1
+            loopbodyidx = lastindex(expr.args)
+            kind = :loop
+        elseif expr.head == :comprehension
+            outerassignidx = lastindex(expr.args)
+            loopbodyidx = 1
+            kind = :loop
+        elseif expr.head == :typed_comprehension
+            outerassignidx = lastindex(expr.args)
+            loopbodyidx = 2
+            kind = :loop
+        elseif expr.head == :call && expr.args[1] in mapfuns
+            kind = :map
+        elseif expr.head == :do
+            call = expr.args[1]
+            if call.head == :call && call.args[1] in mapfuns
+                kind = :map
             end
         end
+    end
+
+    if kind == :invalid
+        throw(ArgumentError("Final argument to @showprogress must be a for loop, comprehension, map, or pmap; got $expr"))
+    elseif kind == :loop
+        # As of julia 0.5, a comprehension's "loop" is actually one level deeper in the syntax tree.
+        if expr.head !== :for
+            @assert length(expr.args) == loopbodyidx
+            expr = expr.args[outerassignidx] = copy(expr.args[outerassignidx])
+            @assert expr.head === :generator
+            outerassignidx = lastindex(expr.args)
+            loopbodyidx = 1
+        end
+
+        # Transform the first loop assignment
+        loopassign = expr.args[outerassignidx] = copy(expr.args[outerassignidx])
+        if loopassign.head === :block # this will happen in a for loop with multiple iteration variables
+            for i in 2:length(loopassign.args)
+                loopassign.args[i] = esc(loopassign.args[i])
+            end
+            loopassign = loopassign.args[1] = copy(loopassign.args[1])
+        end
+        @assert loopassign.head === :(=)
+        @assert length(loopassign.args) == 2
+        obj = loopassign.args[2]
+        loopassign.args[1] = esc(loopassign.args[1])
+        loopassign.args[2] = :(ProgressWrapper(iterable, $(esc(metersym))))
+
+        # Transform the loop body break and return statements
+        if expr.head === :for
+            expr.args[loopbodyidx] = showprogress_process_expr(expr.args[loopbodyidx], metersym)
+        end
+
+        # Escape all args except the loop assignment, which was already appropriately escaped.
+        for i in 1:length(expr.args)
+            if i != outerassignidx
+                expr.args[i] = esc(expr.args[i])
+            end
+        end
+        if orig !== expr
+            # We have additional escaping to do; this will occur for comprehensions with julia 0.5 or later.
+            for i in 1:length(orig.args)-1
+                orig.args[i] = esc(orig.args[i])
+            end
+        end
+
+        setup = quote
+            iterable = $(esc(obj))
+            $(esc(metersym)) = Progress(length(iterable), $([esc(arg) for arg in progressargs]...))
+        end
+
+        if expr.head === :for
+            return quote
+                $setup
+                $expr
+            end
+        else
+            # We're dealing with a comprehension
+            return quote
+                begin
+                    $setup
+                    rv = $orig
+                    next!($(esc(metersym)))
+                    rv
+                end
+            end
+        end
+    else # kind == :map
+
+        # isolate call to map
+        if expr.head == :do
+            call = expr.args[1]
+        else
+            call = expr
+        end
+
+        # get args to map to determine progress length
+        mapargs = collect(Any, filter(call.args[2:end]) do a
+            return isa(a, Symbol) || a.head != :kw
+        end)
+        if expr.head == :do
+            insert!(mapargs, 1, :nothing) # to make args for ncalls line up
+        end
+
+        # change call to progress_map
+        mapfun = call.args[1]
+        call.args[1] = :progress_map
+
+        # escape args as appropriate
+        for i in 2:length(call.args)
+            call.args[i] = esc(call.args[i])
+        end
+        if expr.head == :do
+            expr.args[2] = esc(expr.args[2])
+        end
+
+        # create appropriate Progress expression
+        lenex = :(ncalls($(esc(mapfun)), ($([esc(a) for a in mapargs]...),)))
+        progex = :(Progress($lenex, $([esc(a) for a in progressargs]...)))
+
+        # insert progress and mapfun kwargs
+        push!(call.args, Expr(:kw, :progress, progex))
+        push!(call.args, Expr(:kw, :mapfun, esc(mapfun)))
+
+        return expr
+    end
+end
+
+"""
+    progress_map(f, c...; mapfun=map, progress=Progress(...), kwargs...)
+
+Run a `map`-like function while displaying progress.
+
+`mapfun` can be any function, but it is only tested with `map` and `pmap`.
+"""
+function progress_map(args...; mapfun=map,
+                               progress=Progress(ncalls(mapfun, args)),
+                               channel_bufflen=min(1000, ncalls(mapfun, args)),
+                               kwargs...)
+    f = first(args)
+    other_args = args[2:end]
+    channel = RemoteChannel(()->Channel{Bool}(channel_bufflen), 1)
+    local vals
+    @sync begin
+        # display task
+        @async while take!(channel)            
+            next!(progress)
+        end
+
+        # map task
+        @sync begin
+            vals = mapfun(other_args...; kwargs...) do x...
+                val = f(x...)
+                put!(channel, true)
+                return val
+            end
+            put!(channel, false)
+        end
+    end
+    return vals
+end
+
+"""
+    progress_pmap(f, [::AbstractWorkerPool], c...; progress=Progress(...), kwargs...)
+
+Run `pmap` while displaying progress.
+"""
+progress_pmap(args...; kwargs...) = progress_map(args...; mapfun=pmap, kwargs...)
+
+"""
+Infer the number of calls to the mapped function (i.e. the length of the returned array) given the input arguments to map or pmap.
+"""
+function ncalls(mapfun::Function, map_args)
+    if mapfun == pmap && length(map_args) >= 2 && isa(map_args[2], AbstractWorkerPool) 
+        relevant = map_args[3:end]
+    else
+        relevant = map_args[2:end]
+    end
+    if isempty(relevant)
+        error("Unable to determine number of calls in $mapfun. Too few arguments?")
+    else
+        return maximum(length(arg) for arg in relevant)
     end
 end
 
