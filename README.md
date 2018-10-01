@@ -15,8 +15,7 @@ Pkg.add("ProgressMeter")
 
 ### Progress meters for tasks with a pre-determined number of steps
 
-This works for functions that process things in loops.
-Here's a demonstration of how to use it:
+This works for functions that process things in loops or with map/pmap:
 
 ```julia
 using ProgressMeter
@@ -24,11 +23,16 @@ using ProgressMeter
 @showprogress 1 "Computing..." for i in 1:50
     sleep(0.1)
 end
+
+@showprogress pmap(1:10) do x
+    sleep(0.1)
+    x^2
+end
 ```
 
-This will use a minimum update interval of 1 second, and show the ETA and final duration.  If your computation runs so quickly that it never needs to show progress, no extraneous output will be displayed.
+The first incantation will use a minimum update interval of 1 second, and show the ETA and final duration.  If your computation runs so quickly that it never needs to show progress, no extraneous output will be displayed.
 
-The `@showprogress` macro wraps a `for` loop or comprehension, as long as the object being iterated over implements the `length` method.  This macro will correctly handle any `continue` statements in a `for` loop as well.
+The `@showprogress` macro wraps a `for` loop, comprehension, or map/pmap as long as the object being iterated over implements the `length` method and will handle `continue` correctly.
 
 You can also control progress updates and reports manually:
 
@@ -64,6 +68,8 @@ function readFileLines(fileName::String)
     end
 end
 ```
+
+### Progress bar style
 
 Optionally, a description string can be specified which will be prepended to the output, and a progress meter `M` characters long can be shown.  E.g.
 
@@ -149,6 +155,18 @@ channel = RemoteChannel(()->Channel{Bool}(10), 1)
         end
         put!(channel, false) # this tells the printing task to finish
     end
+end
+```
+
+### `progress_map`
+
+More control over the progress bar in a map function can be achieved with the `progress_map` and `progress_pmap` functions. The keyword argument `progress` can be used to supply a custom progress meter.
+
+```julia
+p = Progress(10, barglyphs=BarGlyphs("[=> ]"))
+progress_map(1:10, progress=p) do x
+    sleep(0.1)
+    x^2
 end
 ```
 
