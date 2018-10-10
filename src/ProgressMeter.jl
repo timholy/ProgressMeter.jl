@@ -63,6 +63,7 @@ mutable struct Progress <: AbstractProgress
     tlast::Float64
     printed::Bool           # true if we have issued at least one status update
     desc::AbstractString    # prefix to the percentage, e.g.  "Computing..."
+    offset::Int             # position offset of progress bar (default is 0)
     barlen::Int             # progress bar size (default is available terminal width)
     barglyphs::BarGlyphs    # the characters to be used in the bar
     color::Symbol           # default to green
@@ -72,6 +73,7 @@ mutable struct Progress <: AbstractProgress
     function Progress(n::Integer;
                       dt::Real=0.1,
                       desc::AbstractString="Progress: ",
+                      offset::Int=0,
                       color::Symbol=:green,
                       output::IO=stderr,
                       barlen::Integer=tty_width(desc),
@@ -79,15 +81,15 @@ mutable struct Progress <: AbstractProgress
         counter = 0
         tfirst = tlast = time()
         printed = false
-        new(n, dt, counter, tfirst, tlast, printed, desc, barlen, barglyphs, color, output, 0)
+        new(n, dt, counter, tfirst, tlast, printed, desc, offset, barlen, barglyphs, color, output, 0)
     end
 end
 
-Progress(n::Integer, dt::Real, desc::AbstractString="Progress: ",
+Progress(n::Integer, dt::Real, desc::AbstractString="Progress: ", offset::Integer=0,
          barlen::Integer=tty_width(desc), color::Symbol=:green, output::IO=stderr) =
-    Progress(n, dt=dt, desc=desc, barlen=barlen, color=color, output=output)
+    Progress(n, dt=dt, desc=desc, offset=offset, barlen=barlen, color=color, output=output)
 
-Progress(n::Integer, desc::AbstractString) = Progress(n, desc=desc)
+Progress(n::Integer, desc::AbstractString, offset::Integer=0) = Progress(n, desc=desc, offset=offset)
 
 
 """
@@ -108,6 +110,7 @@ mutable struct ProgressThresh{T<:Real} <: AbstractProgress
     tlast::Float64
     printed::Bool        # true if we have issued at least one status update
     desc::AbstractString # prefix to the percentage, e.g.  "Computing..."
+    offset::Int             # position offset of progress bar (default is 0)
     color::Symbol        # default to green
     output::IO           # output stream into which the progress is written
     numprintedvalues::Int   # num values printed below progress in last iteration
@@ -115,6 +118,7 @@ mutable struct ProgressThresh{T<:Real} <: AbstractProgress
     function ProgressThresh{T}(thresh;
                                dt::Real=0.1,
                                desc::AbstractString="Progress: ",
+                               offset::Int=0,
                                color::Symbol=:green,
                                output::IO=stderr) where T
         tfirst = tlast = time()
@@ -123,9 +127,9 @@ mutable struct ProgressThresh{T<:Real} <: AbstractProgress
     end
 end
 
-ProgressThresh(thresh::Real, dt::Real=0.1, desc::AbstractString="Progress: ",
+ProgressThresh(thresh::Real, dt::Real=0.1, desc::AbstractString="Progress: ", positon::Integer=0,
          color::Symbol=:green, output::IO=stderr) =
-    ProgressThresh{typeof(thresh)}(thresh, dt=dt, desc=desc, color=color, output=output)
+    ProgressThresh{typeof(thresh)}(thresh, dt=dt, desc=desc, offset=0, color=color, output=output)
 
 ProgressThresh(thresh::Real, desc::AbstractString) = ProgressThresh{typeof(thresh)}(thresh, desc=desc)
 
@@ -133,7 +137,8 @@ ProgressThresh(thresh::Real, desc::AbstractString) = ProgressThresh{typeof(thres
 tty_width(desc) = max(0, displaysize()[2] - (length(desc) + 29))
 
 # update progress display
-function updateProgress!(p::Progress; showvalues = Any[], valuecolor = :blue)
+function updateProgress!(p::Progress; showvalues = Any[], valuecolor = :blue, offset::Integer = p.offset)
+    p.offset = offset
     t = time()
     if p.counter >= p.n
         if p.counter == p.n && p.printed
@@ -141,10 +146,14 @@ function updateProgress!(p::Progress; showvalues = Any[], valuecolor = :blue)
             bar = barstring(p.barlen, percentage_complete, barglyphs=p.barglyphs)
             dur = durationstring(t-p.tfirst)
             msg = @sprintf "%s%3u%%%s Time: %s" p.desc round(Int, percentage_complete) bar dur
+            print(p.output, "\r")
+            print(p.output, "\n" ^ p.offset)
+            print(p.output, "\n" ^ p.numprintedvalues)
             move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             printover(p.output, msg, p.color)
             printvalues!(p, showvalues; color = valuecolor)
-            println(p.output)
+            print(p.output, "\u1b[A" ^ p.numprintedvalues)
+            print(p.output, "\u1b[A" ^ p.offset)
         end
         return nothing
     end
@@ -161,9 +170,14 @@ function updateProgress!(p::Progress; showvalues = Any[], valuecolor = :blue)
             eta = "N/A"
         end
         msg = @sprintf "%s%3u%%%s  ETA: %s" p.desc round(Int, percentage_complete) bar eta
+        print(p.output, "\r")
+        print(p.output, "\n" ^ p.offset)
+        print(p.output, "\n" ^ p.numprintedvalues)
         move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
         printover(p.output, msg, p.color)
         printvalues!(p, showvalues; color = valuecolor)
+        print(p.output, "\u1b[A" ^ p.numprintedvalues)
+        print(p.output, "\r\u1b[A" ^ p.offset)
         # Compensate for any overhead of printing. This can be
         # especially important if you're running over a slow network
         # connection.
@@ -173,7 +187,8 @@ function updateProgress!(p::Progress; showvalues = Any[], valuecolor = :blue)
     return nothing
 end
 
-function updateProgress!(p::ProgressThresh; showvalues = Any[], valuecolor = :blue)
+function updateProgress!(p::ProgressThresh; showvalues = Any[], valuecolor = :blue, offset::Integer = p.offset)
+    p.offset = offset
     t = time()
     if p.val <= p.thresh && !p.triggered
         p.triggered = true
@@ -181,10 +196,14 @@ function updateProgress!(p::ProgressThresh; showvalues = Any[], valuecolor = :bl
             p.triggered = true
             dur = durationstring(t-p.tfirst)
             msg = @sprintf "%s Time: %s (%d iterations)" p.desc dur p.counter
+            print(p.output, "\r")
+            print(p.output, "\n" ^ p.offset)
+            print(p.output, "\n" ^ p.numprintedvalues)
             move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             printover(p.output, msg, p.color)
             printvalues!(p, showvalues; color = valuecolor)
-            println(p.output)
+            print(p.output, "\u1b[A" ^ p.numprintedvalues)
+            print(p.output, "\r\u1b[A" ^ p.offset)
         end
         return
     end
@@ -192,9 +211,14 @@ function updateProgress!(p::ProgressThresh; showvalues = Any[], valuecolor = :bl
     if t > p.tlast+p.dt && !p.triggered
         elapsed_time = t - p.tfirst
         msg = @sprintf "%s (thresh = %g, value = %g)" p.desc p.thresh p.val
+        print(p.output, "\r")
+        print(p.output, "\n" ^ p.offset)
+        print(p.output, "\n" ^ p.numprintedvalues)
         move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
         printover(p.output, msg, p.color)
         printvalues!(p, showvalues; color = valuecolor)
+        print(p.output, "\u1b[A" ^ p.numprintedvalues)
+        print(p.output, "\r\u1b[A" ^ p.offset)
         # Compensate for any overhead of printing. This can be
         # especially important if you're running over a slow network
         # connection.
@@ -263,10 +287,15 @@ See also `finish!`.
 """
 function cancel(p::AbstractProgress, msg::AbstractString = "Aborted before all tasks were completed", color = :red; showvalues = Any[], valuecolor = :blue)
     if p.printed
+        print(p.output, "\r")
+        print(p.output, "\n" ^ p.offset)
+        print(p.output, "\n" ^ p.numprintedvalues)
         move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
         printover(p.output, msg, color)
         printvalues!(p, showvalues; color = valuecolor)
         println(p.output)
+        print(p.output, "\u1b[A" ^ p.numprintedvalues)
+        print(p.output, "\r\u1b[A" ^ p.offset)
     end
     return
 end
@@ -564,7 +593,7 @@ function progress_map(args...; mapfun=map,
     local vals
     @sync begin
         # display task
-        @async while take!(channel)            
+        @async while take!(channel)
             next!(progress)
         end
 
@@ -592,7 +621,7 @@ progress_pmap(args...; kwargs...) = progress_map(args...; mapfun=pmap, kwargs...
 Infer the number of calls to the mapped function (i.e. the length of the returned array) given the input arguments to map or pmap.
 """
 function ncalls(mapfun::Function, map_args)
-    if mapfun == pmap && length(map_args) >= 2 && isa(map_args[2], AbstractWorkerPool) 
+    if mapfun == pmap && length(map_args) >= 2 && isa(map_args[2], AbstractWorkerPool)
         relevant = map_args[3:end]
     else
         relevant = map_args[2:end]
