@@ -63,31 +63,32 @@ mutable struct Progress <: AbstractProgress
     tlast::Float64
     printed::Bool           # true if we have issued at least one status update
     desc::AbstractString    # prefix to the percentage, e.g.  "Computing..."
-    offset::Int             # position offset of progress bar (default is 0)
     barlen::Int             # progress bar size (default is available terminal width)
     barglyphs::BarGlyphs    # the characters to be used in the bar
     color::Symbol           # default to green
     output::IO              # output stream into which the progress is written
+    offset::Int             # position offset of progress bar (default is 0)
     numprintedvalues::Int   # num values printed below progress in last iteration
 
     function Progress(n::Integer;
                       dt::Real=0.1,
                       desc::AbstractString="Progress: ",
-                      offset::Int=0,
                       color::Symbol=:green,
                       output::IO=stderr,
                       barlen::Integer=tty_width(desc),
-                      barglyphs::BarGlyphs=BarGlyphs('|','█','█',' ','|'))
+                      barglyphs::BarGlyphs=BarGlyphs('|','█','█',' ','|'),
+                      offset::Int=0)
         counter = 0
         tfirst = tlast = time()
         printed = false
-        new(n, dt, counter, tfirst, tlast, printed, desc, offset, barlen, barglyphs, color, output, 0)
+        new(n, dt, counter, tfirst, tlast, printed, desc, barlen, barglyphs, color, output, offset, 0)
     end
 end
 
-Progress(n::Integer, dt::Real, desc::AbstractString="Progress: ", offset::Integer=0,
-         barlen::Integer=tty_width(desc), color::Symbol=:green, output::IO=stderr) =
-    Progress(n, dt=dt, desc=desc, offset=offset, barlen=barlen, color=color, output=output)
+Progress(n::Integer, dt::Real, desc::AbstractString="Progress: ",
+         barlen::Integer=tty_width(desc), color::Symbol=:green, output::IO=stderr,
+         offset::Integer=0) =
+    Progress(n, dt=dt, desc=desc, barlen=barlen, color=color, output=output, offset=offset)
 
 Progress(n::Integer, desc::AbstractString, offset::Integer=0) = Progress(n, desc=desc, offset=offset)
 
@@ -110,28 +111,29 @@ mutable struct ProgressThresh{T<:Real} <: AbstractProgress
     tlast::Float64
     printed::Bool        # true if we have issued at least one status update
     desc::AbstractString # prefix to the percentage, e.g.  "Computing..."
-    offset::Int             # position offset of progress bar (default is 0)
     color::Symbol        # default to green
     output::IO           # output stream into which the progress is written
     numprintedvalues::Int   # num values printed below progress in last iteration
+    offset::Int             # position offset of progress bar (default is 0)
 
     function ProgressThresh{T}(thresh;
                                dt::Real=0.1,
                                desc::AbstractString="Progress: ",
-                               offset::Int=0,
                                color::Symbol=:green,
-                               output::IO=stderr) where T
+                               output::IO=stderr,
+                               offset::Int=0) where T
         tfirst = tlast = time()
         printed = false
-        new{T}(thresh, dt, typemax(T), 0, false, tfirst, tlast, printed, desc, color, output, 0)
+        new{T}(thresh, dt, typemax(T), 0, false, tfirst, tlast, printed, desc, color, output, offset, 0)
     end
 end
 
-ProgressThresh(thresh::Real, dt::Real=0.1, desc::AbstractString="Progress: ", positon::Integer=0,
-         color::Symbol=:green, output::IO=stderr) =
-    ProgressThresh{typeof(thresh)}(thresh, dt=dt, desc=desc, offset=0, color=color, output=output)
+ProgressThresh(thresh::Real, dt::Real=0.1, desc::AbstractString="Progress: ",
+         color::Symbol=:green, output::IO=stderr,
+         offset::Integer=0) =
+    ProgressThresh{typeof(thresh)}(thresh, dt=dt, desc=desc, offset=0, color=color, output=output, offset=offset)
 
-ProgressThresh(thresh::Real, desc::AbstractString) = ProgressThresh{typeof(thresh)}(thresh, desc=desc)
+ProgressThresh(thresh::Real, desc::AbstractString; offset::Integer=0) = ProgressThresh{typeof(thresh)}(thresh, desc=desc, offset=offset)
 
 #...length of percentage and ETA string with days is 29 characters
 tty_width(desc) = max(0, displaysize()[2] - (length(desc) + 29))
@@ -285,7 +287,8 @@ message printed and its color.
 
 See also `finish!`.
 """
-function cancel(p::AbstractProgress, msg::AbstractString = "Aborted before all tasks were completed", color = :red; showvalues = Any[], valuecolor = :blue)
+function cancel(p::AbstractProgress, msg::AbstractString = "Aborted before all tasks were completed", color = :red; showvalues = Any[], valuecolor = :blue, offset = p.offset)
+    p.offset = offset
     if p.printed
         print(p.output, "\r")
         print(p.output, "\n" ^ p.offset)
