@@ -305,7 +305,8 @@ end
 
 function printover(io::IO, s::AbstractString, color::Symbol = :color_normal)
     if isdefined(Main, :ESS) || isdefined(Main, :Atom)
-        print(io, '\r', s)
+        print(io, "\r")
+        printstyled(io, s; color=color)
     elseif isdefined(Main, :IJulia)
         print(io, '\r')
         printstyled(io, s; color=color) # Jupyter notebooks support ANSI color codes
