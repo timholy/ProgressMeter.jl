@@ -13,7 +13,7 @@ function testfunc2(n, dt, tsleep, desc, barlen)
     p = ProgressMeter.Progress(n, dt, desc, barlen)
     for i = 1:n
         sleep(tsleep)
-        ProgressMeter.next!(p; showvalues = [(:i, i), 
+        ProgressMeter.next!(p; showvalues = [(:i, i),
             (:constant, "foo"), (:isq, i^2), (:large, 2^i)])
     end
 end
@@ -24,7 +24,7 @@ function testfunc3(n, dt, tsleep, desc, barlen)
     p = ProgressMeter.Progress(n, dt, desc, barlen)
     for i = 1:n
         sleep(tsleep)
-        ProgressMeter.next!(p; showvalues = [(:i, i*10), ("constant", "foo"), 
+        ProgressMeter.next!(p; showvalues = [(:i, i*10), ("constant", "foo"),
             ("foobar", round(i*tsleep, digits=4))])
     end
 end
@@ -57,6 +57,14 @@ for val in 10 .^ range(2, stop=-6, length=20)
     ProgressMeter.update!(prog, val; showvalues = Dict(:margin => abs(val - 1e-5)))
     sleep(0.1)
 end
+
+println("Testing showvalues with online progress")
+prog = ProgressMeter.ProgressUnknown("Entries read:")
+for title in ["a", "b", "c", "d", "e"]
+    ProgressMeter.update!(prog; showvalues = Dict(:title => title))
+    sleep(0.5)
+end
+ProgressMeter.finish!(prog)
 
 
 println("Testing showvalues with early cancel")

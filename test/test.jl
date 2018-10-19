@@ -245,3 +245,12 @@ for val in 10 .^ range(2, stop=-6, length=20)
     ProgressMeter.update!(prog, val)
     sleep(0.1)
 end
+
+# Threshold-based progress reports
+println("Testing progress unknown")
+prog = ProgressMeter.ProgressUnknown("Reading entry:")
+for _ in 1:10
+    ProgressMeter.update!(prog)
+    sleep(0.1)
+end
+ProgressMeter.finish!(prog)
