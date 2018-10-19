@@ -3,7 +3,7 @@ module ProgressMeter
 using Printf: @sprintf
 using Distributed
 
-export Progress, ProgressThresh, BarGlyphs, next!, update!, cancel, finish!, @showprogress, progress_map, progress_pmap
+export Progress, ProgressThresh, ProgressUnknown, BarGlyphs, next!, update!, cancel, finish!, @showprogress, progress_map, progress_pmap
 
 """
 `ProgressMeter` contains a suite of utilities for displaying progress
@@ -129,6 +129,40 @@ ProgressThresh(thresh::Real, dt::Real=0.1, desc::AbstractString="Progress: ",
 
 ProgressThresh(thresh::Real, desc::AbstractString) = ProgressThresh{typeof(thresh)}(thresh, desc=desc)
 
+"""
+`prog = ProgressUnknown(; dt=0.1, desc="Progress: ",
+color=:green, output=stderr)` creates a progress meter for a task
+which has a non-deterministic termination criterion.
+Output will be generated at intervals at least `dt` seconds
+apart, and perhaps longer if each iteration takes longer than
+`dt`. `desc` is a description of the current task.
+"""
+mutable struct ProgressUnknown <: AbstractProgress
+    done::Bool
+    dt::Float64
+    counter::Int
+    triggered::Bool
+    tfirst::Float64
+    tlast::Float64
+    printed::Bool        # true if we have issued at least one status update
+    desc::AbstractString # prefix to the percentage, e.g.  "Computing..."
+    color::Symbol        # default to green
+    output::IO           # output stream into which the progress is written
+    numprintedvalues::Int   # num values printed below progress in last iteration
+end
+
+function ProgressUnknown(;dt::Real=0.1, desc::AbstractString="Progress: ", color::Symbol=:green, output::IO=stderr)
+    tfirst = tlast = time()
+    printed = false
+    ProgressUnknown(false, dt, 0, false, tfirst, tlast, printed, desc, color, output, 0)
+end
+
+ProgressUnknown(dt::Real, desc::AbstractString="Progress: ",
+         color::Symbol=:green, output::IO=stderr) =
+    ProgressUnknown(dt=dt, desc=desc, color=color, output=output)
+
+ProgressUnknown(desc::AbstractString) = ProgressUnknown(desc=desc)
+
 #...length of percentage and ETA string with days is 29 characters
 tty_width(desc) = max(0, displaysize()[2] - (length(desc) + 29))
 
@@ -203,6 +237,35 @@ function updateProgress!(p::ProgressThresh; showvalues = Any[], valuecolor = :bl
     end
 end
 
+function updateProgress!(p::ProgressUnknown; showvalues = Any[], valuecolor = :blue)
+    t = time()
+    if p.done
+        if p.printed
+            dur = durationstring(t-p.tfirst)
+            msg = @sprintf "%s %d \t Time: %s" p.desc p.counter dur
+            move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
+            printover(p.output, msg, p.color)
+            printvalues!(p, showvalues; color = valuecolor)
+            println(p.output)
+        end
+        return
+    end
+
+    if t > p.tlast+p.dt
+        dur = durationstring(t-p.tfirst)
+        msg = @sprintf "%s %d \t Time: %s" p.desc p.counter dur
+        move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
+        printover(p.output, msg, p.color)
+        printvalues!(p, showvalues; color = valuecolor)
+        # Compensate for any overhead of printing. This can be
+        # especially important if you're running over a slow network
+        # connection.
+        p.tlast = t + 2*(time()-t)
+        p.printed = true
+        return
+    end
+end
+
 # update progress display
 """
 `next!(prog, [color])` reports that one unit of progress has been
@@ -253,6 +316,16 @@ function update!(p::ProgressThresh, val, color::Symbol; options...)
     update!(p, val; options...)
 end
 
+function update!(p::ProgressUnknown; options...)
+    p.counter += 1
+    updateProgress!(p; options...)
+end
+
+function update!(p::ProgressUnknown, color::Symbol; options...)
+    p.color = color
+    update!(p, val; options...)
+end
+
 
 """
 `cancel(prog, [msg], [color=:red])` cancels the progress display
@@ -284,6 +357,11 @@ end
 
 function finish!(p::ProgressThresh; options...)
     update!(p, p.thresh; options...)
+end
+
+function finish!(p::ProgressUnknown; options...)
+    p.done = true
+    updateProgress!(p; options...)
 end
 
 # Internal method to print additional values below progress bar
@@ -561,7 +639,7 @@ function progress_map(args...; mapfun=map,
     local vals
     @sync begin
         # display task
-        @async while take!(channel)            
+        @async while take!(channel)
             next!(progress)
         end
 
@@ -589,7 +667,7 @@ progress_pmap(args...; kwargs...) = progress_map(args...; mapfun=pmap, kwargs...
 Infer the number of calls to the mapped function (i.e. the length of the returned array) given the input arguments to map or pmap.
 """
 function ncalls(mapfun::Function, map_args)
-    if mapfun == pmap && length(map_args) >= 2 && isa(map_args[2], AbstractWorkerPool) 
+    if mapfun == pmap && length(map_args) >= 2 && isa(map_args[2], AbstractWorkerPool)
         relevant = map_args[3:end]
     else
         relevant = map_args[2:end]

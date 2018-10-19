@@ -111,7 +111,25 @@ for val in exp10.(range(2, stop=-6, length=20))
 end
 ```
 
-This will display progress until `val` drops below the threshold value (1e-5).
+### Progress meters for tasks with an unknown number of steps
+
+Some tasks only terminate when some non-deterministic criterion is satisfied. In such
+circumstances, you can use the `ProgressUnknown` type:
+
+```julia
+prog = ProgressUnknown("Titles read:")
+for val in ["a" , "b", "c", "d"]
+    ProgressMeter.update!(prog)
+    if val == "c"
+        ProgressMeter.finish!(prog)
+        break
+    end
+    sleep(0.1)
+end
+```
+
+
+This will display the number of calls to `update!` until `finish!` is called.
 
 ### Printing additional information
 
