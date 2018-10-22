@@ -246,11 +246,25 @@ for val in 10 .^ range(2, stop=-6, length=20)
     sleep(0.1)
 end
 
-# Threshold-based progress reports
+# ProgressUnknown progress reports
 println("Testing progress unknown")
 prog = ProgressMeter.ProgressUnknown("Reading entry:")
 for _ in 1:10
     ProgressMeter.update!(prog)
+    sleep(0.1)
+end
+ProgressMeter.finish!(prog)
+
+prog = ProgressMeter.ProgressUnknown("Reading entry:")
+for k in 1:2:20
+    ProgressMeter.update!(prog, k)
+    sleep(0.1)
+end
+
+colors = [:red, :blue, :green]
+prog = ProgressMeter.ProgressUnknown("Reading entry:")
+for k in 1:2:20
+    ProgressMeter.update!(prog, k, rand(colors))
     sleep(0.1)
 end
 ProgressMeter.finish!(prog)

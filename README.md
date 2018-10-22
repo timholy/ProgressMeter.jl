@@ -127,7 +127,22 @@ for val in ["a" , "b", "c", "d"]
     sleep(0.1)
 end
 ```
+This will display the number of calls to `update!` until `finish!` is called.
 
+If your counter does not monotonically increases, you can also set the counter by hand.
+```julia
+prog = ProgressUnknown("Total length of characters read:")
+total_length_characters = 0
+for val in ["aaa" , "bb", "c", "d"]
+    global total_length_characters += length(val)
+    ProgressMeter.update!(prog, total_length_characters)
+    if val == "c"
+        ProgressMeter.finish!(prog)
+        break
+    end
+    sleep(0.5)
+end
+```
 
 This will display the number of calls to `update!` until `finish!` is called.
 

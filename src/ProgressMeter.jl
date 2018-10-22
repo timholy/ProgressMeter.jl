@@ -295,12 +295,12 @@ the current value.
 
 You may optionally change the color of the display. See also `next!`.
 """
-function update!(p::Progress, counter::Int; options...)
+function update!(p::Union{Progress, ProgressUnknown}, counter::Int; options...)
     p.counter = counter
     updateProgress!(p; options...)
 end
 
-function update!(p::Progress, counter::Int, color::Symbol; options...)
+function update!(p::Union{Progress, ProgressUnknown}, counter::Int, color::Symbol; options...)
     p.color = color
     update!(p, counter; options...)
 end
@@ -316,16 +316,12 @@ function update!(p::ProgressThresh, val, color::Symbol; options...)
     update!(p, val; options...)
 end
 
-function update!(p::ProgressUnknown; options...)
-    p.counter += 1
+function update!(p::ProgressUnknown; increasecounter=true, options...)
+    if increasecounter
+        p.counter += 1
+    end
     updateProgress!(p; options...)
 end
-
-function update!(p::ProgressUnknown, color::Symbol; options...)
-    p.color = color
-    update!(p, val; options...)
-end
-
 
 """
 `cancel(prog, [msg], [color=:red])` cancels the progress display
