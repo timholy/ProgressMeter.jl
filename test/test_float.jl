@@ -1,6 +1,3 @@
-include("../src/ProgressMeter.jl")
-using Main.ProgressMeter
-
 println("Testing floating normal progress bar (offset 4)")
 function testfunc1(n, dt, tsleep, desc, barlen, offset)
     p = ProgressMeter.Progress(n, dt, desc, barlen, offset=offset)
