@@ -86,11 +86,11 @@ mutable struct Progress <: AbstractProgress
 end
 
 Progress(n::Integer, dt::Real, desc::AbstractString="Progress: ",
-         barlen::Integer=tty_width(desc), color::Symbol=:green, output::IO=stderr,
-         offset::Integer = 0) =
+         barlen::Integer=tty_width(desc), color::Symbol=:green, output::IO=stderr;
+         offset::Integer=0) =
     Progress(n, dt=dt, desc=desc, barlen=barlen, color=color, output=output, offset=offset)
 
-Progress(n::Integer, desc::AbstractString, offset::Integer = 0) = Progress(n, desc=desc, offset=offset)
+Progress(n::Integer, desc::AbstractString, offset::Integer=0) = Progress(n, desc=desc, offset=offset)
 
 
 """
@@ -124,16 +124,16 @@ mutable struct ProgressThresh{T<:Real} <: AbstractProgress
                                offset::Int=0) where T
         tfirst = tlast = time()
         printed = false
-        new{T}(thresh, dt, typemax(T), 0, false, tfirst, tlast, printed, desc, color, output, offset, 0)
+        new{T}(thresh, dt, typemax(T), 0, false, tfirst, tlast, printed, desc, color, output, 0, offset)
     end
 end
 
 ProgressThresh(thresh::Real, dt::Real=0.1, desc::AbstractString="Progress: ",
-         color::Symbol=:green, output::IO=stderr,
+         color::Symbol=:green, output::IO=stderr;
          offset::Integer=0) =
     ProgressThresh{typeof(thresh)}(thresh, dt=dt, desc=desc, color=color, output=output, offset=offset)
 
-ProgressThresh(thresh::Real, desc::AbstractString; offset::Integer=0) = ProgressThresh{typeof(thresh)}(thresh, desc=desc, offset=offset)
+ProgressThresh(thresh::Real, desc::AbstractString, offset::Integer=0) = ProgressThresh{typeof(thresh)}(thresh, desc=desc, offset=offset)
 
 #...length of percentage and ETA string with days is 29 characters
 tty_width(desc) = max(0, displaysize()[2] - (length(desc) + 29))
