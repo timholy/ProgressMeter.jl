@@ -250,7 +250,7 @@ end
 println("Testing progress unknown")
 prog = ProgressMeter.ProgressUnknown("Reading entry:")
 for _ in 1:10
-    ProgressMeter.update!(prog)
+    ProgressMeter.next!(prog)
     sleep(0.1)
 end
 ProgressMeter.finish!(prog)

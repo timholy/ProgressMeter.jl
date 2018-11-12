@@ -274,12 +274,12 @@ or may not result in a change to the display.
 
 You may optionally change the color of the display. See also `update!`.
 """
-function next!(p::Progress; options...)
+function next!(p::Union{Progress, ProgressUnknown}; options...)
     p.counter += 1
     updateProgress!(p; options...)
 end
 
-function next!(p::Progress, color::Symbol; options...)
+function next!(p::Union{Progress, ProgressUnknown}, color::Symbol; options...)
     p.color = color
     next!(p; options...)
 end
@@ -316,12 +316,6 @@ function update!(p::ProgressThresh, val, color::Symbol; options...)
     update!(p, val; options...)
 end
 
-function update!(p::ProgressUnknown; increasecounter=true, options...)
-    if increasecounter
-        p.counter += 1
-    end
-    updateProgress!(p; options...)
-end
 
 """
 `cancel(prog, [msg], [color=:red])` cancels the progress display

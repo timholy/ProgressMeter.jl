@@ -119,7 +119,7 @@ circumstances, you can use the `ProgressUnknown` type:
 ```julia
 prog = ProgressUnknown("Titles read:")
 for val in ["a" , "b", "c", "d"]
-    ProgressMeter.update!(prog)
+    ProgressMeter.next!(prog)
     if val == "c"
         ProgressMeter.finish!(prog)
         break
@@ -127,7 +127,7 @@ for val in ["a" , "b", "c", "d"]
     sleep(0.1)
 end
 ```
-This will display the number of calls to `update!` until `finish!` is called.
+This will display the number of calls to `next!` until `finish!` is called.
 
 If your counter does not monotonically increases, you can also set the counter by hand.
 ```julia
@@ -143,8 +143,6 @@ for val in ["aaa" , "bb", "c", "d"]
     sleep(0.5)
 end
 ```
-
-This will display the number of calls to `update!` until `finish!` is called.
 
 ### Printing additional information
 
