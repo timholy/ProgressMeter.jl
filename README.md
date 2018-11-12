@@ -97,7 +97,7 @@ will yield
 Progress: 53%[==========================>                       ]  ETA: 0:09:02
 ```
 
-### Progress meters for tasks with an unknown number of steps
+### Progress meters for tasks with a target threshold
 
 Some tasks only terminate when some criterion is satisfied, for
 example to achieve convergence within a specified tolerance.  In such
