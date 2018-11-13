@@ -61,7 +61,7 @@ end
 println("Testing showvalues with online progress")
 prog = ProgressMeter.ProgressUnknown("Entries read:")
 for title in ["a", "b", "c", "d", "e"]
-    ProgressMeter.update!(prog; showvalues = Dict(:title => title))
+    ProgressMeter.next!(prog; showvalues = Dict(:title => title))
     sleep(0.5)
 end
 ProgressMeter.finish!(prog)

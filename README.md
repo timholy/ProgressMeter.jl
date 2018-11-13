@@ -97,7 +97,7 @@ will yield
 Progress: 53%[==========================>                       ]  ETA: 0:09:02
 ```
 
-### Progress meters for tasks with an unknown number of steps
+### Progress meters for tasks with a target threshold
 
 Some tasks only terminate when some criterion is satisfied, for
 example to achieve convergence within a specified tolerance.  In such
@@ -119,7 +119,7 @@ circumstances, you can use the `ProgressUnknown` type:
 ```julia
 prog = ProgressUnknown("Titles read:")
 for val in ["a" , "b", "c", "d"]
-    ProgressMeter.update!(prog)
+    ProgressMeter.next!(prog)
     if val == "c"
         ProgressMeter.finish!(prog)
         break
@@ -127,9 +127,22 @@ for val in ["a" , "b", "c", "d"]
     sleep(0.1)
 end
 ```
+This will display the number of calls to `next!` until `finish!` is called.
 
-
-This will display the number of calls to `update!` until `finish!` is called.
+If your counter does not monotonically increases, you can also set the counter by hand.
+```julia
+prog = ProgressUnknown("Total length of characters read:")
+total_length_characters = 0
+for val in ["aaa" , "bb", "c", "d"]
+    global total_length_characters += length(val)
+    ProgressMeter.update!(prog, total_length_characters)
+    if val == "c"
+        ProgressMeter.finish!(prog)
+        break
+    end
+    sleep(0.5)
+end
+```
 
 ### Printing additional information
 
