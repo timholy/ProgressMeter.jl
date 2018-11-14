@@ -67,6 +67,7 @@ mutable struct Progress <: AbstractProgress
     barglyphs::BarGlyphs    # the characters to be used in the bar
     color::Symbol           # default to green
     output::IO              # output stream into which the progress is written
+    offset::Int             # position offset of progress bar (default is 0)
     numprintedvalues::Int   # num values printed below progress in last iteration
 
     function Progress(n::Integer;
@@ -75,19 +76,21 @@ mutable struct Progress <: AbstractProgress
                       color::Symbol=:green,
                       output::IO=stderr,
                       barlen::Integer=tty_width(desc),
-                      barglyphs::BarGlyphs=BarGlyphs('|','█','█',' ','|'))
+                      barglyphs::BarGlyphs=BarGlyphs('|','█','█',' ','|'),
+                      offset::Int=0)
         counter = 0
         tfirst = tlast = time()
         printed = false
-        new(n, dt, counter, tfirst, tlast, printed, desc, barlen, barglyphs, color, output, 0)
+        new(n, dt, counter, tfirst, tlast, printed, desc, barlen, barglyphs, color, output, offset, 0)
     end
 end
 
 Progress(n::Integer, dt::Real, desc::AbstractString="Progress: ",
-         barlen::Integer=tty_width(desc), color::Symbol=:green, output::IO=stderr) =
-    Progress(n, dt=dt, desc=desc, barlen=barlen, color=color, output=output)
+         barlen::Integer=tty_width(desc), color::Symbol=:green, output::IO=stderr;
+         offset::Integer=0) =
+    Progress(n, dt=dt, desc=desc, barlen=barlen, color=color, output=output, offset=offset)
 
-Progress(n::Integer, desc::AbstractString) = Progress(n, desc=desc)
+Progress(n::Integer, desc::AbstractString, offset::Integer=0) = Progress(n, desc=desc, offset=offset)
 
 
 """
@@ -111,23 +114,26 @@ mutable struct ProgressThresh{T<:Real} <: AbstractProgress
     color::Symbol        # default to green
     output::IO           # output stream into which the progress is written
     numprintedvalues::Int   # num values printed below progress in last iteration
+    offset::Int             # position offset of progress bar (default is 0)
 
     function ProgressThresh{T}(thresh;
                                dt::Real=0.1,
                                desc::AbstractString="Progress: ",
                                color::Symbol=:green,
-                               output::IO=stderr) where T
+                               output::IO=stderr,
+                               offset::Int=0) where T
         tfirst = tlast = time()
         printed = false
-        new{T}(thresh, dt, typemax(T), 0, false, tfirst, tlast, printed, desc, color, output, 0)
+        new{T}(thresh, dt, typemax(T), 0, false, tfirst, tlast, printed, desc, color, output, 0, offset)
     end
 end
 
 ProgressThresh(thresh::Real, dt::Real=0.1, desc::AbstractString="Progress: ",
-         color::Symbol=:green, output::IO=stderr) =
-    ProgressThresh{typeof(thresh)}(thresh, dt=dt, desc=desc, color=color, output=output)
+         color::Symbol=:green, output::IO=stderr;
+         offset::Integer=0) =
+    ProgressThresh{typeof(thresh)}(thresh, dt=dt, desc=desc, color=color, output=output, offset=offset)
 
-ProgressThresh(thresh::Real, desc::AbstractString) = ProgressThresh{typeof(thresh)}(thresh, desc=desc)
+ProgressThresh(thresh::Real, desc::AbstractString, offset::Integer=0) = ProgressThresh{typeof(thresh)}(thresh, desc=desc, offset=offset)
 
 """
 `prog = ProgressUnknown(; dt=0.1, desc="Progress: ",
@@ -167,7 +173,8 @@ ProgressUnknown(desc::AbstractString) = ProgressUnknown(desc=desc)
 tty_width(desc) = max(0, displaysize()[2] - (length(desc) + 29))
 
 # update progress display
-function updateProgress!(p::Progress; showvalues = Any[], valuecolor = :blue)
+function updateProgress!(p::Progress; showvalues = Any[], valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0))
+    p.offset = offset
     t = time()
     if p.counter >= p.n
         if p.counter == p.n && p.printed
@@ -175,10 +182,15 @@ function updateProgress!(p::Progress; showvalues = Any[], valuecolor = :blue)
             bar = barstring(p.barlen, percentage_complete, barglyphs=p.barglyphs)
             dur = durationstring(t-p.tfirst)
             msg = @sprintf "%s%3u%%%s Time: %s" p.desc round(Int, percentage_complete) bar dur
+            print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
             move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             printover(p.output, msg, p.color)
             printvalues!(p, showvalues; color = valuecolor)
-            println(p.output)
+            if keep
+                println(p.output)
+            else
+                print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+            end
         end
         return nothing
     end
@@ -195,9 +207,11 @@ function updateProgress!(p::Progress; showvalues = Any[], valuecolor = :blue)
             eta = "N/A"
         end
         msg = @sprintf "%s%3u%%%s  ETA: %s" p.desc round(Int, percentage_complete) bar eta
+        print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
         move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
         printover(p.output, msg, p.color)
         printvalues!(p, showvalues; color = valuecolor)
+        print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
         # Compensate for any overhead of printing. This can be
         # especially important if you're running over a slow network
         # connection.
@@ -207,7 +221,8 @@ function updateProgress!(p::Progress; showvalues = Any[], valuecolor = :blue)
     return nothing
 end
 
-function updateProgress!(p::ProgressThresh; showvalues = Any[], valuecolor = :blue)
+function updateProgress!(p::ProgressThresh; showvalues = Any[], valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0))
+    p.offset = offset
     t = time()
     if p.val <= p.thresh && !p.triggered
         p.triggered = true
@@ -215,10 +230,15 @@ function updateProgress!(p::ProgressThresh; showvalues = Any[], valuecolor = :bl
             p.triggered = true
             dur = durationstring(t-p.tfirst)
             msg = @sprintf "%s Time: %s (%d iterations)" p.desc dur p.counter
+            print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
             move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             printover(p.output, msg, p.color)
             printvalues!(p, showvalues; color = valuecolor)
-            println(p.output)
+            if keep
+                println(p.output)
+            else
+                print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+            end
         end
         return
     end
@@ -226,9 +246,11 @@ function updateProgress!(p::ProgressThresh; showvalues = Any[], valuecolor = :bl
     if t > p.tlast+p.dt && !p.triggered
         elapsed_time = t - p.tfirst
         msg = @sprintf "%s (thresh = %g, value = %g)" p.desc p.thresh p.val
+        print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
         move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
         printover(p.output, msg, p.color)
         printvalues!(p, showvalues; color = valuecolor)
+        print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
         # Compensate for any overhead of printing. This can be
         # especially important if you're running over a slow network
         # connection.
@@ -324,12 +346,18 @@ message printed and its color.
 
 See also `finish!`.
 """
-function cancel(p::AbstractProgress, msg::AbstractString = "Aborted before all tasks were completed", color = :red; showvalues = Any[], valuecolor = :blue)
+function cancel(p::AbstractProgress, msg::AbstractString = "Aborted before all tasks were completed", color = :red; showvalues = Any[], valuecolor = :blue, offset = p.offset, keep = (offset == 0))
+    p.offset = offset
     if p.printed
+        print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
         move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
         printover(p.output, msg, color)
         printvalues!(p, showvalues; color = valuecolor)
-        println(p.output)
+        if keep
+            println(p.output)
+        else
+            print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+        end
     end
     return
 end
