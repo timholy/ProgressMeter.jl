@@ -28,7 +28,7 @@ Holds the five characters that will be used to generate the progress bar.
 mutable struct BarGlyphs
     leftend::Char
     fill::Char
-    front::Char
+    front::Union{Vector{Char}, Char}
     empty::Char
     rightend::Char
 end
@@ -76,7 +76,7 @@ mutable struct Progress <: AbstractProgress
                       color::Symbol=:green,
                       output::IO=stderr,
                       barlen::Integer=tty_width(desc),
-                      barglyphs::BarGlyphs=BarGlyphs('|','█','█',' ','|'),
+                      barglyphs::BarGlyphs=BarGlyphs('|','█', ['▏','▎','▍','▌','▋','▊','▉'],' ','|',),
                       offset::Int=0)
         counter = 0
         tfirst = tlast = time()
@@ -410,18 +410,28 @@ function printover(io::IO, s::AbstractString, color::Symbol = :color_normal)
     end
 end
 
-function barstring(barlen, percentage_complete; barglyphs::BarGlyphs=BarGlyphs('|','█','█',' ','|'))
+function compute_front(barglyphs::BarGlyphs, frac_solid::AbstractFloat)
+    barglyphs.front isa Char && return barglyphs.front
+    idx = round(Int, frac_solid * (length(barglyphs.front) + 1))
+    return idx > length(barglyphs.front) ? barglyphs.fill :
+           idx == 0 ? barglyphs.empty :
+           barglyphs.front[idx]
+end
+
+function barstring(barlen, percentage_complete; barglyphs)
     bar = ""
     if barlen>0
         if percentage_complete == 100 # if we're done, don't use the "front" character
             bar = string(barglyphs.leftend, repeat(string(barglyphs.fill), barlen), barglyphs.rightend)
         else
-            nsolid = round(Int, barlen * percentage_complete / 100)
-            nempty = barlen - nsolid
+            n_bars = barlen * percentage_complete / 100
+            nsolid = trunc(Int, n_bars)
+            frac_solid = n_bars - nsolid
+            nempty = barlen - nsolid - 1
             bar = string(barglyphs.leftend,
-                         repeat(string(barglyphs.fill), max(0,nsolid-1)),
-                         nsolid>0 ? barglyphs.front : "",
-                         repeat(string(barglyphs.empty), nempty),
+                         repeat(string(barglyphs.fill), max(0,nsolid)),
+                         compute_front(barglyphs, frac_solid),
+                         repeat(string(barglyphs.empty), max(0, nempty)),
                          barglyphs.rightend)
         end
     end

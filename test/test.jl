@@ -268,3 +268,12 @@ for k in 1:2:20
     sleep(0.1)
 end
 ProgressMeter.finish!(prog)
+
+println("Testing fractional bars")
+for front in (['▏','▎','▍','▌','▋','▊', '▉'], ['▁' ,'▂' ,'▃' ,'▄' ,'▅' ,'▆', '▇'], ['░', '▒', '▓',])
+    p = ProgressMeter.Progress(100, dt=0.01, barglyphs=ProgressMeter.BarGlyphs('|','█',front,' ','|'), barlen=10)
+    for i in 1:100
+        ProgressMeter.next!(p)
+        sleep(0.02)
+    end
+end
