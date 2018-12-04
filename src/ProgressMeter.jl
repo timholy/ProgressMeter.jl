@@ -76,7 +76,7 @@ mutable struct Progress <: AbstractProgress
                       color::Symbol=:green,
                       output::IO=stderr,
                       barlen::Integer=tty_width(desc),
-                      barglyphs::BarGlyphs=BarGlyphs('|','█', ['▏','▎','▍','▌','▋','▊','▉'],' ','|',),
+                      barglyphs::BarGlyphs=BarGlyphs('|','█', Sys.iswindows() ? '█' : ['▏','▎','▍','▌','▋','▊','▉'],' ','|',),
                       offset::Int=0)
         counter = 0
         tfirst = tlast = time()
