@@ -97,6 +97,24 @@ will yield
 Progress: 53%[==========================>                       ]  ETA: 0:09:02
 ```
 
+It is possible to give a vector of characters that acts like a transition between the empty character
+and the fully filled character. For example, definining the progress bar as:
+
+```julia
+p = Progress(n, dt=0.5,
+             barglyphs=BarGlyphs('|','█', ['▁' ,'▂' ,'▃' ,'▄' ,'▅' ,'▆', '▇'],' ','|',),
+             barlen=10)
+```
+
+might show the progress bar as:
+
+```
+Progress:  34%|███▃      |  ETA: 0:00:02
+```
+
+where the last bar is not yet fully filled.
+
+
 ### Progress meters for tasks with a target threshold
 
 Some tasks only terminate when some criterion is satisfied, for
