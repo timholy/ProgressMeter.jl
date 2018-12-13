@@ -444,7 +444,7 @@ function durationstring(nsec)
     hours = div(r,60*60)
     r = r - 60*60*hours
     minutes = div(r, 60)
-    seconds = r - 60*minutes
+    seconds = floor(r - 60*minutes)
 
     hhmmss = @sprintf "%u:%02u:%02u" hours minutes seconds
     if days>9
