@@ -1,6 +1,4 @@
-import ProgressMeter
 using Random: seed!
-using Test
 
 seed!(123)
 
