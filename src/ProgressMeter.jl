@@ -620,7 +620,7 @@ macro showprogress(args...)
 
         # get args to map to determine progress length
         mapargs = collect(Any, filter(call.args[2:end]) do a
-            return isa(a, Symbol) || a.head != :kw
+            return isa(a, Symbol) || !(a.head in (:kw, :parameters))
         end)
         if expr.head == :do
             insert!(mapargs, 1, :nothing) # to make args for ncalls line up

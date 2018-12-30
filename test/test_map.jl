@@ -102,6 +102,14 @@ procs = addprocs(2)
     end
     @test vals == map(x->C*x, 1:10)
 
+
+
+    # keyword arguments
+    vals = @showprogress pmap(x->x^2, 1:100, batch_size=10)
+    @test vals == map(x->x^2, 1:100)
+    # with semicolon
+    vals = @showprogress pmap(x->x^2, 1:100; batch_size=10)
+    @test vals == map(x->x^2, 1:100)
 end
 
 rmprocs(procs)
