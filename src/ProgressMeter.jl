@@ -69,6 +69,7 @@ mutable struct Progress <: AbstractProgress
     output::IO              # output stream into which the progress is written
     offset::Int             # position offset of progress bar (default is 0)
     numprintedvalues::Int   # num values printed below progress in last iteration
+    alwaysflush::Bool       # if this is true, immediately flush after every printing (see #117)
 
     function Progress(n::Integer;
                       dt::Real=0.1,
@@ -77,11 +78,13 @@ mutable struct Progress <: AbstractProgress
                       output::IO=stderr,
                       barlen::Integer=tty_width(desc),
                       barglyphs::BarGlyphs=BarGlyphs('|','█', Sys.iswindows() ? '█' : ['▏','▎','▍','▌','▋','▊','▉'],' ','|',),
-                      offset::Int=0)
+                      offset::Int=0,
+                      alwaysflush::Bool=true
+                     )
         counter = 0
         tfirst = tlast = time()
         printed = false
-        new(n, dt, counter, tfirst, tlast, printed, desc, barlen, barglyphs, color, output, offset, 0)
+        new(n, dt, counter, tfirst, tlast, printed, desc, barlen, barglyphs, color, output, offset, 0, alwaysflush)
     end
 end
 
@@ -115,16 +118,18 @@ mutable struct ProgressThresh{T<:Real} <: AbstractProgress
     output::IO           # output stream into which the progress is written
     numprintedvalues::Int   # num values printed below progress in last iteration
     offset::Int             # position offset of progress bar (default is 0)
+    alwaysflush::Bool    # if this is true, immediately flush after every printing (see #117)
 
     function ProgressThresh{T}(thresh;
                                dt::Real=0.1,
                                desc::AbstractString="Progress: ",
                                color::Symbol=:green,
                                output::IO=stderr,
-                               offset::Int=0) where T
+                               offset::Int=0,
+                               alwaysflush::Bool=true) where T
         tfirst = tlast = time()
         printed = false
-        new{T}(thresh, dt, typemax(T), 0, false, tfirst, tlast, printed, desc, color, output, 0, offset)
+        new{T}(thresh, dt, typemax(T), 0, false, tfirst, tlast, printed, desc, color, output, 0, offset, alwaysflush)
     end
 end
 
@@ -155,17 +160,18 @@ mutable struct ProgressUnknown <: AbstractProgress
     color::Symbol        # default to green
     output::IO           # output stream into which the progress is written
     numprintedvalues::Int   # num values printed below progress in last iteration
+    alwaysflush::Bool    # if this is true, immediately flush after every printing (see #117)
 end
 
-function ProgressUnknown(;dt::Real=0.1, desc::AbstractString="Progress: ", color::Symbol=:green, output::IO=stderr)
+function ProgressUnknown(;dt::Real=0.1, desc::AbstractString="Progress: ", color::Symbol=:green, output::IO=stderr, alwaysflush::Bool=true)
     tfirst = tlast = time()
     printed = false
-    ProgressUnknown(false, dt, 0, false, tfirst, tlast, printed, desc, color, output, 0)
+    ProgressUnknown(false, dt, 0, false, tfirst, tlast, printed, desc, color, output, 0, alwaysflush)
 end
 
 ProgressUnknown(dt::Real, desc::AbstractString="Progress: ",
-         color::Symbol=:green, output::IO=stderr) =
-    ProgressUnknown(dt=dt, desc=desc, color=color, output=output)
+         color::Symbol=:green, output::IO=stderr; kwargs...) =
+    ProgressUnknown(dt=dt, desc=desc, color=color, output=output; kwargs...)
 
 ProgressUnknown(desc::AbstractString) = ProgressUnknown(desc=desc)
 
@@ -191,6 +197,9 @@ function updateProgress!(p::Progress; showvalues = Any[], valuecolor = :blue, of
             else
                 print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
             end
+            if p.alwaysflush
+                flush(p.output)
+            end
         end
         return nothing
     end
@@ -212,6 +221,9 @@ function updateProgress!(p::Progress; showvalues = Any[], valuecolor = :blue, of
         printover(p.output, msg, p.color)
         printvalues!(p, showvalues; color = valuecolor)
         print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+        if p.alwaysflush
+            flush(p.output)
+        end
         # Compensate for any overhead of printing. This can be
         # especially important if you're running over a slow network
         # connection.
@@ -239,6 +251,9 @@ function updateProgress!(p::ProgressThresh; showvalues = Any[], valuecolor = :bl
             else
                 print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
             end
+            if p.alwaysflush
+                flush(p.output)
+            end
         end
         return
     end
@@ -251,6 +266,9 @@ function updateProgress!(p::ProgressThresh; showvalues = Any[], valuecolor = :bl
         printover(p.output, msg, p.color)
         printvalues!(p, showvalues; color = valuecolor)
         print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+        if p.alwaysflush
+            flush(p.output)
+        end
         # Compensate for any overhead of printing. This can be
         # especially important if you're running over a slow network
         # connection.
@@ -269,6 +287,9 @@ function updateProgress!(p::ProgressUnknown; showvalues = Any[], valuecolor = :b
             printover(p.output, msg, p.color)
             printvalues!(p, showvalues; color = valuecolor)
             println(p.output)
+            if p.alwaysflush
+                flush(p.output)
+            end
         end
         return
     end
@@ -279,6 +300,9 @@ function updateProgress!(p::ProgressUnknown; showvalues = Any[], valuecolor = :b
         move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
         printover(p.output, msg, p.color)
         printvalues!(p, showvalues; color = valuecolor)
+        if p.alwaysflush
+            flush(p.output)
+        end
         # Compensate for any overhead of printing. This can be
         # especially important if you're running over a slow network
         # connection.
