@@ -77,7 +77,8 @@ mutable struct Progress <: AbstractProgress
                       output::IO=stderr,
                       barlen::Integer=tty_width(desc),
                       barglyphs::BarGlyphs=BarGlyphs('|','█', Sys.iswindows() ? '█' : ['▏','▎','▍','▌','▋','▊','▉'],' ','|',),
-                      offset::Int=0)
+                      offset::Int=0,
+                     )
         counter = 0
         tfirst = tlast = time()
         printed = false
@@ -164,8 +165,8 @@ function ProgressUnknown(;dt::Real=0.1, desc::AbstractString="Progress: ", color
 end
 
 ProgressUnknown(dt::Real, desc::AbstractString="Progress: ",
-         color::Symbol=:green, output::IO=stderr) =
-    ProgressUnknown(dt=dt, desc=desc, color=color, output=output)
+         color::Symbol=:green, output::IO=stderr; kwargs...) =
+    ProgressUnknown(dt=dt, desc=desc, color=color, output=output; kwargs...)
 
 ProgressUnknown(desc::AbstractString) = ProgressUnknown(desc=desc)
 
@@ -191,6 +192,7 @@ function updateProgress!(p::Progress; showvalues = Any[], valuecolor = :blue, of
             else
                 print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
             end
+            flush(p.output)
         end
         return nothing
     end
@@ -212,6 +214,7 @@ function updateProgress!(p::Progress; showvalues = Any[], valuecolor = :blue, of
         printover(p.output, msg, p.color)
         printvalues!(p, showvalues; color = valuecolor)
         print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+        flush(p.output)
         # Compensate for any overhead of printing. This can be
         # especially important if you're running over a slow network
         # connection.
@@ -239,6 +242,7 @@ function updateProgress!(p::ProgressThresh; showvalues = Any[], valuecolor = :bl
             else
                 print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
             end
+            flush(p.output)
         end
         return
     end
@@ -251,6 +255,7 @@ function updateProgress!(p::ProgressThresh; showvalues = Any[], valuecolor = :bl
         printover(p.output, msg, p.color)
         printvalues!(p, showvalues; color = valuecolor)
         print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+        flush(p.output)
         # Compensate for any overhead of printing. This can be
         # especially important if you're running over a slow network
         # connection.
@@ -269,6 +274,7 @@ function updateProgress!(p::ProgressUnknown; showvalues = Any[], valuecolor = :b
             printover(p.output, msg, p.color)
             printvalues!(p, showvalues; color = valuecolor)
             println(p.output)
+            flush(p.output)
         end
         return
     end
@@ -279,6 +285,7 @@ function updateProgress!(p::ProgressUnknown; showvalues = Any[], valuecolor = :b
         move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
         printover(p.output, msg, p.color)
         printvalues!(p, showvalues; color = valuecolor)
+        flush(p.output)
         # Compensate for any overhead of printing. This can be
         # especially important if you're running over a slow network
         # connection.
