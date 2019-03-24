@@ -171,7 +171,7 @@ ProgressUnknown(dt::Real, desc::AbstractString="Progress: ",
 ProgressUnknown(desc::AbstractString) = ProgressUnknown(desc=desc)
 
 #...length of percentage and ETA string with days is 29 characters
-tty_width(desc) = max(0, displaysize()[2] - (length(desc) + 29))
+tty_width(desc) = max(0, displaysize(stdout)[2] - (length(desc) + 29))
 
 # update progress display
 function updateProgress!(p::Progress; showvalues = Any[], valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0))
