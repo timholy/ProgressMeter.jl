@@ -220,7 +220,7 @@ function updateProgress!(p::Progress; showvalues = Any[], valuecolor = :blue, of
         move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues, flush_display(p))
         printover(p.output, msg, p.color, flush_display(p))
         printvalues!(p, showvalues; color = valuecolor)
-        # print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+        !flush_display(p) && print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
         flush(p.output)
         # Compensate for any overhead of printing. This can be
         # especially important if you're running over a slow network
@@ -261,7 +261,7 @@ function updateProgress!(p::ProgressThresh; showvalues = Any[], valuecolor = :bl
         move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues, flush_display(p))
         printover(p.output, msg, p.color, flush_display(p))
         printvalues!(p, showvalues; color = valuecolor)
-        print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+        !flush_display(p) && print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
         flush(p.output)
         # Compensate for any overhead of printing. This can be
         # especially important if you're running over a slow network
