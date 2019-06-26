@@ -178,6 +178,24 @@ for iter = 1:10
 end
 ```
 
+### ProgressMeter in Jupyter notebooks
+
+Since Jupyter notebooks don't allow to overwrite only parts of the output of cell, the progress bars
+are printed repeatedly to the output.
+Jupyter notebooks allow to clear the output of a cell, but this will remove **all** output
+of the current cell, i.e., to properly update a progress bar we need to wipe all output of cell.
+You can opt-in into this behaviour by setting the `clear_output_ijulia=true` flag.
+
+```julia
+x,n = 1,10
+p = Progress(n; clear_output_ijulia=true)
+for iter = 1:10
+    x *= 2
+    sleep(0.5)
+    ProgressMeter.next!(p; showvalues = [(:iter,iter), (:x,x)])
+end
+```
+
 ### Tips for parallel programming
 
 When multiple processes or tasks are being used for a computation, the workers should communicate back to a single task for displaying the progress bar. This can be accomplished with a `RemoteChannel`:

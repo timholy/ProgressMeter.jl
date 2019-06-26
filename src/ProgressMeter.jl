@@ -69,6 +69,7 @@ mutable struct Progress <: AbstractProgress
     output::IO              # output stream into which the progress is written
     offset::Int             # position offset of progress bar (default is 0)
     numprintedvalues::Int   # num values printed below progress in last iteration
+    clear_output_ijulia::Bool  # flush current display in IJulia possibly overwriting other printed things
 
     function Progress(n::Integer;
                       dt::Real=0.1,
@@ -78,18 +79,17 @@ mutable struct Progress <: AbstractProgress
                       barlen::Integer=tty_width(desc),
                       barglyphs::BarGlyphs=BarGlyphs('|','█', Sys.iswindows() ? '█' : ['▏','▎','▍','▌','▋','▊','▉'],' ','|',),
                       offset::Int=0,
-                     )
+                      clear_output_ijulia::Bool=false)
         counter = 0
         tfirst = tlast = time()
         printed = false
-        new(n, dt, counter, tfirst, tlast, printed, desc, barlen, barglyphs, color, output, offset, 0)
+        new(n, dt, counter, tfirst, tlast, printed, desc, barlen, barglyphs, color, output, offset, 0, clear_output_ijulia)
     end
 end
 
 Progress(n::Integer, dt::Real, desc::AbstractString="Progress: ",
-         barlen::Integer=tty_width(desc), color::Symbol=:green, output::IO=stderr;
-         offset::Integer=0) =
-    Progress(n, dt=dt, desc=desc, barlen=barlen, color=color, output=output, offset=offset)
+         barlen::Integer=tty_width(desc), color::Symbol=:green, output::IO=stderr; kwargs...) =
+    Progress(n; dt=dt, desc=desc, barlen=barlen, color=color, output=output, kwargs...)
 
 Progress(n::Integer, desc::AbstractString, offset::Integer=0) = Progress(n, desc=desc, offset=offset)
 
@@ -116,25 +116,26 @@ mutable struct ProgressThresh{T<:Real} <: AbstractProgress
     output::IO           # output stream into which the progress is written
     numprintedvalues::Int   # num values printed below progress in last iteration
     offset::Int             # position offset of progress bar (default is 0)
+    clear_output_ijulia::Bool      # flush current display in IJulia possibly overwriting other printed things
 
     function ProgressThresh{T}(thresh;
                                dt::Real=0.1,
                                desc::AbstractString="Progress: ",
                                color::Symbol=:green,
                                output::IO=stderr,
-                               offset::Int=0) where T
+                               offset::Int=0,
+                               clear_output_ijulia::Bool=false) where T
         tfirst = tlast = time()
         printed = false
-        new{T}(thresh, dt, typemax(T), 0, false, tfirst, tlast, printed, desc, color, output, 0, offset)
+        new{T}(thresh, dt, typemax(T), 0, false, tfirst, tlast, printed, desc, color, output, 0, offset, clear_output_ijulia)
     end
 end
 
 ProgressThresh(thresh::Real, dt::Real=0.1, desc::AbstractString="Progress: ",
-         color::Symbol=:green, output::IO=stderr;
-         offset::Integer=0) =
-    ProgressThresh{typeof(thresh)}(thresh, dt=dt, desc=desc, color=color, output=output, offset=offset)
+         color::Symbol=:green, output::IO=stderr; kwargs...) =
+    ProgressThresh{typeof(thresh)}(thresh; dt=dt, desc=desc, color=color, output=output, kwargs...)
 
-ProgressThresh(thresh::Real, desc::AbstractString, offset::Integer=0) = ProgressThresh{typeof(thresh)}(thresh, desc=desc, offset=offset)
+ProgressThresh(thresh::Real, desc::AbstractString, offset::Integer=0; kwargs...) = ProgressThresh{typeof(thresh)}(thresh; desc=desc, offset=offset, kwargs...)
 
 """
 `prog = ProgressUnknown(; dt=0.1, desc="Progress: ",
@@ -156,22 +157,28 @@ mutable struct ProgressUnknown <: AbstractProgress
     color::Symbol        # default to green
     output::IO           # output stream into which the progress is written
     numprintedvalues::Int   # num values printed below progress in last iteration
+    clear_output_ijulia::Bool      # flush current display in IJulia possibly overwriting other printed things
 end
 
-function ProgressUnknown(;dt::Real=0.1, desc::AbstractString="Progress: ", color::Symbol=:green, output::IO=stderr)
+function ProgressUnknown(;dt::Real=0.1, desc::AbstractString="Progress: ",
+                          color::Symbol=:green,
+                          output::IO=stderr,
+                          clear_output_ijulia::Bool=false)
     tfirst = tlast = time()
     printed = false
-    ProgressUnknown(false, dt, 0, false, tfirst, tlast, printed, desc, color, output, 0)
+    ProgressUnknown(false, dt, 0, false, tfirst, tlast, printed, desc, color, output, 0, clear_output_ijulia)
 end
 
 ProgressUnknown(dt::Real, desc::AbstractString="Progress: ",
          color::Symbol=:green, output::IO=stderr; kwargs...) =
     ProgressUnknown(dt=dt, desc=desc, color=color, output=output; kwargs...)
 
-ProgressUnknown(desc::AbstractString) = ProgressUnknown(desc=desc)
+ProgressUnknown(desc::AbstractString; kwargs...) = ProgressUnknown(;desc=desc, kwargs...)
 
 #...length of percentage and ETA string with days is 29 characters
 tty_width(desc) = max(0, displaysize(stdout)[2] - (length(desc) + 29))
+
+flush_display(p) = p.clear_output_ijulia && isdefined(Main, :IJulia)
 
 # update progress display
 function updateProgress!(p::Progress; showvalues = Any[], valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0))
@@ -183,9 +190,9 @@ function updateProgress!(p::Progress; showvalues = Any[], valuecolor = :blue, of
             bar = barstring(p.barlen, percentage_complete, barglyphs=p.barglyphs)
             dur = durationstring(t-p.tfirst)
             msg = @sprintf "%s%3u%%%s Time: %s" p.desc round(Int, percentage_complete) bar dur
-            print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
-            move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
-            printover(p.output, msg, p.color)
+            !flush_display(p) && print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
+            move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues, flush_display(p))
+            printover(p.output, msg, p.color, flush_display(p))
             printvalues!(p, showvalues; color = valuecolor)
             if keep
                 println(p.output)
@@ -209,11 +216,11 @@ function updateProgress!(p::Progress; showvalues = Any[], valuecolor = :blue, of
             eta = "N/A"
         end
         msg = @sprintf "%s%3u%%%s  ETA: %s" p.desc round(Int, percentage_complete) bar eta
-        print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
-        move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
-        printover(p.output, msg, p.color)
+        !flush_display(p) && print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
+        move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues, flush_display(p))
+        printover(p.output, msg, p.color, flush_display(p))
         printvalues!(p, showvalues; color = valuecolor)
-        print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+        # print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
         flush(p.output)
         # Compensate for any overhead of printing. This can be
         # especially important if you're running over a slow network
@@ -234,8 +241,8 @@ function updateProgress!(p::ProgressThresh; showvalues = Any[], valuecolor = :bl
             dur = durationstring(t-p.tfirst)
             msg = @sprintf "%s Time: %s (%d iterations)" p.desc dur p.counter
             print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
-            move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
-            printover(p.output, msg, p.color)
+            move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues, flush_display(p))
+            printover(p.output, msg, p.color, flush_display(p))
             printvalues!(p, showvalues; color = valuecolor)
             if keep
                 println(p.output)
@@ -251,8 +258,8 @@ function updateProgress!(p::ProgressThresh; showvalues = Any[], valuecolor = :bl
         elapsed_time = t - p.tfirst
         msg = @sprintf "%s (thresh = %g, value = %g)" p.desc p.thresh p.val
         print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
-        move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
-        printover(p.output, msg, p.color)
+        move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues, flush_display(p))
+        printover(p.output, msg, p.color, flush_display(p))
         printvalues!(p, showvalues; color = valuecolor)
         print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
         flush(p.output)
@@ -270,8 +277,8 @@ function updateProgress!(p::ProgressUnknown; showvalues = Any[], valuecolor = :b
         if p.printed
             dur = durationstring(t-p.tfirst)
             msg = @sprintf "%s %d \t Time: %s" p.desc p.counter dur
-            move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
-            printover(p.output, msg, p.color)
+            move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues, flush_display(p))
+            printover(p.output, msg, p.color, flush_display(p))
             printvalues!(p, showvalues; color = valuecolor)
             println(p.output)
             flush(p.output)
@@ -282,8 +289,8 @@ function updateProgress!(p::ProgressUnknown; showvalues = Any[], valuecolor = :b
     if t > p.tlast+p.dt
         dur = durationstring(t-p.tfirst)
         msg = @sprintf "%s %d \t Time: %s" p.desc p.counter dur
-        move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
-        printover(p.output, msg, p.color)
+        move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues, flush_display(p))
+        printover(p.output, msg, p.color, flush_display(p))
         printvalues!(p, showvalues; color = valuecolor)
         flush(p.output)
         # Compensate for any overhead of printing. This can be
@@ -357,8 +364,8 @@ function cancel(p::AbstractProgress, msg::AbstractString = "Aborted before all t
     p.offset = offset
     if p.printed
         print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
-        move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
-        printover(p.output, msg, color)
+        move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues, flush_display(p))
+        printover(p.output, msg, color, flush_display(p))
         printvalues!(p, showvalues; color = valuecolor)
         if keep
             println(p.output)
@@ -400,13 +407,17 @@ function printvalues!(p::AbstractProgress, showvalues; color = false)
     p.numprintedvalues = length(showvalues)
 end
 
-function move_cursor_up_while_clearing_lines(io, numlinesup)
-    for _ in 1:numlinesup
-        print(io, "\r\u1b[K\u1b[A")
+function move_cursor_up_while_clearing_lines(io, numlinesup, clear_output_ijulia)
+    if numlinesup > 0 && clear_output_ijulia && isdefined(Main, :IJulia) && Main.IJulia.inited
+        Main.IJulia.clear_output(true)
+    else
+        for _ in 1:numlinesup
+            print(io, "\r\u1b[K\u1b[A")
+        end
     end
 end
 
-function printover(io::IO, s::AbstractString, color::Symbol = :color_normal)
+function printover(io::IO, s::AbstractString, color::Symbol = :color_normal, clear_output_ijulia=false)
     print(io, "\r")
     printstyled(io, s; color=color)
     if isdefined(Main, :IJulia)
