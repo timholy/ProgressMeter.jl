@@ -34,6 +34,23 @@ The first incantation will use a minimum update interval of 1 second, and show t
 
 The `@showprogress` macro wraps a `for` loop, comprehension, or map/pmap as long as the object being iterated over implements the `length` method and will handle `continue` correctly.
 
+The `@showprogressdistributed` macro is the equivalent of `@showprogress` and wraps `@distributed` for loops with a reducer.
+
+```julia
+using Distributed
+using ProgressMeter
+
+result = @showprogressdistributed (+) for i in 1:10
+    sleep(0.1)
+    i^2
+end
+
+result = @showprogressdistributed 1 "Computing..." (+) for i in 1:10
+    sleep(0.1)
+    i^2
+end
+```
+
 You can also control progress updates and reports manually:
 
 ```julia

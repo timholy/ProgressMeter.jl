@@ -3,7 +3,8 @@ module ProgressMeter
 using Printf: @sprintf
 using Distributed
 
-export Progress, ProgressThresh, ProgressUnknown, BarGlyphs, next!, update!, cancel, finish!, @showprogress, progress_map, progress_pmap
+export Progress, ProgressThresh, ProgressUnknown, BarGlyphs, next!, update!, cancel, finish!
+export @showprogress, @showprogressdistributed, progress_map, progress_pmap
 
 """
 `ProgressMeter` contains a suite of utilities for displaying progress
@@ -11,6 +12,7 @@ in long-running computations. The major functions/types in this module
 are:
 
 - `@showprogress`: an easy interface for straightforward situations
+- `@showprogressdistributed`: equivalent of `@showprogress` for distributed loops with a reducer
 - `Progress`: an object for managing progress updates with a predictable number of iterations
 - `ProgressThresh`: an object for managing progress updates where termination is governed by a threshold
 - `next!` and `update!`: report that progress has been made
@@ -500,6 +502,51 @@ function Base.iterate(wrap::ProgressWrapper, state...)
     end
 
     ir
+end
+
+"""
+Equivalent of @showprogress for a distributed for loop with a reducer.
+```
+result = @showprogressdistributed dt "Computing..." (+) for i = 1:50
+    sleep(0.1)
+    i^2
+end
+```
+"""
+macro showprogressdistributed(args...)
+    if length(args) < 2
+        throw(ArgumentError("@showprogressdistributed requires at least 2 arguments"))
+    end
+    progressargs = args[1:end-2]
+    reducer = args[end-1]
+    loop = args[end]
+    if loop.head !== :for
+        throw(ArgumentError("malformed @showprogressdistributed loop"))
+    end
+    var = loop.args[1].args[1]
+    r = loop.args[1].args[2]
+    body = loop.args[2]
+
+    quote
+        n = length($(esc(r)))
+        p = Progress(n, $([esc(arg) for arg in progressargs]...))
+        ch = RemoteChannel(() -> Channel{Bool}(n))
+        display = @async while take!(ch) next!(p) end
+
+        job = @async begin
+            results = @distributed $(esc(reducer)) for $(esc(var)) in $(esc(r))
+                x = $(esc(body))
+                put!(ch, true)
+                x
+            end
+            put!(ch, false)
+            results
+        end
+
+        results = fetch(job)
+        wait(display)
+        results
+    end
 end
 
 """

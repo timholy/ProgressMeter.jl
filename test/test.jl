@@ -275,3 +275,17 @@ for front in (['▏','▎','▍','▌','▋','▊', '▉'], ['▁' ,'▂' ,'▃'
         sleep(0.02)
     end
 end
+
+function testfunc15(n, dt, tsleep)
+    result = ProgressMeter.@showprogressdistributed dt (+) for i in 1:n
+        if rand() < 0.7
+            sleep(tsleep)
+        end
+        i ^ 2
+    end
+    @test result == sum(abs2.(1:n))
+end
+
+println("Testing @showprogressdistributed macro on for loop")
+testfunc15(3000, 0.01, 0.002)
+
