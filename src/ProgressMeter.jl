@@ -3,8 +3,7 @@ module ProgressMeter
 using Printf: @sprintf
 using Distributed
 
-export Progress, ProgressThresh, ProgressUnknown, BarGlyphs, next!, update!, cancel, finish!
-export @showprogress, @showprogressdistributed, progress_map, progress_pmap
+export Progress, ProgressThresh, ProgressUnknown, BarGlyphs, next!, update!, cancel, finish!, @showprogress, progress_map, progress_pmap
 
 """
 `ProgressMeter` contains a suite of utilities for displaying progress
@@ -12,7 +11,6 @@ in long-running computations. The major functions/types in this module
 are:
 
 - `@showprogress`: an easy interface for straightforward situations
-- `@showprogressdistributed`: equivalent of `@showprogress` for distributed loops with a reducer
 - `Progress`: an object for managing progress updates with a predictable number of iterations
 - `ProgressThresh`: an object for managing progress updates where termination is governed by a threshold
 - `next!` and `update!`: report that progress has been made
@@ -505,36 +503,70 @@ function Base.iterate(wrap::ProgressWrapper, state...)
 end
 
 """
-Equivalent of @showprogress for a distributed for loop with a reducer.
+Equivalent of @showprogress for a distributed for loop.
 ```
-result = @showprogressdistributed dt "Computing..." (+) for i = 1:50
+result = @showprogress dt "Computing..." @distributed (+) for i = 1:50
     sleep(0.1)
     i^2
 end
 ```
 """
-macro showprogressdistributed(args...)
-    if length(args) < 2
-        throw(ArgumentError("@showprogressdistributed requires at least 2 arguments"))
+function showprogressdistributed(args...)
+    if length(args) < 1
+        throw(ArgumentError("@showprogress @distributed requires at least 1 argument"))
     end
-    progressargs = args[1:end-2]
-    reducer = args[end-1]
-    loop = args[end]
+    progressargs = args[1:end-1]
+    expr = Base.remove_linenums!(args[end])
+
+    if expr.head != :macrocall || expr.args[1] != Symbol("@distributed")
+        throw(ArgumentError("malformed @showprogress @distributed expression"))
+    end
+
+    distargs = filter(x -> !(x isa LineNumberNode), expr.args[2:end])
+    na = length(distargs)
+    if na == 1
+        loop = distargs[1]
+    elseif na == 2
+        reducer = distargs[1]
+        loop = distargs[2]
+    else
+        println("$distargs $na")
+        throw(ArgumentError("wrong number of arguments to @distributed"))
+    end
     if loop.head !== :for
-        throw(ArgumentError("malformed @showprogressdistributed loop"))
+        throw(ArgumentError("malformed @distributed loop"))
     end
     var = loop.args[1].args[1]
     r = loop.args[1].args[2]
     body = loop.args[2]
 
-    quote
+    setup = quote
         n = length($(esc(r)))
         p = Progress(n, $([esc(arg) for arg in progressargs]...))
         ch = RemoteChannel(() -> Channel{Bool}(n))
-        display = @async while take!(ch) next!(p) end
+    end
 
-        job = @async begin
-            results = @distributed $(esc(reducer)) for $(esc(var)) in $(esc(r))
+    if na == 1
+        # would be nice to do this with @sync @distributed but @sync is broken
+        # https://github.com/JuliaLang/julia/issues/28979
+        compute = quote
+            display = @async let i = 0
+                while i < n
+                    take!(ch)
+                    next!(p)
+                    i += 1
+                end
+            end
+            @distributed for $(esc(var)) = $(esc(r))
+                $(esc(body))
+                put!(ch, true)
+            end
+            nothing
+        end
+    else
+        compute = quote
+            display = @async while take!(ch) next!(p) end
+            results = @distributed $(esc(reducer)) for $(esc(var)) = $(esc(r))
                 x = $(esc(body))
                 put!(ch, true)
                 x
@@ -542,8 +574,11 @@ macro showprogressdistributed(args...)
             put!(ch, false)
             results
         end
-
-        results = fetch(job)
+    end
+    
+    quote
+        $setup
+        results = $compute
         wait(display)
         results
     end
@@ -570,6 +605,9 @@ macro showprogress(args...)
     end
     progressargs = args[1:end-1]
     expr = args[end]
+    if expr.head == :macrocall && expr.args[1] == Symbol("@distributed")
+        return showprogressdistributed(args...)
+    end
     orig = expr = copy(expr)
     metersym = gensym("meter")
     mapfuns = (:map, :pmap)

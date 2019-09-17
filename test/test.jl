@@ -277,7 +277,7 @@ for front in (['▏','▎','▍','▌','▋','▊', '▉'], ['▁' ,'▂' ,'▃'
 end
 
 function testfunc15(n, dt, tsleep)
-    result = ProgressMeter.@showprogressdistributed dt (+) for i in 1:n
+    result = ProgressMeter.@showprogress dt @distributed (+) for i in 1:n
         if rand() < 0.7
             sleep(tsleep)
         end
@@ -286,6 +286,17 @@ function testfunc15(n, dt, tsleep)
     @test result == sum(abs2.(1:n))
 end
 
-println("Testing @showprogressdistributed macro on for loop")
+println("Testing @showprogress macro on distributed for loop with reducer")
 testfunc15(3000, 0.01, 0.002)
 
+function testfunc16(n, dt, tsleep)
+    ProgressMeter.@showprogress dt "Description: " @distributed for i in 1:n
+        if rand() < 0.7
+            sleep(tsleep)
+        end
+        i ^ 2
+    end
+end
+
+println("Testing @showprogress macro on distributed for loop without reducer")
+testfunc15(3000, 0.01, 0.002)
