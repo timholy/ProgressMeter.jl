@@ -32,7 +32,23 @@ end
 
 The first incantation will use a minimum update interval of 1 second, and show the ETA and final duration.  If your computation runs so quickly that it never needs to show progress, no extraneous output will be displayed.
 
-The `@showprogress` macro wraps a `for` loop, comprehension, or map/pmap as long as the object being iterated over implements the `length` method and will handle `continue` correctly.
+The `@showprogress` macro wraps a `for` loop, comprehension, `@distributed` for loop, or map/pmap as long as the object being iterated over implements the `length` method and will handle `continue` correctly.
+
+```julia
+using Distributed
+using ProgressMeter
+
+@showprogress @distributed for i in 1:10
+    sleep(0.1)
+end
+
+result = @showprogress 1 "Computing..." @distributed (+) for i in 1:10
+    sleep(0.1)
+    i^2
+end
+```
+
+In the case of a `@distributed` for loop without a reducer, an `@sync` is implied.
 
 You can also control progress updates and reports manually:
 

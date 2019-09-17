@@ -503,6 +503,88 @@ function Base.iterate(wrap::ProgressWrapper, state...)
 end
 
 """
+Equivalent of @showprogress for a distributed for loop.
+```
+result = @showprogress dt "Computing..." @distributed (+) for i = 1:50
+    sleep(0.1)
+    i^2
+end
+```
+"""
+function showprogressdistributed(args...)
+    if length(args) < 1
+        throw(ArgumentError("@showprogress @distributed requires at least 1 argument"))
+    end
+    progressargs = args[1:end-1]
+    expr = Base.remove_linenums!(args[end])
+
+    if expr.head != :macrocall || expr.args[1] != Symbol("@distributed")
+        throw(ArgumentError("malformed @showprogress @distributed expression"))
+    end
+
+    distargs = filter(x -> !(x isa LineNumberNode), expr.args[2:end])
+    na = length(distargs)
+    if na == 1
+        loop = distargs[1]
+    elseif na == 2
+        reducer = distargs[1]
+        loop = distargs[2]
+    else
+        println("$distargs $na")
+        throw(ArgumentError("wrong number of arguments to @distributed"))
+    end
+    if loop.head !== :for
+        throw(ArgumentError("malformed @distributed loop"))
+    end
+    var = loop.args[1].args[1]
+    r = loop.args[1].args[2]
+    body = loop.args[2]
+
+    setup = quote
+        n = length($(esc(r)))
+        p = Progress(n, $([esc(arg) for arg in progressargs]...))
+        ch = RemoteChannel(() -> Channel{Bool}(n))
+    end
+
+    if na == 1
+        # would be nice to do this with @sync @distributed but @sync is broken
+        # https://github.com/JuliaLang/julia/issues/28979
+        compute = quote
+            display = @async let i = 0
+                while i < n
+                    take!(ch)
+                    next!(p)
+                    i += 1
+                end
+            end
+            @distributed for $(esc(var)) = $(esc(r))
+                $(esc(body))
+                put!(ch, true)
+            end
+            nothing
+        end
+    else
+        compute = quote
+            display = @async while take!(ch) next!(p) end
+            results = @distributed $(esc(reducer)) for $(esc(var)) = $(esc(r))
+                x = $(esc(body))
+                put!(ch, true)
+                x
+            end
+            put!(ch, false)
+            results
+        end
+    end
+    
+    quote
+        $setup
+        results = $compute
+        wait(display)
+        results
+    end
+end
+
+"""
 ```
 @showprogress dt "Computing..." for i = 1:50
     # computation goes here
@@ -523,6 +605,9 @@ macro showprogress(args...)
     end
     progressargs = args[1:end-1]
     expr = args[end]
+    if expr.head == :macrocall && expr.args[1] == Symbol("@distributed")
+        return showprogressdistributed(args...)
+    end
     orig = expr = copy(expr)
     metersym = gensym("meter")
     mapfuns = (:map, :pmap)
