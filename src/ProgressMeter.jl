@@ -174,7 +174,7 @@ ProgressUnknown(desc::AbstractString) = ProgressUnknown(desc=desc)
 tty_width(desc) = max(0, displaysize(stdout)[2] - (length(desc) + 29))
 
 # update progress display
-function updateProgress!(p::Progress; showvalues = Any[], valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0))
+function updateProgress!(p::Progress; showvalues = (), valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0))
     p.offset = offset
     t = time()
     if p.counter >= p.n
@@ -224,7 +224,7 @@ function updateProgress!(p::Progress; showvalues = Any[], valuecolor = :blue, of
     return nothing
 end
 
-function updateProgress!(p::ProgressThresh; showvalues = Any[], valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0))
+function updateProgress!(p::ProgressThresh; showvalues = (), valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0))
     p.offset = offset
     t = time()
     if p.val <= p.thresh && !p.triggered
@@ -264,7 +264,7 @@ function updateProgress!(p::ProgressThresh; showvalues = Any[], valuecolor = :bl
     end
 end
 
-function updateProgress!(p::ProgressUnknown; showvalues = Any[], valuecolor = :blue)
+function updateProgress!(p::ProgressUnknown; showvalues = (), valuecolor = :blue)
     t = time()
     if p.done
         if p.printed
@@ -353,7 +353,7 @@ message printed and its color.
 
 See also `finish!`.
 """
-function cancel(p::AbstractProgress, msg::AbstractString = "Aborted before all tasks were completed", color = :red; showvalues = Any[], valuecolor = :blue, offset = p.offset, keep = (offset == 0))
+function cancel(p::AbstractProgress, msg::AbstractString = "Aborted before all tasks were completed", color = :red; showvalues = (), valuecolor = :blue, offset = p.offset, keep = (offset == 0))
     p.offset = offset
     if p.printed
         print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
