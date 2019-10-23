@@ -768,6 +768,7 @@ function progress_map(args...; mapfun=map,
             vals = mapfun(other_args...; kwargs...) do x...
                 val = f(x...)
                 put!(channel, true)
+                yield()
                 return val
             end
             put!(channel, false)
