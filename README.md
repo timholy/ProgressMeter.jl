@@ -196,7 +196,7 @@ end
 
 ### Parallel processes
 
-For processes that are parallelized with `Threads.@spawn` or `Threads.@threads`,
+For processes that are parallelized with `Threads.@threads`,
 `ProgressParallel` can be used to ensure that the progress bar is updated on a
 single thread
 

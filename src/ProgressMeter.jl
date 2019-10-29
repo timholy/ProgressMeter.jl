@@ -97,7 +97,7 @@ Progress(n::Integer, desc::AbstractString, offset::Integer=0) = Progress(n, desc
 `prog = ProgressParallel(n; dt=0.1, desc="Progress: ", color=:green,
 output=stderr, barlen=tty_width(desc))` creates a progress meter for a
 task with `n` iterations or stages over a parallel process such as
-`Threads.@spawn`. Output will be generated at intervals at least `dt`
+`Threads.@threads`. Output will be generated at intervals at least `dt`
 seconds apart, and perhaps longer if each iteration takes longer than
 `dt`. `desc` is a description of the current task.
 """
