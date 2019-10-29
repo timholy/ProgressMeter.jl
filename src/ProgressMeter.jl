@@ -3,7 +3,7 @@ module ProgressMeter
 using Printf: @sprintf
 using Distributed
 
-export Progress, ProgressThresh, ProgressUnknown, BarGlyphs, next!, update!, cancel, finish!, @showprogress, progress_map, progress_pmap
+export Progress, ProgressParallel, ProgressThresh, ProgressUnknown, BarGlyphs, next!, update!, cancel, finish!, @showprogress, progress_map, progress_pmap
 
 """
 `ProgressMeter` contains a suite of utilities for displaying progress
@@ -93,6 +93,54 @@ Progress(n::Integer, dt::Real, desc::AbstractString="Progress: ",
 
 Progress(n::Integer, desc::AbstractString, offset::Integer=0) = Progress(n, desc=desc, offset=offset)
 
+"""
+`prog = ProgressParallel(n; dt=0.1, desc="Progress: ", color=:green,
+output=stderr, barlen=tty_width(desc))` creates a progress meter for a
+task with `n` iterations or stages over a parallel process such as
+`Threads.@spawn`. Output will be generated at intervals at least `dt`
+seconds apart, and perhaps longer if each iteration takes longer than
+`dt`. `desc` is a description of the current task.
+"""
+mutable struct ProgressParallel <: AbstractProgress
+    n::Int
+    spinlocker::Threads.SpinLock
+    dt::Float64
+    counter::Int
+    tfirst::Float64
+    tlast::Float64
+    printed::Bool           # true if we have issued at least one status update
+    desc::AbstractString    # prefix to the percentage, e.g.  "Computing..."
+    barlen::Int             # progress bar size (default is available terminal width)
+    barglyphs::BarGlyphs    # the characters to be used in the bar
+    color::Symbol           # default to green
+    output::IO              # output stream into which the progress is written
+    offset::Int             # position offset of progress bar (default is 0)
+    numprintedvalues::Int   # num values printed below progress in last iteration
+
+    function ProgressParallel(n::Integer;
+                      dt::Real=0.1,
+                      desc::AbstractString="Progress: ",
+                      color::Symbol=:green,
+                      output::IO=stderr,
+                      barlen::Integer=tty_width(desc),
+                      barglyphs::BarGlyphs=BarGlyphs('|','█', Sys.iswindows() ? '█' : ['▏','▎','▍','▌','▋','▊','▉'],' ','|',),
+                      offset::Int=0,
+                     )
+        spinlocker = Threads.SpinLock()
+        counter = 0
+        tfirst = tlast = time()
+        printed = false
+        new(n, spinlocker, dt, counter, tfirst, tlast, printed, desc, barlen, barglyphs, color, output, offset, 0)
+    end
+end
+
+ProgressParallel(n::Integer, dt::Real, desc::AbstractString="Progress: ",
+         barlen::Integer=tty_width(desc), color::Symbol=:green, output::IO=stderr;
+         offset::Integer=0) =
+    ProgressParallel(n, dt=dt, desc=desc, barlen=barlen, color=color, output=output, offset=offset)
+
+ProgressParallel(n::Integer, desc::AbstractString, offset::Integer=0) = ProgressParallel(n, desc=desc, offset=offset)
+
 
 """
 `prog = ProgressThresh(thresh; dt=0.1, desc="Progress: ",
@@ -174,7 +222,7 @@ ProgressUnknown(desc::AbstractString) = ProgressUnknown(desc=desc)
 tty_width(desc) = max(0, displaysize(stdout)[2] - (length(desc) + 29))
 
 # update progress display
-function updateProgress!(p::Progress; showvalues = Any[], valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0))
+function updateProgress!(p::Union{Progress, ProgressParallel}; showvalues = Any[], valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0))
     p.offset = offset
     t = time()
     if p.counter >= p.n
@@ -313,6 +361,20 @@ function next!(p::Union{Progress, ProgressUnknown}, color::Symbol; options...)
     next!(p; options...)
 end
 
+function next!(p::ProgressParallel; options...)
+    lock(p.spinlocker)
+    p.counter += 1
+    updateProgress!(p; options...)
+    unlock(p.spinlocker)
+end
+
+function next!(p::ProgressParallel, color::Symbol; options...)
+    lock(p.spinlocker)
+    p.color = color
+    next!(p; options...)
+    unlock(p.spinlocker)
+end
+
 """
 `update!(prog, counter, [color])` sets the progress counter to
 `counter`, relative to the `n` units of progress specified when `prog`
@@ -324,12 +386,12 @@ the current value.
 
 You may optionally change the color of the display. See also `next!`.
 """
-function update!(p::Union{Progress, ProgressUnknown}, counter::Int; options...)
+function update!(p::Union{Progress, ProgressUnknown, ProgressParallel}, counter::Int; options...)
     p.counter = counter
     updateProgress!(p; options...)
 end
 
-function update!(p::Union{Progress, ProgressUnknown}, counter::Int, color::Symbol; options...)
+function update!(p::Union{Progress, ProgressUnknown, ProgressParallel}, counter::Int, color::Symbol; options...)
     p.color = color
     update!(p, counter; options...)
 end
@@ -374,7 +436,7 @@ end
 
 See also `cancel`.
 """
-function finish!(p::Progress; options...)
+function finish!(p::Union{Progress, ProgressParallel}; options...)
     while p.counter < p.n
         next!(p; options...)
     end
@@ -575,7 +637,7 @@ function showprogressdistributed(args...)
             results
         end
     end
-    
+
     quote
         $setup
         results = $compute
