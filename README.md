@@ -194,9 +194,27 @@ for iter = 1:10
 end
 ```
 
+### Parallel processes
+
+For processes that are parallelized with `Threads.@spawn` or `Threads.@threads`,
+`ProgressParallel` can be used to ensure that the progress bar is updated on a
+single thread
+
+```julia
+using ProgressMeter
+n = 100
+p = ProgressParallel(n)
+Threads.@threads for i = 1:n
+    sleep(0.1)
+    next!(p)
+end
+```
+
 ### Tips for parallel programming
 
-When multiple processes or tasks are being used for a computation, the workers should communicate back to a single task for displaying the progress bar. This can be accomplished with a `RemoteChannel`:
+For remote parallelization, when multiple processes or tasks are being used for
+a computation, the workers should communicate back to a single task for
+isplaying the progress bar. This can be accomplished with a `RemoteChannel`:
 
 ```julia
 using ProgressMeter
