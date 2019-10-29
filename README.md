@@ -214,7 +214,7 @@ end
 
 For remote parallelization, when multiple processes or tasks are being used for
 a computation, the workers should communicate back to a single task for
-isplaying the progress bar. This can be accomplished with a `RemoteChannel`:
+displaying the progress bar. This can be accomplished with a `RemoteChannel`:
 
 ```julia
 using ProgressMeter
