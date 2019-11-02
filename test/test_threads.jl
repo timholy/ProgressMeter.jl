@@ -16,27 +16,28 @@
     @test !any(vals .== 1) #Check that all elements have been iterated
     @test length(threadsUsed) == threads #Ensure that all threads are used
 
-
-    if (Threads.nthreads() > 1)
-        threads = Threads.nthreads() - 1
-        println("Testing ProgressThreads with Threads.@spawn across $threads threads")
-        n = 20 #per thread
-        tasks = Vector{Task}(undef, threads)
-        threadsUsed = Int[]
-        vals = ones(n*threads)
-        p = ProgressMeter.ProgressThreads(n*threads)
-        for t in 1:threads
-            tasks[t] = Threads.@spawn for i in 1:n
-                !in(Threads.threadid(), threadsUsed) && push!(threadsUsed, Threads.threadid())
-                vals[(n*(t-1)) + i] = 0
-                sleep(0.05 + (rand()*0.1))
-                ProgressMeter.next!(p)
+    @static if VERSION >= v"1.3.0-rc1" #Threads.@spawn not available before 1.3
+        if (Threads.nthreads() > 1)
+            threads = Threads.nthreads() - 1
+            println("Testing ProgressThreads with Threads.@spawn across $threads threads")
+            n = 20 #per thread
+            tasks = Vector{Task}(undef, threads)
+            threadsUsed = Int[]
+            vals = ones(n*threads)
+            p = ProgressMeter.ProgressThreads(n*threads)
+            for t in 1:threads
+                tasks[t] = Threads.@spawn for i in 1:n
+                    !in(Threads.threadid(), threadsUsed) && push!(threadsUsed, Threads.threadid())
+                    vals[(n*(t-1)) + i] = 0
+                    sleep(0.05 + (rand()*0.1))
+                    ProgressMeter.next!(p)
+                end
             end
+            wait.(tasks)
+            @test !any(vals .== 1) #Check that all elements have been iterated
+            @test length(threadsUsed) == threads #Ensure that all threads are used
+        else
+            @info "Threads.nthreads() == 1, so Threads.@spawn tests cannot be meaningfully tested"
         end
-        wait.(tasks)
-        @test !any(vals .== 1) #Check that all elements have been iterated
-        @test length(threadsUsed) == threads #Ensure that all threads are used
-    else
-        @info "Threads.nthreads() == 1, so Threads.@spawn tests cannot be meaningfully tested"
     end
 end
