@@ -362,17 +362,17 @@ function next!(p::Union{Progress, ProgressUnknown}, color::Symbol; options...)
 end
 
 function next!(p::ProgressThreads; options...)
-    lock(p.spinlocker)
-    p.counter += 1
-    updateProgress!(p; options...)
-    unlock(p.spinlocker)
+    lock(p.spinlocker) do
+        p.counter += 1
+        updateProgress!(p; options...)
+    end
 end
 
 function next!(p::ProgressThreads, color::Symbol; options...)
-    lock(p.spinlocker)
-    p.color = color
-    next!(p; options...)
-    unlock(p.spinlocker)
+    lock(p.spinlocker) do
+        p.color = color
+        next!(p; options...)
+    end
 end
 
 """
