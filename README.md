@@ -197,13 +197,13 @@ end
 ### Parallel processes
 
 For processes that are parallelized with `Threads.@threads`,
-`ProgressParallel` can be used to ensure that the progress bar is updated on a
+`ProgressThreads` can be used to ensure that the progress bar is updated on a
 single thread
 
 ```julia
 using ProgressMeter
 n = 100
-p = ProgressParallel(n)
+p = ProgressThreads(n)
 Threads.@threads for i = 1:n
     sleep(0.1)
     next!(p)
