@@ -11,7 +11,7 @@ julia:
 script:
   - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
   - julia --project -e 'using Pkg; Pkg.build();
-  - JULIA_NUM_THREADS=2 julia --project -e 'Pkg.test(; coverage=true)'
+  - JULIA_NUM_THREADS=2 julia --project -e 'using Pkg; Pkg.test(; coverage=true)'
 notifications:
   email: false
 git:
