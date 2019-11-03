@@ -8,6 +8,10 @@ julia:
   - 1.1
   - 1.2
   - nightly
+script:
+  - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
+  - julia -e 'if VERSION < v"0.7-"; Pkg.clone(pwd()); else; import Pkg; Pkg.add(Pkg.PackageSpec(path=pwd())); end; Pkg.build("ProgressMeter")'
+  - JULIA_NUM_THREADS=2 julia -e 'Pkg.test("ProgressMeter"; coverage=true)'
 notifications:
   email: false
 git:
