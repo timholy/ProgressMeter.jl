@@ -10,7 +10,7 @@ julia:
   - nightly
 script:
   - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
-  - julia --project -e 'using Pkg; Pkg.build();
+  - julia --project -e 'using Pkg; Pkg.build();'
   - JULIA_NUM_THREADS=2 julia --project -e 'using Pkg; Pkg.test(; coverage=true)'
 notifications:
   email: false
