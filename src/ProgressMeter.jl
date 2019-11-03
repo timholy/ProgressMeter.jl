@@ -57,6 +57,7 @@ the current task.
 """
 mutable struct Progress <: AbstractProgress
     n::Int
+    spinlocker::Threads.SpinLock
     dt::Float64
     counter::Int
     tfirst::Float64
@@ -79,10 +80,11 @@ mutable struct Progress <: AbstractProgress
                       barglyphs::BarGlyphs=BarGlyphs('|','█', Sys.iswindows() ? '█' : ['▏','▎','▍','▌','▋','▊','▉'],' ','|',),
                       offset::Int=0,
                      )
+        spinlocker = Threads.SpinLock()
         counter = 0
         tfirst = tlast = time()
         printed = false
-        new(n, dt, counter, tfirst, tlast, printed, desc, barlen, barglyphs, color, output, offset, 0)
+        new(n, spinlocker, dt, counter, tfirst, tlast, printed, desc, barlen, barglyphs, color, output, offset, 0)
     end
 end
 
@@ -104,6 +106,7 @@ apart, and perhaps longer if each iteration takes longer than
 """
 mutable struct ProgressThresh{T<:Real} <: AbstractProgress
     thresh::T
+    spinlocker::Threads.SpinLock
     dt::Float64
     val::T
     counter::Int
@@ -123,9 +126,10 @@ mutable struct ProgressThresh{T<:Real} <: AbstractProgress
                                color::Symbol=:green,
                                output::IO=stderr,
                                offset::Int=0) where T
+        spinlocker = Threads.SpinLock()
         tfirst = tlast = time()
         printed = false
-        new{T}(thresh, dt, typemax(T), 0, false, tfirst, tlast, printed, desc, color, output, 0, offset)
+        new{T}(thresh, spinlocker, dt, typemax(T), 0, false, tfirst, tlast, printed, desc, color, output, 0, offset)
     end
 end
 
@@ -146,6 +150,7 @@ apart, and perhaps longer if each iteration takes longer than
 """
 mutable struct ProgressUnknown <: AbstractProgress
     done::Bool
+    spinlocker::Threads.SpinLock
     dt::Float64
     counter::Int
     triggered::Bool
@@ -159,9 +164,10 @@ mutable struct ProgressUnknown <: AbstractProgress
 end
 
 function ProgressUnknown(;dt::Real=0.1, desc::AbstractString="Progress: ", color::Symbol=:green, output::IO=stderr)
+    spinlocker = Threads.SpinLock()
     tfirst = tlast = time()
     printed = false
-    ProgressUnknown(false, dt, 0, false, tfirst, tlast, printed, desc, color, output, 0)
+    ProgressUnknown(false, spinlocker, dt, 0, false, tfirst, tlast, printed, desc, color, output, 0)
 end
 
 ProgressUnknown(dt::Real, desc::AbstractString="Progress: ",
@@ -304,13 +310,18 @@ or may not result in a change to the display.
 You may optionally change the color of the display. See also `update!`.
 """
 function next!(p::Union{Progress, ProgressUnknown}; options...)
-    p.counter += 1
-    updateProgress!(p; options...)
+    lock(p.spinlocker) do
+        p.counter += 1
+        updateProgress!(p; options...)
+    end
 end
 
 function next!(p::Union{Progress, ProgressUnknown}, color::Symbol; options...)
-    p.color = color
-    next!(p; options...)
+    lock(p.spinlocker) do
+        p.color = color
+        p.counter += 1
+        updateProgress!(p; options...)
+    end
 end
 
 """
@@ -325,24 +336,35 @@ the current value.
 You may optionally change the color of the display. See also `next!`.
 """
 function update!(p::Union{Progress, ProgressUnknown}, counter::Int; options...)
-    p.counter = counter
-    updateProgress!(p; options...)
+    lock(p.spinlocker) do
+        p.counter = counter
+        updateProgress!(p; options...)
+    end
 end
 
 function update!(p::Union{Progress, ProgressUnknown}, counter::Int, color::Symbol; options...)
-    p.color = color
-    update!(p, counter; options...)
+    lock(p.spinlocker) do
+        p.counter = counter
+        p.color = color
+        updateProgress!(p; options...)
+    end
 end
 
 function update!(p::ProgressThresh, val; options...)
-    p.val = val
-    p.counter += 1
-    updateProgress!(p; options...)
+    lock(p.spinlocker) do
+        p.val = val
+        p.counter += 1
+        updateProgress!(p; options...)
+    end
 end
 
 function update!(p::ProgressThresh, val, color::Symbol; options...)
-    p.color = color
-    update!(p, val; options...)
+    lock(p.spinlocker) do
+        p.val = val
+        p.counter += 1
+        p.color = color
+        updateProgress!(p; options...)
+    end
 end
 
 
@@ -354,16 +376,18 @@ message printed and its color.
 See also `finish!`.
 """
 function cancel(p::AbstractProgress, msg::AbstractString = "Aborted before all tasks were completed", color = :red; showvalues = Any[], valuecolor = :blue, offset = p.offset, keep = (offset == 0))
-    p.offset = offset
-    if p.printed
-        print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
-        move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
-        printover(p.output, msg, color)
-        printvalues!(p, showvalues; color = valuecolor)
-        if keep
-            println(p.output)
-        else
-            print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+    lock(p.spinlocker) do
+        p.offset = offset
+        if p.printed
+            print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
+            move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
+            printover(p.output, msg, color)
+            printvalues!(p, showvalues; color = valuecolor)
+            if keep
+                println(p.output)
+            else
+                print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+            end
         end
     end
     return
@@ -385,8 +409,10 @@ function finish!(p::ProgressThresh; options...)
 end
 
 function finish!(p::ProgressUnknown; options...)
-    p.done = true
-    updateProgress!(p; options...)
+    lock(p.spinlocker) do
+        p.done = true
+        updateProgress!(p; options...)
+    end
 end
 
 # Internal method to print additional values below progress bar
@@ -575,7 +601,7 @@ function showprogressdistributed(args...)
             results
         end
     end
-    
+
     quote
         $setup
         results = $compute

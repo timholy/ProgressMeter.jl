@@ -85,6 +85,32 @@ function readFileLines(fileName::String)
 end
 ```
 
+The core methods `Progress()`, `ProgressThresh()`, `ProgressUnknown()`, and their updaters
+are also thread-safe, so can be used with `Threads.@threads`, `Threads.@spawn` etc.:
+
+```julia
+using ProgressMeter
+p = Progress(10)
+Threads.@threads for i in 1:10
+    sleep(2*rand())
+    next!(p)
+end
+```
+
+```julia
+using ProgressMeter
+n = 10
+p = Progress(n)
+tasks = Vector{Task}(undef, n)
+for i in 1:n
+    tasks[i] = Threads.@spawn begin
+        sleep(2*rand())
+        next!(p)
+    end
+end
+wait.(tasks)
+```
+
 ### Progress bar style
 
 Optionally, a description string can be specified which will be prepended to the output, and a progress meter `M` characters long can be shown.  E.g.
@@ -196,7 +222,7 @@ end
 
 ### Tips for parallel programming
 
-When multiple processes or tasks are being used for a computation, the workers should communicate back to a single task for displaying the progress bar. This can be accomplished with a `RemoteChannel`:
+For remote parallelization, when multiple processes or tasks are being used for a computation, the workers should communicate back to a single task for displaying the progress bar. This can be accomplished with a `RemoteChannel`:
 
 ```julia
 using ProgressMeter
