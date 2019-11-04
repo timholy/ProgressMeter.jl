@@ -8,10 +8,14 @@ julia:
   - 1.1
   - 1.2
   - nightly
-script:
-  - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
-  - julia --project -e 'using Pkg; Pkg.build();'
-  - JULIA_NUM_THREADS=2 julia --project -e 'using Pkg; Pkg.test(; coverage=true)'
+env:
+  matrix:
+    - JULIA_NUM_THREADS=1
+    - JULIA_NUM_THREADS=3 #3 allows the @spawn test to run effectively
+# script:
+#   - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
+#   - julia --project -e 'using Pkg; Pkg.build();'
+#   - JULIA_NUM_THREADS=2 julia --project -e 'using Pkg; Pkg.test(; coverage=true)'
 notifications:
   email: false
 git:
