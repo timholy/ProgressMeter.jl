@@ -197,7 +197,7 @@ function updateProgress!(p::Progress; showvalues = Any[], valuecolor = :blue, of
         return nothing
     end
 
-    if t > p.tlast+p.dt
+    if t > p.tlast+p.dt || p.counter == 0 # Always print the first time
         percentage_complete = 100.0 * p.counter / p.n
         bar = barstring(p.barlen, percentage_complete, barglyphs=p.barglyphs)
         elapsed_time = t - p.tfirst
@@ -312,6 +312,9 @@ function next!(p::Union{Progress, ProgressUnknown}, color::Symbol; options...)
     p.color = color
     next!(p; options...)
 end
+
+# Like next! but doesn't increase p.counter
+first!(p; options...) = updateProgress!(p; options...)
 
 """
 `update!(prog, counter, [color])` sets the progress counter to
@@ -491,6 +494,9 @@ end
 Base.length(wrap::ProgressWrapper) = Base.length(wrap.obj)
 
 function Base.iterate(wrap::ProgressWrapper, state...)
+    if isempty(state)
+        first!(wrap.meter)
+    end
     ir = iterate(wrap.obj, state...)
 
     if ir === nothing
