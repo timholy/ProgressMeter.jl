@@ -12,6 +12,14 @@ env:
   matrix:
     - JULIA_NUM_THREADS=1
     - JULIA_NUM_THREADS=3 #3 allows the @spawn test to run effectively
+jobs:
+  exclude:
+  - julia: 0.7 # Disable Threads testing
+    env: JULIA_NUM_THREADS=3
+  - julia: 1.0 # Disable Threads testing
+    env: JULIA_NUM_THREADS=3
+  - julia: 1.1 # Disable Threads testing
+    env: JULIA_NUM_THREADS=3
 # script:
 #   - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
 #   - julia --project -e 'using Pkg; Pkg.build();'
