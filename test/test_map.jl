@@ -20,7 +20,6 @@ procs = addprocs(2)
     @test vals == map(x->x^2, 1:10)
 
 
-
     # errors
     @test_throws ErrorException progress_map(1:10) do x
         if x > 3
@@ -38,8 +37,6 @@ procs = addprocs(2)
     end
     println()
 
-
-
     # @showprogress
     vals = @showprogress map(1:10) do x
         return x^2
@@ -50,9 +47,7 @@ procs = addprocs(2)
         return x^2
     end
     @test vals == map(x->x^2, 1:10)
-
-
-
+    
     # function passed by name
     function testfun(x)
         return x^2
@@ -62,7 +57,12 @@ procs = addprocs(2)
     vals = @showprogress pmap(testfun, 1:10)
     @test vals == map(testfun, 1:10)
 
-
+    # #136: make sure mid progress shows up even without sleep
+    println("Verify that intermediate progress is displayed:")
+    @showprogress map(1:100) do i
+        A = rand(10000,1000)
+        sum(A)
+    end
 
     # multiple args
     vals = @showprogress pmap((x,y)->x*y, 1:10, 2:11)
