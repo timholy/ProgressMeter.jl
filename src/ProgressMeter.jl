@@ -180,10 +180,10 @@ ProgressUnknown(desc::AbstractString) = ProgressUnknown(desc=desc)
 tty_width(desc) = max(0, displaysize(stdout)[2] - (length(desc) + 29))
 
 # Flag to turn IJulia.clear_output on and off in the package level
-const IS_CLEARIJULIA = Ref(false)  # off by default
-clearijulia(flag=false) = (IS_CLEARIJULIA[] = flag)
+const IS_CLEARIJULIA = Ref(true)  # on by default
+clearijulia(flag=true) = (IS_CLEARIJULIA[] = flag)
 
-# Whether or not IJulia is on
+# Whether or not clear IJulia mode is on
 isijulia() = IS_CLEARIJULIA[] && isdefined(Main, :IJulia) && Main.IJulia.inited
 
 # update progress display

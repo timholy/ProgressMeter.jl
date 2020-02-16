@@ -222,23 +222,11 @@ end
 
 ### ProgressMeter in Jupyter notebooks
 
-Since Jupyter notebooks don't allow to overwrite only parts of the output of cell, the progress bars
-are printed repeatedly to the output.
+Since Jupyter notebooks don't allow to overwrite only parts of the output of cell, the progress bars are printed repeatedly to the output.
 Jupyter notebooks allow to clear the output of a cell, but this will remove **all** output
-of the current cell, i.e., to properly update a progress bar we need to wipe all output of cell.
-You can enable this behaviour by calling `ProgressMeter.clearijulia(true)`.
-
-```julia
-ProgressMeter.clearijulia(true)
-
-x,n = 1,10
-p = Progress(n)
-for iter = 1:10
-    x *= 2
-    sleep(0.5)
-    ProgressMeter.next!(p; showvalues = [(:iter,iter), (:x,x)])
-end
-```
+of the current cell, i.e., to properly update a progress bar we need to wipe all output of cell. This behaviour is enabled by default but you can
+disable it by calling `ProgressMeter.clearijulia(false)` or
+enable it by calling `ProgressMeter.clearijulia(true)`.
 
 ### Tips for parallel programming
 
