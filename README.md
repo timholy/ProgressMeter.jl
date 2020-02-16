@@ -184,7 +184,7 @@ Since Jupyter notebooks don't allow to overwrite only parts of the output of cel
 are printed repeatedly to the output.
 Jupyter notebooks allow to clear the output of a cell, but this will remove **all** output
 of the current cell, i.e., to properly update a progress bar we need to wipe all output of cell.
-You can opt-in into this behaviour by setting the `clear_output_ijulia=true` flag.
+You can enable this behaviour by calling `ProgressMeter.clearijulia(true)`.
 
 ```julia
 x,n = 1,10
