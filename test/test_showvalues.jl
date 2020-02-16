@@ -1,3 +1,7 @@
+for is_clearijulia in [true, false]
+
+ProgressMeter.clearijulia(is_clearijulia)
+
 println("Testing showvalues with a Dict (2 values)")
 function testfunc1(n, dt, tsleep, desc, barlen)
     p = ProgressMeter.Progress(n, dt, desc, barlen)
@@ -75,28 +79,4 @@ for i in 1:50
 end
 ProgressMeter.cancel(prog)
 
-
-println("Testing showvalues with a Dict (2 values) and clear_output_ijulia")
-function testfunc1(n, dt, tsleep, desc, barlen)
-    p = ProgressMeter.Progress(n, dt, desc, barlen; clear_output_ijulia=true)
-    for i = 1:n
-        sleep(tsleep)
-        ProgressMeter.next!(p; showvalues = Dict(:i => i, :halfdone => (i >= n/2)))
-    end
-end
-testfunc1(50, 1, 0.2, "progress  ", 70)
-
-println("Testing showvalues with threshold-based progress and clear_output_ijulia")
-prog = ProgressMeter.ProgressThresh(1e-5, "Minimizing:"; clear_output_ijulia=true)
-for val in 10 .^ range(2, stop=-6, length=20)
-    ProgressMeter.update!(prog, val; showvalues = Dict(:margin => abs(val - 1e-5)))
-    sleep(0.1)
-end
-
-println("Testing showvalues with online progress and clear_output_ijulia")
-prog = ProgressMeter.ProgressUnknown("Entries read:"; clear_output_ijulia=true)
-for title in ["a", "b", "c", "d", "e"]
-    ProgressMeter.next!(prog; showvalues = Dict(:title => title))
-    sleep(0.5)
-end
-ProgressMeter.finish!(prog)
+end # if
