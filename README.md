@@ -229,8 +229,10 @@ of the current cell, i.e., to properly update a progress bar we need to wipe all
 You can enable this behaviour by calling `ProgressMeter.clearijulia(true)`.
 
 ```julia
+ProgressMeter.clearijulia(true)
+
 x,n = 1,10
-p = Progress(n; clear_output_ijulia=true)
+p = Progress(n)
 for iter = 1:10
     x *= 2
     sleep(0.5)
