@@ -187,7 +187,7 @@ clearijulia(flag=false) = (IS_CLEARIJULIA[] = flag)
 isijulia() = IS_CLEARIJULIA[] && isdefined(Main, :IJulia) && Main.IJulia.inited
 
 # update progress display
-function updateProgress!(p::Progress; showvalues = Any[], valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0))
+function updateProgress!(p::Progress; showvalues = (), valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0))
     p.offset = offset
     t = time()
     if p.counter >= p.n

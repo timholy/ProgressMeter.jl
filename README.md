@@ -32,7 +32,23 @@ end
 
 The first incantation will use a minimum update interval of 1 second, and show the ETA and final duration.  If your computation runs so quickly that it never needs to show progress, no extraneous output will be displayed.
 
-The `@showprogress` macro wraps a `for` loop, comprehension, or map/pmap as long as the object being iterated over implements the `length` method and will handle `continue` correctly.
+The `@showprogress` macro wraps a `for` loop, comprehension, `@distributed` for loop, or map/pmap as long as the object being iterated over implements the `length` method and will handle `continue` correctly.
+
+```julia
+using Distributed
+using ProgressMeter
+
+@showprogress @distributed for i in 1:10
+    sleep(0.1)
+end
+
+result = @showprogress 1 "Computing..." @distributed (+) for i in 1:10
+    sleep(0.1)
+    i^2
+end
+```
+
+In the case of a `@distributed` for loop without a reducer, an `@sync` is implied.
 
 You can also control progress updates and reports manually:
 
@@ -67,6 +83,32 @@ function readFileLines(fileName::String)
         update!(p, position(file))
     end
 end
+```
+
+The core methods `Progress()`, `ProgressThresh()`, `ProgressUnknown()`, and their updaters
+are also thread-safe, so can be used with `Threads.@threads`, `Threads.@spawn` etc.:
+
+```julia
+using ProgressMeter
+p = Progress(10)
+Threads.@threads for i in 1:10
+    sleep(2*rand())
+    next!(p)
+end
+```
+
+```julia
+using ProgressMeter
+n = 10
+p = Progress(n)
+tasks = Vector{Task}(undef, n)
+for i in 1:n
+    tasks[i] = Threads.@spawn begin
+        sleep(2*rand())
+        next!(p)
+    end
+end
+wait.(tasks)
 ```
 
 ### Progress bar style
@@ -198,7 +240,7 @@ end
 
 ### Tips for parallel programming
 
-When multiple processes or tasks are being used for a computation, the workers should communicate back to a single task for displaying the progress bar. This can be accomplished with a `RemoteChannel`:
+For remote parallelization, when multiple processes or tasks are being used for a computation, the workers should communicate back to a single task for displaying the progress bar. This can be accomplished with a `RemoteChannel`:
 
 ```julia
 using ProgressMeter
