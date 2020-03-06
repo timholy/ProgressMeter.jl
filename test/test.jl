@@ -299,7 +299,7 @@ function testfunc16(n, dt, tsleep)
 end
 
 println("Testing @showprogress macro on distributed for loop without reducer")
-testfunc15(3000, 0.01, 0.002)
+testfunc16(3000, 0.01, 0.002)
 
 function testfunc17()
     n = 30
