@@ -49,8 +49,8 @@ end
 
 """
 `prog = Progress(n; dt=0.1, desc="Progress: ", color=:green,
-output=stderr, barlen=tty_width(desc))` creates a progress meter for a
-task with `n` iterations or stages. Output will be generated at
+output=stderr, barlen=tty_width(desc), start=0)` creates a progress meter for a
+task with `n` iterations or stages starting from `start`. Output will be generated at
 intervals at least `dt` seconds apart, and perhaps longer if each
 iteration takes longer than `dt`. `desc` is a description of
 the current task.
@@ -70,6 +70,7 @@ mutable struct Progress <: AbstractProgress
     output::IO              # output stream into which the progress is written
     offset::Int             # position offset of progress bar (default is 0)
     numprintedvalues::Int   # num values printed below progress in last iteration
+    start::Int              # which iteration number to start from
 
     function Progress(n::Integer;
                       dt::Real=0.1,
@@ -79,12 +80,13 @@ mutable struct Progress <: AbstractProgress
                       barlen::Integer=tty_width(desc),
                       barglyphs::BarGlyphs=BarGlyphs('|','█', Sys.iswindows() ? '█' : ['▏','▎','▍','▌','▋','▊','▉'],' ','|',),
                       offset::Int=0,
+                      start::Int=0
                      )
         spinlocker = Threads.SpinLock()
-        counter = 0
+        counter = start
         tfirst = tlast = time()
         printed = false
-        new(n, spinlocker, dt, counter, tfirst, tlast, printed, desc, barlen, barglyphs, color, output, offset, 0)
+        new(n, spinlocker, dt, counter, tfirst, tlast, printed, desc, barlen, barglyphs, color, output, offset, 0, start)
     end
 end
 
@@ -207,7 +209,7 @@ function updateProgress!(p::Progress; showvalues = (), valuecolor = :blue, offse
         percentage_complete = 100.0 * p.counter / p.n
         bar = barstring(p.barlen, percentage_complete, barglyphs=p.barglyphs)
         elapsed_time = t - p.tfirst
-        est_total_time = 100 * elapsed_time / percentage_complete
+        est_total_time = elapsed_time * (p.n - p.start) / (p.counter - p.start)
         if 0 <= est_total_time <= typemax(Int)
             eta_sec = round(Int, est_total_time - elapsed_time )
             eta = durationstring(eta_sec)

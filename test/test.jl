@@ -198,8 +198,9 @@ function testfunc13()
         ProgressMeter.next!(p)
     end
     # full keyword argumetns
-    p = ProgressMeter.Progress(n, dt=0.01, desc="", color=:red, output=stderr, barlen=40)
-    for i in 1:n
+    start = 15
+    p = ProgressMeter.Progress(n, dt=0.01, desc="", color=:red, output=stderr, barlen=40, start = start)
+    for i in 1:n-start
         sleep(0.1)
         ProgressMeter.next!(p)
     end
