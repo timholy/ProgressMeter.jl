@@ -445,7 +445,7 @@ function move_cursor_up_while_clearing_lines(io, numlinesup)
     if numlinesup > 0 && clear_ijulia()
         Main.IJulia.clear_output(true)
         if IJULIABEHAVIOR[] == IJuliaWarned
-            @warn "ProgressMeter by default uses `IJulia.clear_output` to refresh progress meter with additional information in IJulia. \nThis means all outputs in the cell will be cleared. To prevent this, do `ProgressMeter.ijulia_behavior(:append)`. \nTo disable this warning message, do `ProgressMeter.ijulia_behavior(:clear)`."
+            @warn "ProgressMeter by default refresh meters with additional information in IJulia via `IJulia.clear_output`, which clears all outputs in the cell. \n - To prevent this behaviour, do `ProgressMeter.ijulia_behavior(:append)`. \n - To disable this warning message, do `ProgressMeter.ijulia_behavior(:clear)`."
         end
     else
         for _ in 1:numlinesup
