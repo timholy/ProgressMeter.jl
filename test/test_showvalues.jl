@@ -1,6 +1,6 @@
-for is_clearijulia in [true, false]
+for ijulia_behavior in [:warn, :clear, :append]
 
-ProgressMeter.clearijulia(is_clearijulia)
+ProgressMeter.ijulia_behavior(ijulia_behavior)
 
 println("Testing showvalues with a Dict (2 values)")
 function testfunc1(n, dt, tsleep, desc, barlen)
