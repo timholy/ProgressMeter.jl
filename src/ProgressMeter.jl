@@ -350,18 +350,18 @@ function update!(p::Union{Progress, ProgressUnknown}, counter::Int, color::Symbo
     end
 end
 
-function update!(p::ProgressThresh, val; options...)
+function update!(p::ProgressThresh, val; increment::Bool = true, options...)
     lock(p.spinlocker) do
         p.val = val
-        p.counter += 1
+        increment && p.counter += 1
         updateProgress!(p; options...)
     end
 end
 
-function update!(p::ProgressThresh, val, color::Symbol; options...)
+function update!(p::ProgressThresh, val, color::Symbol; increment::Bool = true, options...)
     lock(p.spinlocker) do
         p.val = val
-        p.counter += 1
+        increment && p.counter += 1
         p.color = color
         updateProgress!(p; options...)
     end
