@@ -1,3 +1,7 @@
+for ijulia_behavior in [:warn, :clear, :append]
+
+ProgressMeter.ijulia_behavior(ijulia_behavior)
+
 println("Testing showvalues with a Dict (2 values)")
 function testfunc1(n, dt, tsleep, desc, barlen)
     p = ProgressMeter.Progress(n, dt, desc, barlen)
@@ -74,3 +78,5 @@ for i in 1:50
     sleep(0.1)
 end
 ProgressMeter.cancel(prog)
+
+end # if

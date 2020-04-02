@@ -3,7 +3,7 @@ module ProgressMeter
 using Printf: @sprintf
 using Distributed
 
-export Progress, ProgressThresh, ProgressUnknown, BarGlyphs, next!, update!, cancel, finish!, @showprogress, progress_map, progress_pmap
+export Progress, ProgressThresh, ProgressUnknown, BarGlyphs, next!, update!, cancel, finish!, @showprogress, progress_map, progress_pmap, ijulia_behavior
 
 """
 `ProgressMeter` contains a suite of utilities for displaying progress
@@ -179,6 +179,21 @@ ProgressUnknown(desc::AbstractString) = ProgressUnknown(desc=desc)
 #...length of percentage and ETA string with days is 29 characters
 tty_width(desc) = max(0, displaysize(stdout)[2] - (length(desc) + 29))
 
+# Package level behavior of IJulia clear output
+@enum IJuliaBehavior IJuliaWarned IJuliaClear IJuliaAppend
+
+const IJULIABEHAVIOR = Ref(IJuliaWarned)
+
+function ijulia_behavior(b)
+    @assert b in [:warn, :clear, :append]
+    b == :warn && (IJULIABEHAVIOR[] = IJuliaWarned)
+    b == :clear && (IJULIABEHAVIOR[] = IJuliaClear)
+    b == :append && (IJULIABEHAVIOR[] = IJuliaAppend)
+end
+
+# Whether or not to use IJulia.clear_output
+clear_ijulia() = (IJULIABEHAVIOR[] != IJuliaAppend) && isdefined(Main, :IJulia) && Main.IJulia.inited
+
 # update progress display
 function updateProgress!(p::Progress; showvalues = (), valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0))
     p.offset = offset
@@ -189,7 +204,7 @@ function updateProgress!(p::Progress; showvalues = (), valuecolor = :blue, offse
             bar = barstring(p.barlen, percentage_complete, barglyphs=p.barglyphs)
             dur = durationstring(t-p.tfirst)
             msg = @sprintf "%s%3u%%%s Time: %s" p.desc round(Int, percentage_complete) bar dur
-            print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
+            !clear_ijulia() && print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
             move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             printover(p.output, msg, p.color)
             printvalues!(p, showvalues; color = valuecolor)
@@ -215,11 +230,11 @@ function updateProgress!(p::Progress; showvalues = (), valuecolor = :blue, offse
             eta = "N/A"
         end
         msg = @sprintf "%s%3u%%%s  ETA: %s" p.desc round(Int, percentage_complete) bar eta
-        print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
+        !clear_ijulia() && print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
         move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
         printover(p.output, msg, p.color)
         printvalues!(p, showvalues; color = valuecolor)
-        print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+        !clear_ijulia() && print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
         flush(p.output)
         # Compensate for any overhead of printing. This can be
         # especially important if you're running over a slow network
@@ -427,8 +442,15 @@ function printvalues!(p::AbstractProgress, showvalues; color = false)
 end
 
 function move_cursor_up_while_clearing_lines(io, numlinesup)
-    for _ in 1:numlinesup
-        print(io, "\r\u1b[K\u1b[A")
+    if numlinesup > 0 && clear_ijulia()
+        Main.IJulia.clear_output(true)
+        if IJULIABEHAVIOR[] == IJuliaWarned
+            @warn "ProgressMeter by default refresh meters with additional information in IJulia via `IJulia.clear_output`, which clears all outputs in the cell. \n - To prevent this behaviour, do `ProgressMeter.ijulia_behavior(:append)`. \n - To disable this warning message, do `ProgressMeter.ijulia_behavior(:clear)`."
+        end
+    else
+        for _ in 1:numlinesup
+            print(io, "\r\u1b[K\u1b[A")
+        end
     end
 end
 
