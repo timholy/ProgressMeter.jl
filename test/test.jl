@@ -249,12 +249,14 @@ println("Testing threshold-based progress")
 prog = ProgressMeter.ProgressThresh(1e-5, "Minimizing:")
 for val in 10 .^ range(2, stop=-6, length=20)
     ProgressMeter.update!(prog, val; increment=false)
+    @test prog.counter == 0
     sleep(0.1)
 end
 colors = [:red, :blue, :green]
 prog = ProgressMeter.ProgressThresh(1e-5, "Minimizing:")
 for val in 10 .^ range(2, stop=-6, length=20)
     ProgressMeter.update!(prog, val, rand(colors); increment=false)
+    @test prog.counter == 0
     sleep(0.1)
 end
 
