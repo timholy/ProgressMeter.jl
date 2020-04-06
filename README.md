@@ -222,10 +222,10 @@ end
 
 #### ProgressMeter with additional information in Jupyter
 
-Since Jupyter notebooks/lab doesn't allow to overwrite only parts of the output of cell, the progress bars are printed repeatedly to the output.
-Jupyter allow to clear the output of a cell, but this will remove **all** output
-of the current cell, i.e., to properly update a progress bar we need to wipe all output of cell. This behavior is enabled by default but you can
-disable it by calling `ProgressMeter.ijulia_behavior(:append)`. 
+Jupyter notebooks/lab does not allow one to overwrite only parts of the output of cell.
+In releases up through 1.2, progress bars are printed repeatedly to the output.
+Starting with release xx, by default Jupyter clears the output of a cell, but this will remove **all** output from the cell.
+You can restore previous behavior by calling `ProgressMeter.ijulia_behavior(:append)`. 
 You can enable it again by calling `ProgressMeter.ijulia_behavior(:clear)`, which will also disable the warning message.
 
 ### Tips for parallel programming
