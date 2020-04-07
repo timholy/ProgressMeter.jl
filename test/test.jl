@@ -304,7 +304,7 @@ testfunc16(3000, 0.01, 0.002)
 
 function testfunc17()
     n = 30
-    p = ProgressMeter.Progress(n, resumefrom=15)
+    p = ProgressMeter.Progress(n, start=15)
     for i in 15+1:30
         sleep(0.1)
         ProgressMeter.next!(p)
