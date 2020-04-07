@@ -198,8 +198,9 @@ function testfunc13()
         ProgressMeter.next!(p)
     end
     # full keyword argumetns
-    p = ProgressMeter.Progress(n, dt=0.01, desc="", color=:red, output=stderr, barlen=40)
-    for i in 1:n
+    start = 15
+    p = ProgressMeter.Progress(n, dt=0.01, desc="", color=:red, output=stderr, barlen=40, start = start)
+    for i in 1:n-start
         sleep(0.1)
         ProgressMeter.next!(p)
     end
@@ -315,4 +316,16 @@ function testfunc16(n, dt, tsleep)
 end
 
 println("Testing @showprogress macro on distributed for loop without reducer")
-testfunc15(3000, 0.01, 0.002)
+testfunc16(3000, 0.01, 0.002)
+
+function testfunc17()
+    n = 30
+    p = ProgressMeter.Progress(n, start=15)
+    for i in 15+1:30
+        sleep(0.1)
+        ProgressMeter.next!(p)
+    end
+end
+
+println("Testing start offset")
+testfunc17()
