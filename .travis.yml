@@ -13,6 +13,8 @@ env:
     - JULIA_NUM_THREADS=3 #3 allows the @spawn test to run effectively
 jobs:
   exclude:
+  - julia: 0.7 # Disable Threads testing
+    env: JULIA_NUM_THREADS=3
   - julia: 1.0 # Disable Threads testing
     env: JULIA_NUM_THREADS=3
 # script:
