@@ -57,7 +57,7 @@ the current task.
 """
 mutable struct Progress <: AbstractProgress
     n::Int
-    spinlocker::Threads.SpinLock
+    reentrantlocker::Threads.ReentrantLock
     dt::Float64
     counter::Int
     tfirst::Float64
@@ -82,11 +82,11 @@ mutable struct Progress <: AbstractProgress
                       offset::Int=0,
                       start::Int=0
                      )
-        spinlocker = Threads.SpinLock()
+        reentrantlocker = Threads.ReentrantLock()
         counter = start
         tfirst = tlast = time()
         printed = false
-        new(n, spinlocker, dt, counter, tfirst, tlast, printed, desc, barlen, barglyphs, color, output, offset, 0, start)
+        new(n, reentrantlocker, dt, counter, tfirst, tlast, printed, desc, barlen, barglyphs, color, output, offset, 0, start)
     end
 end
 
@@ -108,7 +108,7 @@ apart, and perhaps longer if each iteration takes longer than
 """
 mutable struct ProgressThresh{T<:Real} <: AbstractProgress
     thresh::T
-    spinlocker::Threads.SpinLock
+    reentrantlocker::Threads.ReentrantLock
     dt::Float64
     val::T
     counter::Int
@@ -128,10 +128,10 @@ mutable struct ProgressThresh{T<:Real} <: AbstractProgress
                                color::Symbol=:green,
                                output::IO=stderr,
                                offset::Int=0) where T
-        spinlocker = Threads.SpinLock()
+        reentrantlocker = Threads.ReentrantLock()
         tfirst = tlast = time()
         printed = false
-        new{T}(thresh, spinlocker, dt, typemax(T), 0, false, tfirst, tlast, printed, desc, color, output, 0, offset)
+        new{T}(thresh, reentrantlocker, dt, typemax(T), 0, false, tfirst, tlast, printed, desc, color, output, 0, offset)
     end
 end
 
@@ -152,7 +152,7 @@ apart, and perhaps longer if each iteration takes longer than
 """
 mutable struct ProgressUnknown <: AbstractProgress
     done::Bool
-    spinlocker::Threads.SpinLock
+    reentrantlocker::Threads.ReentrantLock
     dt::Float64
     counter::Int
     triggered::Bool
@@ -166,10 +166,10 @@ mutable struct ProgressUnknown <: AbstractProgress
 end
 
 function ProgressUnknown(;dt::Real=0.1, desc::AbstractString="Progress: ", color::Symbol=:green, output::IO=stderr)
-    spinlocker = Threads.SpinLock()
+    reentrantlocker = Threads.ReentrantLock()
     tfirst = tlast = time()
     printed = false
-    ProgressUnknown(false, spinlocker, dt, 0, false, tfirst, tlast, printed, desc, color, output, 0)
+    ProgressUnknown(false, reentrantlocker, dt, 0, false, tfirst, tlast, printed, desc, color, output, 0)
 end
 
 ProgressUnknown(dt::Real, desc::AbstractString="Progress: ",
@@ -327,14 +327,14 @@ or may not result in a change to the display.
 You may optionally change the color of the display. See also `update!`.
 """
 function next!(p::Union{Progress, ProgressUnknown}; options...)
-    lock(p.spinlocker) do
+    lock(p.reentrantlocker) do
         p.counter += 1
         updateProgress!(p; options...)
     end
 end
 
 function next!(p::Union{Progress, ProgressUnknown}, color::Symbol; options...)
-    lock(p.spinlocker) do
+    lock(p.reentrantlocker) do
         p.color = color
         p.counter += 1
         updateProgress!(p; options...)
@@ -353,14 +353,14 @@ the current value.
 You may optionally change the color of the display. See also `next!`.
 """
 function update!(p::Union{Progress, ProgressUnknown}, counter::Int; options...)
-    lock(p.spinlocker) do
+    lock(p.reentrantlocker) do
         p.counter = counter
         updateProgress!(p; options...)
     end
 end
 
 function update!(p::Union{Progress, ProgressUnknown}, counter::Int, color::Symbol; options...)
-    lock(p.spinlocker) do
+    lock(p.reentrantlocker) do
         p.counter = counter
         p.color = color
         updateProgress!(p; options...)
@@ -368,7 +368,7 @@ function update!(p::Union{Progress, ProgressUnknown}, counter::Int, color::Symbo
 end
 
 function update!(p::ProgressThresh, val; increment::Bool = true, options...)
-    lock(p.spinlocker) do
+    lock(p.reentrantlocker) do
         p.val = val
         if increment
             p.counter += 1
@@ -378,7 +378,7 @@ function update!(p::ProgressThresh, val; increment::Bool = true, options...)
 end
 
 function update!(p::ProgressThresh, val, color::Symbol; increment::Bool = true, options...)
-    lock(p.spinlocker) do
+    lock(p.reentrantlocker) do
         p.val = val
         if increment
             p.counter += 1
@@ -397,7 +397,7 @@ message printed and its color.
 See also `finish!`.
 """
 function cancel(p::AbstractProgress, msg::AbstractString = "Aborted before all tasks were completed", color = :red; showvalues = (), valuecolor = :blue, offset = p.offset, keep = (offset == 0))
-    lock(p.spinlocker) do
+    lock(p.reentrantlocker) do
         p.offset = offset
         if p.printed
             print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
@@ -430,7 +430,7 @@ function finish!(p::ProgressThresh; options...)
 end
 
 function finish!(p::ProgressUnknown; options...)
-    lock(p.spinlocker) do
+    lock(p.reentrantlocker) do
         p.done = true
         updateProgress!(p; options...)
     end
