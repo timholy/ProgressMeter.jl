@@ -3,8 +3,9 @@ os:
   - linux
   - osx
 julia:
+  - 0.7
   - 1.0
-  - 1.4
+  - 1
   - nightly
 env:
   matrix:
