@@ -5,8 +5,7 @@ os:
 julia:
   - 0.7
   - 1.0
-  - 1.1
-  - 1.2
+  - 1
   - nightly
 env:
   matrix:
@@ -17,8 +16,6 @@ jobs:
   - julia: 0.7 # Disable Threads testing
     env: JULIA_NUM_THREADS=3
   - julia: 1.0 # Disable Threads testing
-    env: JULIA_NUM_THREADS=3
-  - julia: 1.1 # Disable Threads testing
     env: JULIA_NUM_THREADS=3
 # script:
 #   - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
