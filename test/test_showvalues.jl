@@ -79,4 +79,14 @@ for i in 1:50
 end
 ProgressMeter.cancel(prog)
 
+
+println("Testing showvalues with truncate")
+prog = ProgressMeter.Progress(50, 1, "progress: ")
+for i in 1:50
+    values = Dict(:left => 100 - i,
+                  :message => repeat("0123456789", i))
+    ProgressMeter.update!(prog, i; showvalues = values, truncate_lines = true)
+    sleep(0.1)
+end
+
 end # if
