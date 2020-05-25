@@ -86,10 +86,24 @@ end
     prog = MultipleProgress(lengths; kws, kw...)
 
 generates one progressbar for each value in `lengths` and one for a global progressbar
-`kw` arguments are applied on all progressbars
-kws[i] arguments are applied on the i-th progressbar
+ - `kw` arguments are applied on all progressbars
+ - `kws[i]` arguments are applied on the i-th progressbar
 
 # Example
+```jldoctest
+julia> using Distributed
+julia> addprocs(2)
+julia> @everywhere using ProgressMeter
+julia> p = MultipleProgress(5,10; desc="global ", kws=[(desc="task \$i ",) for i in 1:5])
+       pmap(1:5) do x
+           for i in 1:10
+               sleep(rand())
+               next!(p[x])
+           end
+           sleep(0.01)
+           myid()
+       end
+```
 """
 function MultipleProgress(lengths::AbstractVector{<:Integer}; 
                           kws = [() for _ in lengths],
@@ -105,7 +119,8 @@ function MultipleProgress(lengths::AbstractVector{<:Integer};
 
     max_offsets = 1
 
-    # we must make sure that 2 progresses aren't updated at the same time
+    # we must make sure that 2 progresses aren't updated at the same time, 
+    # that's why we use only one Channel
     @async begin
         while true
             
