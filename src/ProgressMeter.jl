@@ -854,4 +854,6 @@ function ncalls(mapfun::Function, map_args)
     end
 end
 
+include("parallel_progress.jl")
+
 end
