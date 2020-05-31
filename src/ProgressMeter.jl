@@ -355,27 +355,10 @@ the current value.
 
 You may optionally change the color of the display. See also `next!`.
 """
-function update!(p::Union{Progress, ProgressUnknown}, counter::Int=p.counter; options...)
-    lock(p.reentrantlocker) do
-        p.counter = counter
-        updateProgress!(p; options...)
-    end
-end
-
 function update!(p::Union{Progress, ProgressUnknown}, counter::Int=p.counter, color::Symbol=p.color; options...)
     lock(p.reentrantlocker) do
         p.counter = counter
         p.color = color
-        updateProgress!(p; options...)
-    end
-end
-
-function update!(p::ProgressThresh, val=p.val; increment::Bool = true, options...)
-    lock(p.reentrantlocker) do
-        p.val = val
-        if increment
-            p.counter += 1
-        end
         updateProgress!(p; options...)
     end
 end
