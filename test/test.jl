@@ -52,7 +52,7 @@ end
 println("Testing that not even 1% required...")
 testfunc4()
 
-function testfunc5(n, dt, tsleep, desc, barlen)
+function testfunc5A(n, dt, tsleep, desc, barlen)
     p = ProgressMeter.Progress(n, dt, desc, barlen)
     for i = 1:round(Int, floor(n/2))
         sleep(tsleep)
@@ -65,7 +65,22 @@ function testfunc5(n, dt, tsleep, desc, barlen)
 end
 
 println("\nTesting changing the bar color")
-testfunc5(107, 0.01, 0.01, "Computing...", 50)
+testfunc5A(107, 0.01, 0.01, "Computing...", 50)
+
+function testfunc5B(n, dt, tsleep, desc, barlen)
+    p = ProgressMeter.Progress(n, dt, desc, barlen)
+    for i = 1:n
+        sleep(tsleep)
+        ProgressMeter.next!(p)
+        if i % 10 == 0 
+            stepnum = floor(Int, i/10) + 1
+            ProgressMeter.update!(p, desc = "Step $stepnum...")
+        end
+    end
+end
+
+println("\nTesting changing the description")
+testfunc5B(107, 0.01, 0.05, "Step 1...", 50)
 
 
 function testfunc6(n, dt, tsleep)

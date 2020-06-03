@@ -197,8 +197,9 @@ end
 clear_ijulia() = (IJULIABEHAVIOR[] != IJuliaAppend) && isdefined(Main, :IJulia) && Main.IJulia.inited
 
 # update progress display
-function updateProgress!(p::Progress; showvalues = (), valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0))
+function updateProgress!(p::Progress; showvalues = (), valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0), desc = p.desc)
     p.offset = offset
+    p.desc = desc
     t = time()
     if p.counter >= p.n
         if p.counter == p.n && p.printed
@@ -247,8 +248,9 @@ function updateProgress!(p::Progress; showvalues = (), valuecolor = :blue, offse
     return nothing
 end
 
-function updateProgress!(p::ProgressThresh; showvalues = (), valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0))
+function updateProgress!(p::ProgressThresh; showvalues = (), valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0), desc = p.desc)
     p.offset = offset
+    p.desc = desc
     t = time()
     if p.val <= p.thresh && !p.triggered
         p.triggered = true
@@ -287,7 +289,8 @@ function updateProgress!(p::ProgressThresh; showvalues = (), valuecolor = :blue,
     end
 end
 
-function updateProgress!(p::ProgressUnknown; showvalues = (), valuecolor = :blue)
+function updateProgress!(p::ProgressUnknown; showvalues = (), valuecolor = :blue, desc = p.desc)
+    p.desc = desc
     t = time()
     if p.done
         if p.printed
@@ -352,14 +355,7 @@ the current value.
 
 You may optionally change the color of the display. See also `next!`.
 """
-function update!(p::Union{Progress, ProgressUnknown}, counter::Int; options...)
-    lock(p.reentrantlocker) do
-        p.counter = counter
-        updateProgress!(p; options...)
-    end
-end
-
-function update!(p::Union{Progress, ProgressUnknown}, counter::Int, color::Symbol; options...)
+function update!(p::Union{Progress, ProgressUnknown}, counter::Int=p.counter, color::Symbol=p.color; options...)
     lock(p.reentrantlocker) do
         p.counter = counter
         p.color = color
@@ -367,17 +363,7 @@ function update!(p::Union{Progress, ProgressUnknown}, counter::Int, color::Symbo
     end
 end
 
-function update!(p::ProgressThresh, val; increment::Bool = true, options...)
-    lock(p.reentrantlocker) do
-        p.val = val
-        if increment
-            p.counter += 1
-        end
-        updateProgress!(p; options...)
-    end
-end
-
-function update!(p::ProgressThresh, val, color::Symbol; increment::Bool = true, options...)
+function update!(p::ProgressThresh, val=p.val, color::Symbol=p.color; increment::Bool = true, options...)
     lock(p.reentrantlocker) do
         p.val = val
         if increment
