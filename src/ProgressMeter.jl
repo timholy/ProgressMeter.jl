@@ -199,6 +199,7 @@ clear_ijulia() = (IJULIABEHAVIOR[] != IJuliaAppend) && isdefined(Main, :IJulia) 
 # update progress display
 function updateProgress!(p::Progress; showvalues = (), valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0), desc = p.desc)
     p.offset = offset
+    p.barlen = p.barlen + (length(p.desc) - length(desc)) #adjust bar length to accomodate new description
     p.desc = desc
     t = time()
     if p.counter >= p.n
