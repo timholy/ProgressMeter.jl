@@ -225,7 +225,7 @@ end
 # Package level behavior of IJulia clear output
 @enum IJuliaBehavior IJuliaWarned IJuliaClear IJuliaAppend
 
-const IJULIABEHAVIOR = Ref(IJuliaWarned)
+const IJULIABEHAVIOR = Ref(IJuliaClear)
 
 function ijulia_behavior(b)
     @assert b in [:warn, :clear, :append]
