@@ -17,9 +17,8 @@ julia> pmap(1:10) do
        end
 ```
 """
-struct ParallelProgress{C}
-    channel::C
-    n::Int
+mutable struct ParallelProgress
+    channel
 end
 
 const PP_NEXT = -1
@@ -31,26 +30,37 @@ finish!(pp::ParallelProgress) = put!(pp.channel, PP_FINISH)
 cancel(pp::ParallelProgress, args...; kw...) = put!(pp.channel, PP_CANCEL)
 update!(pp::ParallelProgress, counter, color = nothing) = put!(pp.channel, counter)
 
-function ParallelProgress(n::Int; kw...)
+function ParallelProgress(n::Integer; kw...)
     channel = RemoteChannel(() -> Channel{Int}(n))
     progress = Progress(n; kw...)
+    pp = ParallelProgress(channel)
     
-    @async while progress.counter < progress.n
-        f = take!(channel)
-        if f == PP_NEXT
-            next!(progress)
-        elseif f == PP_FINISH
-            finish!(progress)
-            break
-        elseif f == PP_CANCEL
-            cancel(progress)
-            break
-        elseif f >= 0
-            update!(progress, f)
+    @async begin 
+        while progress.counter < progress.n
+            f = take!(channel)
+            if f == PP_NEXT
+                next!(progress)
+            elseif f == PP_FINISH
+                finish!(progress)
+                break
+            elseif f == PP_CANCEL
+                cancel(progress)
+                break
+            elseif f >= 0
+                update!(progress, f)
+            end
         end
+        while isready(pp.channel)
+            take!(pp.channel)
+        end
+        pp.channel = FakeChannel()
     end
-    return ParallelProgress(channel, n)
+
+    return pp
 end
+
+struct FakeChannel end
+Distributed.put!(::FakeChannel, x) = nothing
 
 struct MultipleChannel{C}
     channel::C
@@ -59,15 +69,15 @@ end
 Distributed.put!(mc::MultipleChannel, x) = put!(mc.channel, (mc.id, x))
 
 
-struct MultipleProgress{C}
-    channel::C
+mutable struct MultipleProgress
+    channel
     amount::Int
     lengths::Vector{Int}
 end
 
-Base.getindex(mp::MultipleProgress, n::Integer) = ParallelProgress(MultipleChannel(mp.channel, n), mp.lengths[n])
+Base.getindex(mp::MultipleProgress, n::Integer) = ParallelProgress(MultipleChannel(mp.channel, n))
 finish!(mp::MultipleProgress) = put!.([mp.channel], [(p, PP_FINISH) for p in 1:mp.amount])
-
+cancel(mp::MultipleProgress) = put!.([mp.channel], [(p, PP_CANCEL) for p in 1:mp.amount])
 
 """
     prog = MultipleProgress(amount, lengths; kw...)
@@ -106,6 +116,7 @@ julia> p = MultipleProgress(5,10; desc="global ", kws=[(desc="task \$i ",) for i
 ```
 """
 function MultipleProgress(lengths::AbstractVector{<:Integer}; 
+                          count_overshoot::Bool = false,
                           kws = [() for _ in lengths],
                           kw...)
     @assert length(lengths) == length(kws) "`length(lengths)` must be equal to `length(kws)`"
@@ -118,6 +129,8 @@ function MultipleProgress(lengths::AbstractVector{<:Integer};
     channel = RemoteChannel(() -> Channel{Tuple{Int,Int}}(max(2amount, 64)))
 
     max_offsets = 1
+
+    mp = MultipleProgress(channel, amount, collect(lengths))
 
     # we must make sure that 2 progresses aren't updated at the same time, 
     # that's why we use only one Channel
@@ -138,17 +151,24 @@ function MultipleProgress(lengths::AbstractVector{<:Integer};
                 push!(taken_offsets, offset)
             end
 
+
             if value == PP_NEXT
-                next!(progresses[p])
-                next!(main_progress)
+                if count_overshoot || progresses[p].counter < lengths[p]
+                    next!(progresses[p])
+                    next!(main_progress)
+                end
             else
                 prev_p_value = progresses[p].counter
                 
                 if value == PP_FINISH
                     finish!(progresses[p])
                 elseif value == PP_CANCEL
+                    finish!(progresses[p])
                     cancel(progresses[p])
                 elseif value >= 0
+                    if !count_overshoot
+                        value = min(value, lengths[n])
+                    end
                     update!(progresses[p], value)
                 end
 
@@ -162,11 +182,13 @@ function MultipleProgress(lengths::AbstractVector{<:Integer};
 
             main_progress.counter >= total_length && break
         end
-
+        while isready(mp.channel)
+            take!(mp.channel)
+        end
+        mp.channel = FakeChannel()
         print("\n" ^ max_offsets)
     end
 
-    return MultipleProgress(channel, amount, collect(lengths))
+    return mp
 end
-
 
