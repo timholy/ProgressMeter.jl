@@ -21,35 +21,39 @@ mutable struct ParallelProgress
     channel
 end
 
-const PP_NEXT = -1
-const PP_FINISH = -2
-const PP_CANCEL = -3
+const PP_NEXT = :next
+const PP_CANCEL = :cancel
+const PP_FINISH = :finish
+const PP_UPDATE = :update
 
-next!(pp::ParallelProgress) = put!(pp.channel, PP_NEXT)
-finish!(pp::ParallelProgress) = put!(pp.channel, PP_FINISH)
-cancel(pp::ParallelProgress, args...; kw...) = put!(pp.channel, PP_CANCEL)
-update!(pp::ParallelProgress, counter, color = nothing) = put!(pp.channel, counter)
+next!(pp::ParallelProgress, args...; kw...) = put!(pp.channel, (PP_NEXT, args, kw))
+cancel(pp::ParallelProgress, args...; kw...) = put!(pp.channel, (PP_CANCEL, args, kw))
+finish!(pp::ParallelProgress, args...; kw...) = put!(pp.channel, (PP_FINISH, args, kw))
+update!(pp::ParallelProgress, args...; kw...) = put!(pp.channel, (PP_UPDATE, args, kw))
 
 function ParallelProgress(n::Integer; kw...)
-    channel = RemoteChannel(() -> Channel{Int}(n))
+    channel = RemoteChannel(() -> Channel{Tuple}(n))
     progress = Progress(n; kw...)
     pp = ParallelProgress(channel)
     
     @async begin 
         while progress.counter < progress.n
-            f = take!(channel)
+            f, args, kw = take!(channel)
             if f == PP_NEXT
-                next!(progress)
-            elseif f == PP_FINISH
-                finish!(progress)
-                break
+                next!(progress, args...; kw...)
             elseif f == PP_CANCEL
-                cancel(progress)
+                cancel(progress, args...; kw...)
                 break
-            elseif f >= 0
-                update!(progress, f)
+            elseif f == PP_FINISH
+                finish!(progress, args...; kw...)
+                break
+            elseif f == PP_UPDATE
+                update!(progress, args...; kw...)
+            else
+                error("not recognized: $f")
             end
         end
+        # empty channel before ending it
         while isready(pp.channel)
             take!(pp.channel)
         end
@@ -59,14 +63,15 @@ function ParallelProgress(n::Integer; kw...)
     return pp
 end
 
+# fake channel to allow over-shoot
 struct FakeChannel end
 Distributed.put!(::FakeChannel, x) = nothing
 
-struct MultipleChannel{C}
-    channel::C
+struct MultipleChannel
+    channel
     id
 end
-Distributed.put!(mc::MultipleChannel, x) = put!(mc.channel, (mc.id, x))
+Distributed.put!(mc::MultipleChannel, x) = put!(mc.channel, (mc.id, x...))
 
 
 mutable struct MultipleProgress
@@ -76,8 +81,9 @@ mutable struct MultipleProgress
 end
 
 Base.getindex(mp::MultipleProgress, n::Integer) = ParallelProgress(MultipleChannel(mp.channel, n))
-finish!(mp::MultipleProgress) = put!.([mp.channel], [(p, PP_FINISH) for p in 1:mp.amount])
-cancel(mp::MultipleProgress) = put!.([mp.channel], [(p, PP_CANCEL) for p in 1:mp.amount])
+Base.lastindex(mp::MultipleProgress) = mp.amount
+finish!(mp::MultipleProgress, args...; kw...) = finish!.(MultipleProgress[:])
+cancel(mp::MultipleProgress, args...; kw...) = cancel.(MultipleProgress[:])
 
 """
     prog = MultipleProgress(amount, lengths; kw...)
@@ -126,7 +132,7 @@ function MultipleProgress(lengths::AbstractVector{<:Integer};
     main_progress = Progress(total_length; offset=0, kw...)
     progresses = Union{Progress,Nothing}[nothing for _ in 1:amount]
     taken_offsets = Set(Int[])
-    channel = RemoteChannel(() -> Channel{Tuple{Int,Int}}(max(2amount, 64)))
+    channel = RemoteChannel(() -> Channel{Tuple}(max(2amount, 64)))
 
     max_offsets = 1
 
@@ -137,7 +143,7 @@ function MultipleProgress(lengths::AbstractVector{<:Integer};
     @async begin
         while true
             
-            (p, value) = take!(channel)
+            p, f, args, kw = take!(channel)
 
             # first time calling progress p
             if isnothing(progresses[p])
@@ -152,24 +158,27 @@ function MultipleProgress(lengths::AbstractVector{<:Integer};
             end
 
 
-            if value == PP_NEXT
+            if f == PP_NEXT
                 if count_overshoot || progresses[p].counter < lengths[p]
-                    next!(progresses[p])
+                    next!(progresses[p], args...; kw...)
                     next!(main_progress)
                 end
             else
                 prev_p_value = progresses[p].counter
                 
-                if value == PP_FINISH
+                if f == PP_FINISH
+                    finish!(progresses[p], args...; kw...)
+                elseif f == PP_CANCEL
                     finish!(progresses[p])
-                elseif value == PP_CANCEL
-                    finish!(progresses[p])
-                    cancel(progresses[p])
-                elseif value >= 0
-                    if !count_overshoot
-                        value = min(value, lengths[n])
+                    cancel(progresses[p], args...; kw...)
+                elseif f == PP_UPDATE
+                    if !count_overshoot && !isempty(args)
+                        value = min(args[1], lengths[n])
+                        update!(progresses[p], value, args[2:end]...; kw...)
+                    else
+                        update!(progresses[p], args...; kw...)
                     end
-                    update!(progresses[p], value)
+                    
                 end
 
                 update!(main_progress, 
