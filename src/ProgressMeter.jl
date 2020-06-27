@@ -638,7 +638,7 @@ interval between updates to the user. You may optionally supply a
 custom message to be printed that specifies the computation being
 performed.
 
-`@showprogress` works for loops, comprehensions, map, and pmap.
+`@showprogress` works for loops, comprehensions, map, reduce, and pmap.
 """
 macro showprogress(args...)
     if length(args) < 1
@@ -651,7 +651,7 @@ macro showprogress(args...)
     end
     orig = expr = copy(expr)
     metersym = gensym("meter")
-    mapfuns = (:map, :pmap)
+    mapfuns = (:map, :reduce, :pmap)
     kind = :invalid # :invalid, :loop, or :map
 
     if isa(expr, Expr)
@@ -678,7 +678,7 @@ macro showprogress(args...)
     end
 
     if kind == :invalid
-        throw(ArgumentError("Final argument to @showprogress must be a for loop, comprehension, map, or pmap; got $expr"))
+        throw(ArgumentError("Final argument to @showprogress must be a for loop, comprehension, map, reduce, or pmap; got $expr"))
     elseif kind == :loop
         # As of julia 0.5, a comprehension's "loop" is actually one level deeper in the syntax tree.
         if expr.head !== :for
@@ -788,7 +788,7 @@ end
 
 Run a `map`-like function while displaying progress.
 
-`mapfun` can be any function, but it is only tested with `map` and `pmap`.
+`mapfun` can be any function, but it is only tested with `map`, `reduce` and `pmap`.
 """
 function progress_map(args...; mapfun=map,
                                progress=Progress(ncalls(mapfun, args)),
@@ -826,7 +826,7 @@ Run `pmap` while displaying progress.
 progress_pmap(args...; kwargs...) = progress_map(args...; mapfun=pmap, kwargs...)
 
 """
-Infer the number of calls to the mapped function (i.e. the length of the returned array) given the input arguments to map or pmap.
+Infer the number of calls to the mapped function (i.e. the length of the returned array) given the input arguments to map, reduce or pmap.
 """
 function ncalls(mapfun::Function, map_args)
     if mapfun == pmap && length(map_args) >= 2 && isa(map_args[2], AbstractWorkerPool)
