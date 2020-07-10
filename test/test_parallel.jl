@@ -1,11 +1,12 @@
 using Distributed
 
+if workers() != [1]
+    rmprocs(workers())
+end
+addprocs(4)
+@everywhere import ProgressMeter
+
 @testset "ParallelProgress() tests" begin
-    if workers() != [1]
-        rmworkers(workers())
-    end
-    addprocs(4)
-    @everywhere import ProgressMeter
 
     procs = nworkers()
     (procs == 1) && @info "incomplete tests: nworkers() == 1"

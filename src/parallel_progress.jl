@@ -80,10 +80,10 @@ mutable struct MultipleProgress
     lengths::Vector{Int}
 end
 
-Base.getindex(mp::MultipleProgress, n::Integer) = ParallelProgress(MultipleChannel(mp.channel, n))
+Base.getindex(mp::MultipleProgress, n) = ParallelProgress.(MultipleChannel.(fill(mp.channel), n))
 Base.lastindex(mp::MultipleProgress) = mp.amount
-finish!(mp::MultipleProgress, args...; kw...) = finish!.(MultipleProgress[:])
-cancel(mp::MultipleProgress, args...; kw...) = cancel.(MultipleProgress[:])
+finish!(mp::MultipleProgress, args...; kw...) = finish!.(mp[1:end])
+cancel(mp::MultipleProgress, args...; kw...) = cancel.(mp[1:end])
 
 """
     prog = MultipleProgress(amount, lengths; kw...)
@@ -141,55 +141,68 @@ function MultipleProgress(lengths::AbstractVector{<:Integer};
     # we must make sure that 2 progresses aren't updated at the same time, 
     # that's why we use only one Channel
     @async begin
-        while true
+        while main_progress.counter < total_length
             
             p, f, args, kw = take!(channel)
 
-            # first time calling progress p
-            if isnothing(progresses[p])
-                # find first available offset
-                offset = 1
-                while offset in taken_offsets
-                    offset += 1
-                end
-                max_offsets = max(max_offsets, offset)
-                progresses[p] = Progress(lengths[p]; offset=offset, kw..., kws[p]...)
-                push!(taken_offsets, offset)
-            end
-
-
-            if f == PP_NEXT
-                if count_overshoot || progresses[p].counter < lengths[p]
-                    next!(progresses[p], args...; kw...)
-                    next!(main_progress)
+            # main progressbar
+            if p == 0
+                if f == PP_CANCEL
+                    cancel(main_progress, args...; kw...)
+                    break
+                elseif f == PP_UPDATE
+                    update!(main_progress, args...; kw...)
+                elseif f == PP_NEXT
+                    next!(main_progress, args...; kw...)
+                elseif f == PP_FINISH
+                    finish!(main_progress, args...; kw...)
                 end
             else
-                prev_p_value = progresses[p].counter
-                
-                if f == PP_FINISH
-                    finish!(progresses[p], args...; kw...)
-                elseif f == PP_CANCEL
-                    finish!(progresses[p])
-                    cancel(progresses[p], args...; kw...)
-                elseif f == PP_UPDATE
-                    if !count_overshoot && !isempty(args)
-                        value = min(args[1], lengths[n])
-                        update!(progresses[p], value, args[2:end]...; kw...)
-                    else
-                        update!(progresses[p], args...; kw...)
+
+                # first time calling progress p
+                if isnothing(progresses[p])
+                    # find first available offset
+                    offset = 1
+                    while offset in taken_offsets
+                        offset += 1
                     end
-                    
+                    max_offsets = max(max_offsets, offset)
+                    progresses[p] = Progress(lengths[p]; offset=offset, kw..., kws[p]...)
+                    push!(taken_offsets, offset)
                 end
 
-                update!(main_progress, 
-                        main_progress.counter - prev_p_value + progresses[p].counter)
-            end
 
-            if progresses[p].counter >= lengths[p]
-                delete!(taken_offsets, progresses[p].offset)
-            end
+                if f == PP_NEXT
+                    if count_overshoot || progresses[p].counter < lengths[p]
+                        next!(progresses[p], args...; kw...)
+                        next!(main_progress)
+                    end
+                else
+                    prev_p_value = progresses[p].counter
+                    
+                    if f == PP_FINISH
+                        finish!(progresses[p], args...; kw...)
+                    elseif f == PP_CANCEL
+                        finish!(progresses[p])
+                        cancel(progresses[p], args...; kw...)
+                    elseif f == PP_UPDATE
+                        if !count_overshoot && !isempty(args)
+                            value = min(args[1], lengths[n])
+                            update!(progresses[p], value, args[2:end]...; kw...)
+                        else
+                            update!(progresses[p], args...; kw...)
+                        end
+                        
+                    end
 
-            main_progress.counter >= total_length && break
+                    update!(main_progress, 
+                            main_progress.counter - prev_p_value + progresses[p].counter)
+                end
+
+                if progresses[p].counter >= lengths[p]
+                    delete!(taken_offsets, progresses[p].offset)
+                end
+            end
         end
         while isready(mp.channel)
             take!(mp.channel)
