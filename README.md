@@ -15,7 +15,7 @@ Pkg.add("ProgressMeter")
 
 ### Progress meters for tasks with a pre-determined number of steps
 
-This works for functions that process things in loops or with map/pmap:
+This works for functions that process things in loops or with `map`/`pmap`/`reduce`:
 
 ```julia
 using ProgressMeter
@@ -28,11 +28,16 @@ end
     sleep(0.1)
     x^2
 end
+
+@showprogress reduce(1:10) do x, y
+    sleep(0.1)
+    x + y
+end
 ```
 
 The first incantation will use a minimum update interval of 1 second, and show the ETA and final duration.  If your computation runs so quickly that it never needs to show progress, no extraneous output will be displayed.
 
-The `@showprogress` macro wraps a `for` loop, comprehension, `@distributed` for loop, or map/pmap as long as the object being iterated over implements the `length` method and will handle `continue` correctly.
+The `@showprogress` macro wraps a `for` loop, comprehension, `@distributed` for loop, or `map`/`pmap`/`reduce` as long as the object being iterated over implements the `length` method and will handle `continue` correctly.
 
 ```julia
 using Distributed
