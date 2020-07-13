@@ -198,10 +198,14 @@ clear_ijulia() = (IJULIABEHAVIOR[] != IJuliaAppend) && isdefined(Main, :IJulia) 
 
 # update progress display
 function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0), desc = p.desc)
+    if desc != p.desc
+        p.desc = desc
+        if p.barlen !== nothing
+            p.barlen += length(p.desc) - length(desc) #adjust bar length to accomodate new description
+        end
+    end
     barlen = p.barlen isa Nothing ? tty_width(p.desc, p.output) : p.barlen
     p.offset = offset
-    p.barlen = p.barlen + (length(p.desc) - length(desc)) #adjust bar length to accomodate new description
-    p.desc = desc
     t = time()
     if p.counter >= p.n
         if p.counter == p.n && p.printed
