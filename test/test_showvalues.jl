@@ -45,6 +45,16 @@ function testfunc4(n, dt, tsleep, desc, barlen)
 end
 testfunc4(30, 1, 0.2, "opt steps  ", 70)
 
+println("Testing showvalues with changing number of lines")
+prog = ProgressMeter.Progress(50)
+for i in 1:50
+    values = Dict(:left => 100 - i,
+                  :message => repeat("0123456789", (i%10 + 1)*15),
+                  :final => "this comes after")
+    ProgressMeter.update!(prog, i; showvalues = values)
+    sleep(0.1)
+end
+
 println("Testing showvalues with a different color (1 value)")
 function testfunc5(n, dt, tsleep, desc, barlen)
     p = ProgressMeter.Progress(n, dt, desc, barlen)
