@@ -63,7 +63,7 @@ mutable struct Progress <: AbstractProgress
     tfirst::Float64
     tlast::Float64
     printed::Bool              # true if we have issued at least one status update
-    desc::AbstractString       # prefix to the percentage, e.g.  "Computing..."
+    desc::String               # prefix to the percentage, e.g.  "Computing..."
     barlen::Union{Int,Nothing} # progress bar size (default is available terminal width)
     barglyphs::BarGlyphs       # the characters to be used in the bar
     color::Symbol              # default to green
@@ -79,8 +79,8 @@ mutable struct Progress <: AbstractProgress
                       output::IO=stderr,
                       barlen=nothing,
                       barglyphs::BarGlyphs=BarGlyphs('|','█', Sys.iswindows() ? '█' : ['▏','▎','▍','▌','▋','▊','▉'],' ','|',),
-                      offset::Int=0,
-                      start::Int=0
+                      offset::Integer=0,
+                      start::Integer=0
                      )
         reentrantlocker = Threads.ReentrantLock()
         counter = start
@@ -116,7 +116,7 @@ mutable struct ProgressThresh{T<:Real} <: AbstractProgress
     tfirst::Float64
     tlast::Float64
     printed::Bool        # true if we have issued at least one status update
-    desc::AbstractString # prefix to the percentage, e.g.  "Computing..."
+    desc::String         # prefix to the percentage, e.g.  "Computing..."
     color::Symbol        # default to green
     output::IO           # output stream into which the progress is written
     numprintedvalues::Int   # num values printed below progress in last iteration
@@ -127,7 +127,7 @@ mutable struct ProgressThresh{T<:Real} <: AbstractProgress
                                desc::AbstractString="Progress: ",
                                color::Symbol=:green,
                                output::IO=stderr,
-                               offset::Int=0) where T
+                               offset::Integer=0) where T
         reentrantlocker = Threads.ReentrantLock()
         tfirst = tlast = time()
         printed = false
@@ -161,7 +161,7 @@ mutable struct ProgressUnknown <: AbstractProgress
     tfirst::Float64
     tlast::Float64
     printed::Bool        # true if we have issued at least one status update
-    desc::AbstractString # prefix to the percentage, e.g.  "Computing..."
+    desc::String         # prefix to the percentage, e.g.  "Computing..."
     color::Symbol        # default to green
     output::IO           # output stream into which the progress is written
     numprintedvalues::Int   # num values printed below progress in last iteration
