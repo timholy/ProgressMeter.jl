@@ -181,7 +181,7 @@ ProgressUnknown(dt::Real, desc::AbstractString="Progress: ",
 ProgressUnknown(desc::AbstractString) = ProgressUnknown(desc=desc)
 
 #...length of percentage and ETA string with days is 29 characters
-tty_width(desc, output) = max(0, displaysize(output)[2] - (length(desc) + 29))
+tty_width(desc, output) = max(0, (displaysize(output)::Tuple{Int,Int})[2] - (length(desc) + 29))
 
 # Package level behavior of IJulia clear output
 @enum IJuliaBehavior IJuliaWarned IJuliaClear IJuliaAppend
@@ -439,7 +439,7 @@ function printvalues!(p::AbstractProgress, showvalues; color = :normal, truncate
 
     for (name, value) in showvalues
         msg = "\n  " * rpad(string(name) * ": ", maxwidth+2+1) * string(value)
-        max_len = displaysize(p.output)[2]
+        max_len = (displaysize(p.output)::Tuple{Int,Int})[2]
         # I don't understand why the minus 1 is necessary here, but empircally
         # it is needed.
         msg_lines = ceil(Int, (length(msg)-1) / max_len)
