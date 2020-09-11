@@ -62,22 +62,22 @@ mutable struct Progress <: AbstractProgress
     counter::Int
     tfirst::Float64
     tlast::Float64
-    printed::Bool           # true if we have issued at least one status update
-    desc::AbstractString    # prefix to the percentage, e.g.  "Computing..."
-    barlen::Int             # progress bar size (default is available terminal width)
-    barglyphs::BarGlyphs    # the characters to be used in the bar
-    color::Symbol           # default to green
-    output::IO              # output stream into which the progress is written
-    offset::Int             # position offset of progress bar (default is 0)
-    numprintedvalues::Int   # num values printed below progress in last iteration
-    start::Int              # which iteration number to start from
+    printed::Bool              # true if we have issued at least one status update
+    desc::AbstractString       # prefix to the percentage, e.g.  "Computing..."
+    barlen::Union{Int,Nothing} # progress bar size (default is available terminal width)
+    barglyphs::BarGlyphs       # the characters to be used in the bar
+    color::Symbol              # default to green
+    output::IO                 # output stream into which the progress is written
+    offset::Int                # position offset of progress bar (default is 0)
+    numprintedvalues::Int      # num values printed below progress in last iteration
+    start::Int                 # which iteration number to start from
 
     function Progress(n::Integer;
                       dt::Real=0.1,
                       desc::AbstractString="Progress: ",
                       color::Symbol=:green,
                       output::IO=stderr,
-                      barlen::Integer=tty_width(desc),
+                      barlen=nothing,
                       barglyphs::BarGlyphs=BarGlyphs('|','█', Sys.iswindows() ? '█' : ['▏','▎','▍','▌','▋','▊','▉'],' ','|',),
                       offset::Int=0,
                       start::Int=0
@@ -91,7 +91,7 @@ mutable struct Progress <: AbstractProgress
 end
 
 Progress(n::Integer, dt::Real, desc::AbstractString="Progress: ",
-         barlen::Integer=tty_width(desc), color::Symbol=:green, output::IO=stderr;
+         barlen=nothing, color::Symbol=:green, output::IO=stderr;
          offset::Integer=0) =
     Progress(n, dt=dt, desc=desc, barlen=barlen, color=color, output=output, offset=offset)
 
@@ -181,7 +181,7 @@ ProgressUnknown(dt::Real, desc::AbstractString="Progress: ",
 ProgressUnknown(desc::AbstractString) = ProgressUnknown(desc=desc)
 
 #...length of percentage and ETA string with days is 29 characters
-tty_width(desc) = max(0, displaysize(stdout)[2] - (length(desc) + 29))
+tty_width(desc, output) = max(0, displaysize(output)[2] - (length(desc) + 29))
 
 # Package level behavior of IJulia clear output
 @enum IJuliaBehavior IJuliaWarned IJuliaClear IJuliaAppend
@@ -199,21 +199,26 @@ end
 clear_ijulia() = (IJULIABEHAVIOR[] != IJuliaAppend) && isdefined(Main, :IJulia) && Main.IJulia.inited
 
 # update progress display
-function updateProgress!(p::Progress; showvalues = (), valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0), desc = p.desc)
+function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0), desc = p.desc)
+    if desc != p.desc
+        p.desc = desc
+        if p.barlen !== nothing
+            p.barlen += length(p.desc) - length(desc) #adjust bar length to accomodate new description
+        end
+    end
+    barlen = p.barlen isa Nothing ? tty_width(p.desc, p.output) : p.barlen
     p.offset = offset
-    p.barlen = p.barlen + (length(p.desc) - length(desc)) #adjust bar length to accomodate new description
-    p.desc = desc
     t = time()
     if p.counter >= p.n
         if p.counter == p.n && p.printed
             percentage_complete = 100.0 * p.counter / p.n
-            bar = barstring(p.barlen, percentage_complete, barglyphs=p.barglyphs)
+            bar = barstring(barlen, percentage_complete, barglyphs=p.barglyphs)
             dur = durationstring(t-p.tfirst)
             msg = @sprintf "%s%3u%%%s Time: %s" p.desc round(Int, percentage_complete) bar dur
             !clear_ijulia() && print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
             move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             printover(p.output, msg, p.color)
-            printvalues!(p, showvalues; color = valuecolor)
+            printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
             if keep
                 println(p.output)
             else
@@ -226,7 +231,7 @@ function updateProgress!(p::Progress; showvalues = (), valuecolor = :blue, offse
 
     if t > p.tlast+p.dt
         percentage_complete = 100.0 * p.counter / p.n
-        bar = barstring(p.barlen, percentage_complete, barglyphs=p.barglyphs)
+        bar = barstring(barlen, percentage_complete, barglyphs=p.barglyphs)
         elapsed_time = t - p.tfirst
         est_total_time = elapsed_time * (p.n - p.start) / (p.counter - p.start)
         if 0 <= est_total_time <= typemax(Int)
@@ -239,7 +244,7 @@ function updateProgress!(p::Progress; showvalues = (), valuecolor = :blue, offse
         !clear_ijulia() && print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
         move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
         printover(p.output, msg, p.color)
-        printvalues!(p, showvalues; color = valuecolor)
+        printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
         !clear_ijulia() && print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
         flush(p.output)
         # Compensate for any overhead of printing. This can be
@@ -251,7 +256,7 @@ function updateProgress!(p::Progress; showvalues = (), valuecolor = :blue, offse
     return nothing
 end
 
-function updateProgress!(p::ProgressThresh; showvalues = (), valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0), desc = p.desc)
+function updateProgress!(p::ProgressThresh; showvalues = (), truncate_lines = false, valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0), desc = p.desc)
     p.offset = offset
     p.desc = desc
     t = time()
@@ -264,7 +269,7 @@ function updateProgress!(p::ProgressThresh; showvalues = (), valuecolor = :blue,
             print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
             move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             printover(p.output, msg, p.color)
-            printvalues!(p, showvalues; color = valuecolor)
+            printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
             if keep
                 println(p.output)
             else
@@ -281,7 +286,7 @@ function updateProgress!(p::ProgressThresh; showvalues = (), valuecolor = :blue,
         print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
         move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
         printover(p.output, msg, p.color)
-        printvalues!(p, showvalues; color = valuecolor)
+        printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
         print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
         flush(p.output)
         # Compensate for any overhead of printing. This can be
@@ -292,7 +297,7 @@ function updateProgress!(p::ProgressThresh; showvalues = (), valuecolor = :blue,
     end
 end
 
-function updateProgress!(p::ProgressUnknown; showvalues = (), valuecolor = :blue, desc = p.desc)
+function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = false, valuecolor = :blue, desc = p.desc)
     p.desc = desc
     t = time()
     if p.done
@@ -301,7 +306,7 @@ function updateProgress!(p::ProgressUnknown; showvalues = (), valuecolor = :blue
             msg = @sprintf "%s %d \t Time: %s" p.desc p.counter dur
             move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             printover(p.output, msg, p.color)
-            printvalues!(p, showvalues; color = valuecolor)
+            printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
             println(p.output)
             flush(p.output)
         end
@@ -313,7 +318,7 @@ function updateProgress!(p::ProgressUnknown; showvalues = (), valuecolor = :blue
         msg = @sprintf "%s %d \t Time: %s" p.desc p.counter dur
         move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
         printover(p.output, msg, p.color)
-        printvalues!(p, showvalues; color = valuecolor)
+        printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
         flush(p.output)
         # Compensate for any overhead of printing. This can be
         # especially important if you're running over a slow network
@@ -385,14 +390,14 @@ message printed and its color.
 
 See also `finish!`.
 """
-function cancel(p::AbstractProgress, msg::AbstractString = "Aborted before all tasks were completed", color = :red; showvalues = (), valuecolor = :blue, offset = p.offset, keep = (offset == 0))
+function cancel(p::AbstractProgress, msg::AbstractString = "Aborted before all tasks were completed", color = :red; showvalues = (), truncate_lines = false, valuecolor = :blue, offset = p.offset, keep = (offset == 0))
     lock(p.reentrantlocker) do
         p.offset = offset
         if p.printed
             print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
             move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             printover(p.output, msg, color)
-            printvalues!(p, showvalues; color = valuecolor)
+            printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
             if keep
                 println(p.output)
             else
@@ -426,14 +431,28 @@ function finish!(p::ProgressUnknown; options...)
 end
 
 # Internal method to print additional values below progress bar
-function printvalues!(p::AbstractProgress, showvalues; color = false)
+function printvalues!(p::AbstractProgress, showvalues; color = :normal, truncate = false)
     length(showvalues) == 0 && return
     maxwidth = maximum(Int[length(string(name)) for (name, _) in showvalues])
+
+    p.numprintedvalues = 0
+
     for (name, value) in showvalues
         msg = "\n  " * rpad(string(name) * ": ", maxwidth+2+1) * string(value)
-        (color == false) ? print(p.output, msg) : printstyled(p.output, msg; color=color)
+        max_len = displaysize(p.output)[2]
+        # I don't understand why the minus 1 is necessary here, but empircally
+        # it is needed.
+        msg_lines = ceil(Int, (length(msg)-1) / max_len)
+        if truncate && msg_lines >= 2
+            # For multibyte characters, need to index with nextind.
+            printover(p.output, msg[1:nextind(msg, 1, max_len-1)] * "…", color)
+            p.numprintedvalues += 1
+        else
+            printover(p.output, msg, color)
+            p.numprintedvalues += msg_lines
+        end
     end
-    p.numprintedvalues = length(showvalues)
+    p
 end
 
 function move_cursor_up_while_clearing_lines(io, numlinesup)
