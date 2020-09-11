@@ -134,13 +134,15 @@ mutable struct ProgressThresh{T<:Real} <: AbstractProgress
         new{T}(thresh, reentrantlocker, dt, typemax(T), 0, false, tfirst, tlast, printed, desc, color, output, 0, offset)
     end
 end
+ProgressThresh(thresh::Real; kwargs...) = ProgressThresh{typeof(thresh)}(thresh; kwargs...)
 
-ProgressThresh(thresh::Real, dt::Real=0.1, desc::AbstractString="Progress: ",
+# Legacy constructor calls
+ProgressThresh(thresh::Real, dt::Real, desc::AbstractString="Progress: ",
          color::Symbol=:green, output::IO=stderr;
          offset::Integer=0) =
-    ProgressThresh{typeof(thresh)}(thresh, dt=dt, desc=desc, color=color, output=output, offset=offset)
+    ProgressThresh(thresh; dt=dt, desc=desc, color=color, output=output, offset=offset)
 
-ProgressThresh(thresh::Real, desc::AbstractString, offset::Integer=0) = ProgressThresh{typeof(thresh)}(thresh, desc=desc, offset=offset)
+ProgressThresh(thresh::Real, desc::AbstractString, offset::Integer=0) = ProgressThresh(thresh; desc=desc, offset=offset)
 
 """
 `prog = ProgressUnknown(; dt=0.1, desc="Progress: ",
