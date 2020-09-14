@@ -63,7 +63,7 @@ mutable struct Progress <: AbstractProgress
     tfirst::Float64
     tlast::Float64
     printed::Bool              # true if we have issued at least one status update
-    desc::AbstractString       # prefix to the percentage, e.g.  "Computing..."
+    desc::String               # prefix to the percentage, e.g.  "Computing..."
     barlen::Union{Int,Nothing} # progress bar size (default is available terminal width)
     barglyphs::BarGlyphs       # the characters to be used in the bar
     color::Symbol              # default to green
@@ -79,8 +79,8 @@ mutable struct Progress <: AbstractProgress
                       output::IO=stderr,
                       barlen=nothing,
                       barglyphs::BarGlyphs=BarGlyphs('|','█', Sys.iswindows() ? '█' : ['▏','▎','▍','▌','▋','▊','▉'],' ','|',),
-                      offset::Int=0,
-                      start::Int=0
+                      offset::Integer=0,
+                      start::Integer=0
                      )
         reentrantlocker = Threads.ReentrantLock()
         counter = start
@@ -116,7 +116,7 @@ mutable struct ProgressThresh{T<:Real} <: AbstractProgress
     tfirst::Float64
     tlast::Float64
     printed::Bool        # true if we have issued at least one status update
-    desc::AbstractString # prefix to the percentage, e.g.  "Computing..."
+    desc::String         # prefix to the percentage, e.g.  "Computing..."
     color::Symbol        # default to green
     output::IO           # output stream into which the progress is written
     numprintedvalues::Int   # num values printed below progress in last iteration
@@ -127,7 +127,7 @@ mutable struct ProgressThresh{T<:Real} <: AbstractProgress
                                desc::AbstractString="Progress: ",
                                color::Symbol=:green,
                                output::IO=stderr,
-                               offset::Int=0) where T
+                               offset::Integer=0) where T
         reentrantlocker = Threads.ReentrantLock()
         tfirst = tlast = time()
         printed = false
@@ -161,7 +161,7 @@ mutable struct ProgressUnknown <: AbstractProgress
     tfirst::Float64
     tlast::Float64
     printed::Bool        # true if we have issued at least one status update
-    desc::AbstractString # prefix to the percentage, e.g.  "Computing..."
+    desc::String         # prefix to the percentage, e.g.  "Computing..."
     color::Symbol        # default to green
     output::IO           # output stream into which the progress is written
     numprintedvalues::Int   # num values printed below progress in last iteration
@@ -181,7 +181,7 @@ ProgressUnknown(dt::Real, desc::AbstractString="Progress: ",
 ProgressUnknown(desc::AbstractString) = ProgressUnknown(desc=desc)
 
 #...length of percentage and ETA string with days is 29 characters
-tty_width(desc, output) = max(0, displaysize(output)[2] - (length(desc) + 29))
+tty_width(desc, output) = max(0, (displaysize(output)::Tuple{Int,Int})[2] - (length(desc) + 29))
 
 # Package level behavior of IJulia clear output
 @enum IJuliaBehavior IJuliaWarned IJuliaClear IJuliaAppend
@@ -439,7 +439,7 @@ function printvalues!(p::AbstractProgress, showvalues; color = :normal, truncate
 
     for (name, value) in showvalues
         msg = "\n  " * rpad(string(name) * ": ", maxwidth+2+1) * string(value)
-        max_len = displaysize(p.output)[2]
+        max_len = (displaysize(p.output)::Tuple{Int,Int})[2]
         # I don't understand why the minus 1 is necessary here, but empircally
         # it is needed.
         msg_lines = ceil(Int, (length(msg)-1) / max_len)
