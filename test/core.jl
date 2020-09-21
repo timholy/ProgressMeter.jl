@@ -12,3 +12,26 @@
 
 @test ProgressMeter.Progress(5, "Progress:", Int16(5)).offset == 5
 @test ProgressMeter.ProgressThresh(0.2, "Progress:", Int16(5)).offset == 5
+
+# Performance test (from #171)
+function prog_perf(n)
+    prog = Progress(n)
+    x = 0.0
+    for i in 1:n
+        x += rand()
+        next!(prog)
+    end
+    return x
+end
+
+function noprog_perf(n)
+    x = 0.0
+    for i in 1:n
+        x += rand()
+    end
+    return x
+end
+
+prog_perf(1)
+noprog_perf(1)
+@test @elapsed(prog_perf(10^7)) < 40*@elapsed(noprog_perf(10^7))
