@@ -206,11 +206,11 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
         end
         p.desc = desc
     end
-    barlen = p.barlen isa Nothing ? tty_width(p.desc, p.output) : p.barlen
     p.offset = offset
     t = time()
     if p.counter >= p.n
         if p.counter == p.n && p.printed
+            barlen = p.barlen isa Nothing ? tty_width(p.desc, p.output) : p.barlen
             percentage_complete = 100.0 * p.counter / p.n
             bar = barstring(barlen, percentage_complete, barglyphs=p.barglyphs)
             dur = durationstring(t-p.tfirst)
@@ -230,6 +230,7 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
     end
 
     if t > p.tlast+p.dt
+        barlen = p.barlen isa Nothing ? tty_width(p.desc, p.output) : p.barlen
         percentage_complete = 100.0 * p.counter / p.n
         bar = barstring(barlen, percentage_complete, barglyphs=p.barglyphs)
         elapsed_time = t - p.tfirst
