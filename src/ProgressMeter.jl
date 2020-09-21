@@ -199,10 +199,10 @@ end
 clear_ijulia() = (IJULIABEHAVIOR[] != IJuliaAppend) && isdefined(Main, :IJulia) && Main.IJulia.inited
 
 # update progress display
-function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0), desc = p.desc)
-    if desc != p.desc
+function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0), desc::Union{Nothing,AbstractString} = nothing)
+    if desc !== nothing
         if p.barlen !== nothing
-            p.barlen += length(p.desc) - length(desc) #adjust bar length to accomodate new description
+            p.barlen += length(p.desc) - length(desc) #adjust bar length to accommodate new description
         end
         p.desc = desc
     end
