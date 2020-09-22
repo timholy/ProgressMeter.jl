@@ -330,14 +330,14 @@ or may not result in a change to the display.
 
 You may optionally change the color of the display. See also `update!`.
 """
-function next!(p::Union{Progress, ProgressUnknown}, step::Int = 1; options...)
+function next!(p::Union{Progress, ProgressUnknown}; step::Int = 1, options...)
     lock(p.reentrantlocker) do
         p.counter += step
         updateProgress!(p; options...)
     end
 end
 
-function next!(p::Union{Progress, ProgressUnknown}, color::Symbol, step::Int = 1; options...)
+function next!(p::Union{Progress, ProgressUnknown}, color::Symbol; step::Int = 1, options...)
     lock(p.reentrantlocker) do
         p.color = color
         p.counter += step
