@@ -1,4 +1,4 @@
-import ProgressMeter
+using ProgressMeter
 using Test
 
 include("core.jl")

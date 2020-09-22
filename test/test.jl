@@ -72,7 +72,7 @@ function testfunc5B(n, dt, tsleep, desc, barlen)
     for i = 1:n
         sleep(tsleep)
         ProgressMeter.next!(p)
-        if i % 10 == 0 
+        if i % 10 == 0
             stepnum = floor(Int, i/10) + 1
             ProgressMeter.update!(p, desc = "Step $stepnum...")
         end
@@ -259,6 +259,8 @@ for val in 10 .^ range(2, stop=-6, length=20)
     ProgressMeter.update!(prog, val)
     sleep(0.1)
 end
+# issue #166
+@test ProgressMeter.ProgressThresh(1.0f0; desc = "Desc: ") isa ProgressMeter.ProgressThresh{Float32}
 
 # Threshold-based progress reports with increment=false
 println("Testing threshold-based progress")
