@@ -332,7 +332,7 @@ end
 
 # update progress display
 """
-`next!(prog, [color], step = 1)` reports that step units of progress has been
+`next!(prog, [color], step = 1)` reports that `step` units of progress have been
 made. Depending on the time interval since the last update, this may
 or may not result in a change to the display.
 
