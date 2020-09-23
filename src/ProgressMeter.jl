@@ -332,23 +332,23 @@ end
 
 # update progress display
 """
-`next!(prog, [color])` reports that one unit of progress has been
+`next!(prog, [color], step = 1)` reports that `step` units of progress have been
 made. Depending on the time interval since the last update, this may
 or may not result in a change to the display.
 
 You may optionally change the color of the display. See also `update!`.
 """
-function next!(p::Union{Progress, ProgressUnknown}; options...)
+function next!(p::Union{Progress, ProgressUnknown}; step::Int = 1, options...)
     lock(p.reentrantlocker) do
-        p.counter += 1
+        p.counter += step
         updateProgress!(p; options...)
     end
 end
 
-function next!(p::Union{Progress, ProgressUnknown}, color::Symbol; options...)
+function next!(p::Union{Progress, ProgressUnknown}, color::Symbol; step::Int = 1, options...)
     lock(p.reentrantlocker) do
         p.color = color
-        p.counter += 1
+        p.counter += step
         updateProgress!(p; options...)
     end
 end
