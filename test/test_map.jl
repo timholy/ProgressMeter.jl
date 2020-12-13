@@ -130,6 +130,22 @@ procs = addprocs(2)
     # with semicolon
     vals = @showprogress pmap(x->x^2, 1:100; batch_size=10)
     @test vals == map(x->x^2, 1:100)
+
+    
+    # pipes after map
+    @showprogress map(testfun, 1:10) |> sum |> length
+
+    # pipes after map do block
+    vals = @showprogress map(1:10) do x
+        sleep(.1)
+        return x => x^2
+    end |> Dict
+    @test vals == Dict(x=>x^2 for x in 1:10)
+
+    # pipe + pmap
+    sumvals = @showprogress pmap(testfun, 1:10) |> sum
+    @test sumvals == sum(map(testfun, 1:10))
+    
 end
 
 rmprocs(procs)
