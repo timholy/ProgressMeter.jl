@@ -675,11 +675,11 @@ function showprogress(args...)
     if expr.head == :macrocall && expr.args[1] == Symbol("@distributed")
         return showprogressdistributed(args...)
     end
+    orig = expr = copy(expr)
     if expr.args[1] == :|> # e.g. map(x->x^2) |> sum
         expr.args[2] = showprogress(progressargs..., expr.args[2])
         return expr
     end
-    orig = expr = copy(expr)
     metersym = gensym("meter")
     mapfuns = (:map, :reduce, :pmap)
     kind = :invalid # :invalid, :loop, or :map
