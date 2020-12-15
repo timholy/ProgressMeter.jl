@@ -663,6 +663,10 @@ performed.
 `@showprogress` works for loops, comprehensions, map, reduce, and pmap.
 """
 macro showprogress(args...)
+    showprogress(args...)
+end
+
+function showprogress(args...)
     if length(args) < 1
         throw(ArgumentError("@showprogress requires at least one argument."))
     end
@@ -672,6 +676,10 @@ macro showprogress(args...)
         return showprogressdistributed(args...)
     end
     orig = expr = copy(expr)
+    if expr.args[1] == :|> # e.g. map(x->x^2) |> sum
+        expr.args[2] = showprogress(progressargs..., expr.args[2])
+        return expr
+    end
     metersym = gensym("meter")
     mapfuns = (:map, :reduce, :pmap)
     kind = :invalid # :invalid, :loop, or :map
