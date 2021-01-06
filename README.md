@@ -225,6 +225,21 @@ for iter = 1:10
 end
 ```
 
+In the above example `showvalues` keyword is evaluated in each iteration, regardless
+if the progress will be reprinted or not. For avoiding that and prevent overhead a
+zero-argument function can be passed that returns the `showvalues` object.
+
+```julia
+**x,n = 1,10
+p = Progress(n)
+generate_showvalues(iter, x) = () -> [(:iter,iter), (:x,x)]
+for iter = 1:10
+    x *= 2
+    sleep(0.5)
+    ProgressMeter.next!(p; showvalues = generate_showvalues(iter, x))
+end**
+```
+
 #### ProgressMeter with additional information in Jupyter
 
 Jupyter notebooks/lab does not allow one to overwrite only parts of the output of cell.
