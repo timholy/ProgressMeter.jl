@@ -225,9 +225,7 @@ for iter = 1:10
 end
 ```
 
-In the above example `showvalues` keyword is evaluated in each iteration, regardless
-if the progress will be reprinted or not. For avoiding that and prevent overhead a
-zero-argument function can be passed that returns the `showvalues` object.
+In the above example, the data passed to `showvalues` is evaluated even if the progress bar is not updated. To avoid this unnecessary computation and reduce the overhead you can alternatively pass a zero-argument function as a callback to the `showvalues` keyword.
 
 ```julia
 x,n = 1,10
