@@ -236,7 +236,8 @@ generate_showvalues(iter, x) = () -> [(:iter,iter), (:x,x)]
 for iter = 1:10
     x *= 2
     sleep(0.5)
-    ProgressMeter.next!(p; showvalues = generate_showvalues(iter, x))
+# unlike `showvalues=generate_showvalues(iter, x)()`, this version only evaluate the function when necessary
+ProgressMeter.next!(p; showvalues = generate_showvalues(iter, x))
 end**
 ```
 
