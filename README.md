@@ -230,7 +230,7 @@ if the progress will be reprinted or not. For avoiding that and prevent overhead
 zero-argument function can be passed that returns the `showvalues` object.
 
 ```julia
-**x,n = 1,10
+x,n = 1,10
 p = Progress(n)
 generate_showvalues(iter, x) = () -> [(:iter,iter), (:x,x)]
 for iter = 1:10
