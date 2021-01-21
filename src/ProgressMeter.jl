@@ -71,6 +71,7 @@ mutable struct Progress <: AbstractProgress
     offset::Int                # position offset of progress bar (default is 0)
     numprintedvalues::Int      # num values printed below progress in last iteration
     start::Int                 # which iteration number to start from
+    io_is_tty::Bool             # is the output a file or not
 
     function Progress(n::Integer;
                       dt::Real=0.1,
@@ -86,7 +87,8 @@ mutable struct Progress <: AbstractProgress
         counter = start
         tfirst = tlast = time()
         printed = false
-        new(n, reentrantlocker, dt, counter, tfirst, tlast, printed, desc, barlen, barglyphs, color, output, offset, 0, start)
+        io_is_tty = isa(output, Base.TTY)
+        new(n, reentrantlocker, dt, counter, tfirst, tlast, printed, desc, barlen, barglyphs, color, output, offset, 0, start, io_is_tty)
     end
 end
 
@@ -121,6 +123,7 @@ mutable struct ProgressThresh{T<:Real} <: AbstractProgress
     output::IO           # output stream into which the progress is written
     numprintedvalues::Int   # num values printed below progress in last iteration
     offset::Int             # position offset of progress bar (default is 0)
+    io_is_tty::Bool             # is the output a file or not
 
     function ProgressThresh{T}(thresh;
                                dt::Real=0.1,
@@ -131,7 +134,8 @@ mutable struct ProgressThresh{T<:Real} <: AbstractProgress
         reentrantlocker = Threads.ReentrantLock()
         tfirst = tlast = time()
         printed = false
-        new{T}(thresh, reentrantlocker, dt, typemax(T), 0, false, tfirst, tlast, printed, desc, color, output, 0, offset)
+        io_is_tty = isa(output, Base.TTY)
+        new{T}(thresh, reentrantlocker, dt, typemax(T), 0, false, tfirst, tlast, printed, desc, color, output, 0, offset, io_is_tty)
     end
 end
 ProgressThresh(thresh::Real; kwargs...) = ProgressThresh{typeof(thresh)}(thresh; kwargs...)
@@ -165,13 +169,15 @@ mutable struct ProgressUnknown <: AbstractProgress
     color::Symbol        # default to green
     output::IO           # output stream into which the progress is written
     numprintedvalues::Int   # num values printed below progress in last iteration
+    io_is_tty::Bool
 end
 
 function ProgressUnknown(;dt::Real=0.1, desc::AbstractString="Progress: ", color::Symbol=:green, output::IO=stderr)
     reentrantlocker = Threads.ReentrantLock()
     tfirst = tlast = time()
     printed = false
-    ProgressUnknown(false, reentrantlocker, dt, 0, false, tfirst, tlast, printed, desc, color, output, 0)
+    io_is_tty = isa(output, Base.TTY)
+    ProgressUnknown(false, reentrantlocker, dt, 0, false, tfirst, tlast, printed, desc, color, output, 0, io_is_tty)
 end
 
 ProgressUnknown(dt::Real, desc::AbstractString="Progress: ",
@@ -200,6 +206,7 @@ clear_ijulia() = (IJULIABEHAVIOR[] != IJuliaAppend) && isdefined(Main, :IJulia) 
 
 # update progress display
 function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0), desc::Union{Nothing,AbstractString} = nothing)
+    !p.io_is_tty && return
     if desc !== nothing
         if p.barlen !== nothing
             p.barlen += length(p.desc) - length(desc) #adjust bar length to accommodate new description
@@ -258,6 +265,7 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
 end
 
 function updateProgress!(p::ProgressThresh; showvalues = (), truncate_lines = false, valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0), desc = p.desc)
+    !p.io_is_tty && return
     p.offset = offset
     p.desc = desc
     t = time()
@@ -299,6 +307,7 @@ function updateProgress!(p::ProgressThresh; showvalues = (), truncate_lines = fa
 end
 
 function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = false, valuecolor = :blue, desc = p.desc)
+    !p.io_is_tty && return
     p.desc = desc
     t = time()
     if p.done
