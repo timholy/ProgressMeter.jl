@@ -202,11 +202,12 @@ function ijulia_behavior(b)
 end
 
 # Whether or not to use IJulia.clear_output
-clear_ijulia() = (IJULIABEHAVIOR[] != IJuliaAppend) && isdefined(Main, :IJulia) && Main.IJulia.inited
+running_ijulia_kernel() = isdefined(Main, :IJulia) && Main.IJulia.inited
+clear_ijulia() = (IJULIABEHAVIOR[] != IJuliaAppend) && running_ijulia_kernel()
 
 # update progress display
 function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0), desc::Union{Nothing,AbstractString} = nothing)
-    !p.io_is_tty && return
+    (!running_ijulia_kernel() & !p.io_is_tty) && return
     if desc !== nothing
         if p.barlen !== nothing
             p.barlen += length(p.desc) - length(desc) #adjust bar length to accommodate new description
@@ -265,7 +266,7 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
 end
 
 function updateProgress!(p::ProgressThresh; showvalues = (), truncate_lines = false, valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0), desc = p.desc)
-    !p.io_is_tty && return
+    (!running_ijulia_kernel() & !p.io_is_tty) && return
     p.offset = offset
     p.desc = desc
     t = time()
@@ -307,7 +308,7 @@ function updateProgress!(p::ProgressThresh; showvalues = (), truncate_lines = fa
 end
 
 function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = false, valuecolor = :blue, desc = p.desc)
-    !p.io_is_tty && return
+    (!running_ijulia_kernel() & !p.io_is_tty) && return
     p.desc = desc
     t = time()
     if p.done
