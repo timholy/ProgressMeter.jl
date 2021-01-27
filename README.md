@@ -305,6 +305,7 @@ In cases where the output is text output such as CI or in an HPC scheduler, the 
 `is_logging` can be used to disable automatically.
 
 ```julia
+is_logging(io) = isa(io, Base.TTY) == false || (get(ENV, "CI", nothing) == "true")
 p = Progress(n; output = stderr, disable = is_logging(stderr))
 ````
 

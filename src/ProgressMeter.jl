@@ -3,7 +3,7 @@ module ProgressMeter
 using Printf: @sprintf
 using Distributed
 
-export Progress, ProgressThresh, ProgressUnknown, BarGlyphs, next!, update!, cancel, finish!, @showprogress, progress_map, progress_pmap, ijulia_behavior, is_logging
+export Progress, ProgressThresh, ProgressUnknown, BarGlyphs, next!, update!, cancel, finish!, @showprogress, progress_map, progress_pmap, ijulia_behavior
 
 """
 `ProgressMeter` contains a suite of utilities for displaying progress
@@ -19,8 +19,6 @@ are:
 ProgressMeter
 
 abstract type AbstractProgress end
-
-
 
 """
 Holds the five characters that will be used to generate the progress bar.
@@ -47,9 +45,6 @@ function BarGlyphs(s::AbstractString)
     end
     return BarGlyphs(glyphs...)
 end
-
-
-is_logging(io) = isa(io, Base.TTY) == false || (get(ENV, "CI", nothing) == "true")
 
 """
 `prog = Progress(n; dt=0.1, desc="Progress: ", color=:green,
