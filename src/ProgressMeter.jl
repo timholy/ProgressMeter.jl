@@ -689,7 +689,7 @@ function showprogress(args...)
         return expr
     end
     metersym = gensym("meter")
-    mapfuns = (:map, :reduce, :pmap)
+    mapfuns = (:map, :asyncmap, :reduce, :pmap)
     kind = :invalid # :invalid, :loop, or :map
 
     if isa(expr, Expr)
