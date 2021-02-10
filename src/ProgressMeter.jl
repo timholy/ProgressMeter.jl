@@ -464,6 +464,9 @@ function printvalues!(p::AbstractProgress, showvalues; color = :normal, truncate
     p
 end
 
+# Internal method to print additional values below progress bar (lazy-showvalues version) 
+printvalues!(p::AbstractProgress, showvalues::Function; kwargs...) = printvalues!(p, showvalues(); kwargs...)
+
 function move_cursor_up_while_clearing_lines(io, numlinesup)
     if numlinesup > 0 && clear_ijulia()
         Main.IJulia.clear_output(true)

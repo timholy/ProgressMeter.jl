@@ -234,6 +234,20 @@ for iter = 1:10
 end
 ```
 
+In the above example, the data passed to `showvalues` is evaluated even if the progress bar is not updated. To avoid this unnecessary computation and reduce the overhead you can alternatively pass a zero-argument function as a callback to the `showvalues` keyword.
+
+```julia
+x,n = 1,10
+p = Progress(n)
+generate_showvalues(iter, x) = () -> [(:iter,iter), (:x,x)]
+for iter = 1:10
+    x *= 2
+    sleep(0.5)
+# unlike `showvalues=generate_showvalues(iter, x)()`, this version only evaluate the function when necessary
+ProgressMeter.next!(p; showvalues = generate_showvalues(iter, x))
+end**
+```
+
 ### ProgressMeter with additional information in Jupyter
 
 Jupyter notebooks/lab does not allow one to overwrite only parts of the output of cell.
