@@ -56,6 +56,11 @@ procs = addprocs(2)
     end
     @test vals == map(x->x^2, 1:10)
 
+    vals = @showprogress asyncmap(1:10) do x
+        return x^2
+    end
+    @test vals == map(x->x^2, 1:10)
+
     vals = @showprogress pmap(1:10) do x
         return x^2
     end
