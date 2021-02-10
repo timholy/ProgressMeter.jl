@@ -81,7 +81,7 @@ mutable struct Progress <: AbstractProgress
                       barglyphs::BarGlyphs=BarGlyphs('|','█', Sys.iswindows() ? '█' : ['▏','▎','▍','▌','▋','▊','▉'],' ','|',),
                       offset::Integer=0,
                       start::Integer=0,
-                      enabled = true
+                      enabled::Bool = true
                      )
         reentrantlocker = Threads.ReentrantLock()
         counter = start
@@ -171,7 +171,7 @@ mutable struct ProgressUnknown <: AbstractProgress
     enabled::Bool
 end
 
-function ProgressUnknown(;dt::Real=0.1, desc::AbstractString="Progress: ", color::Symbol=:green, output::IO=stderr, enabled = true)
+function ProgressUnknown(;dt::Real=0.1, desc::AbstractString="Progress: ", color::Symbol=:green, output::IO=stderr, enabled::Bool = true)
     reentrantlocker = Threads.ReentrantLock()
     tfirst = tlast = time()
     printed = false
