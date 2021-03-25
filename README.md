@@ -320,7 +320,7 @@ In cases where the output is text output such as CI or in an HPC scheduler, the 
 
 ```julia
 is_logging(io) = isa(io, Base.TTY) == false || (get(ENV, "CI", nothing) == "true")
-p = Progress(n; output = stderr, disable = is_logging(stderr))
+p = Progress(n; output = stderr, enabled = !is_logging(stderr))
 ````
 
 ## Credits
