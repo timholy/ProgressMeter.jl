@@ -72,6 +72,7 @@ mutable struct Progress <: AbstractProgress
     numprintedvalues::Int      # num values printed below progress in last iteration
     start::Int                 # which iteration number to start from
     enabled::Bool              # is the output enabled
+    showspeed::Bool            # should the output include average time per iteration
 
     function Progress(n::Integer;
                       dt::Real=0.1,
@@ -82,7 +83,8 @@ mutable struct Progress <: AbstractProgress
                       barglyphs::BarGlyphs=BarGlyphs('|','█', Sys.iswindows() ? '█' : ['▏','▎','▍','▌','▋','▊','▉'],' ','|',),
                       offset::Integer=0,
                       start::Integer=0,
-                      enabled::Bool = true
+                      enabled::Bool = true,
+                      showspeed::Bool = false,
                      )
         RUNNING_IJULIA_KERNEL[] = running_ijulia_kernel()
         CLEAR_IJULIA[] = clear_ijulia()
@@ -90,7 +92,7 @@ mutable struct Progress <: AbstractProgress
         counter = start
         tinit = tsecond = tlast = time()
         printed = false
-        new(n, reentrantlocker, dt, counter, tinit, tsecond, tlast, printed, desc, barlen, barglyphs, color, output, offset, 0, start, enabled)
+        new(n, reentrantlocker, dt, counter, tinit, tsecond, tlast, printed, desc, barlen, barglyphs, color, output, offset, 0, start, enabled, showspeed)
     end
 end
 
@@ -119,13 +121,14 @@ mutable struct ProgressThresh{T<:Real} <: AbstractProgress
     triggered::Bool
     tinit::Float64
     tlast::Float64
-    printed::Bool        # true if we have issued at least one status update
-    desc::String         # prefix to the percentage, e.g.  "Computing..."
-    color::Symbol        # default to green
-    output::IO           # output stream into which the progress is written
+    printed::Bool           # true if we have issued at least one status update
+    desc::String            # prefix to the percentage, e.g.  "Computing..."
+    color::Symbol           # default to green
+    output::IO              # output stream into which the progress is written
     numprintedvalues::Int   # num values printed below progress in last iteration
     offset::Int             # position offset of progress bar (default is 0)
-    enabled::Bool             # is the output a file or not
+    enabled::Bool           # is the output enabled
+    showspeed::Bool         # should the output include average time per iteration
 
     function ProgressThresh{T}(thresh;
                                dt::Real=0.1,
@@ -133,13 +136,14 @@ mutable struct ProgressThresh{T<:Real} <: AbstractProgress
                                color::Symbol=:green,
                                output::IO=stderr,
                                offset::Integer=0,
-                               enabled = true) where T
+                               enabled = true,
+                               showspeed::Bool = true) where T
         RUNNING_IJULIA_KERNEL[] = running_ijulia_kernel()
         CLEAR_IJULIA[] = clear_ijulia()
         reentrantlocker = Threads.ReentrantLock()
         tinit = tlast = time()
         printed = false
-        new{T}(thresh, reentrantlocker, dt, typemax(T), 0, false, tinit, tlast, printed, desc, color, output, 0, offset, enabled)
+        new{T}(thresh, reentrantlocker, dt, typemax(T), 0, false, tinit, tlast, printed, desc, color, output, 0, offset, enabled, showspeed)
     end
 end
 ProgressThresh(thresh::Real; kwargs...) = ProgressThresh{typeof(thresh)}(thresh; kwargs...)
@@ -168,21 +172,22 @@ mutable struct ProgressUnknown <: AbstractProgress
     triggered::Bool
     tinit::Float64
     tlast::Float64
-    printed::Bool        # true if we have issued at least one status update
-    desc::String         # prefix to the percentage, e.g.  "Computing..."
-    color::Symbol        # default to green
-    output::IO           # output stream into which the progress is written
+    printed::Bool           # true if we have issued at least one status update
+    desc::String            # prefix to the percentage, e.g.  "Computing..."
+    color::Symbol           # default to green
+    output::IO              # output stream into which the progress is written
     numprintedvalues::Int   # num values printed below progress in last iteration
-    enabled::Bool
+    enabled::Bool           # is the output enabled
+    showspeed::Bool         # should the output include average time per iteration
 end
 
-function ProgressUnknown(;dt::Real=0.1, desc::AbstractString="Progress: ", color::Symbol=:green, output::IO=stderr, enabled::Bool = true)
+function ProgressUnknown(;dt::Real=0.1, desc::AbstractString="Progress: ", color::Symbol=:green, output::IO=stderr, enabled::Bool = true, showspeed::Bool = true)
     RUNNING_IJULIA_KERNEL[] = running_ijulia_kernel()
     CLEAR_IJULIA[] = clear_ijulia()
     reentrantlocker = Threads.ReentrantLock()
     tinit = tlast = time()
     printed = false
-    ProgressUnknown(false, reentrantlocker, dt, 0, false, tinit, tlast, printed, desc, color, output, 0, enabled)
+    ProgressUnknown(false, reentrantlocker, dt, 0, false, tinit, tlast, printed, desc, color, output, 0, enabled, showspeed)
 end
 
 ProgressUnknown(dt::Real, desc::AbstractString="Progress: ",
