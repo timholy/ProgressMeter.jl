@@ -1,6 +1,6 @@
 # ProgressMeter.jl
 
-[![Build Status](https://travis-ci.org/timholy/ProgressMeter.jl.svg?branch=master)](https://travis-ci.org/timholy/ProgressMeter.jl)
+[![Build Status](https://github.com/timholy/ProgressMeter.jl/workflows/CI/badge.svg)](https://github.com/timholy/ProgressMeter.jl/actions)
 
 Progress meter for long-running operations in Julia
 
