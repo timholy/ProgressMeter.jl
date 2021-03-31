@@ -52,7 +52,9 @@ output=stderr, barlen=tty_width(desc), start=0)` creates a progress meter for a
 task with `n` iterations or stages starting from `start`. Output will be
 generated at intervals at least `dt` seconds apart, and perhaps longer if each
 iteration takes longer than `dt`. `desc` is a description of
-the current task.
+the current task. Optionally you can disable the progress bar by setting
+`enable=false`. You can also append a per-iteration average duration like
+"(12.34 ms/it)" to the description by setting `showspeed=true`.
 """
 mutable struct Progress <: AbstractProgress
     n::Int
@@ -110,7 +112,10 @@ color=:green, output=stderr)` creates a progress meter for a task
 which will terminate once a value less than or equal to `thresh` is
 reached. Output will be generated at intervals at least `dt` seconds
 apart, and perhaps longer if each iteration takes longer than
-`dt`. `desc` is a description of the current task.
+`dt`. `desc` is a description of the current task. Optionally you can disable
+the progress meter by setting `enable=false`. You can also append a
+per-iteration average duration like "(12.34 ms/it)" to the description by
+setting `showspeed=true`.
 """
 mutable struct ProgressThresh{T<:Real} <: AbstractProgress
     thresh::T
@@ -162,7 +167,10 @@ color=:green, output=stderr)` creates a progress meter for a task
 which has a non-deterministic termination criterion.
 Output will be generated at intervals at least `dt` seconds
 apart, and perhaps longer if each iteration takes longer than
-`dt`. `desc` is a description of the current task.
+`dt`. `desc` is a description of the current task. Optionally you can disable
+the progress meter by setting `enable=false`. You can also append a
+per-iteration average duration like "(12.34 ms/it)" to the description by
+setting `showspeed=true`.
 """
 mutable struct ProgressUnknown <: AbstractProgress
     done::Bool
