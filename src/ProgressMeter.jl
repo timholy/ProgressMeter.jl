@@ -181,7 +181,7 @@ mutable struct ProgressUnknown <: AbstractProgress
     showspeed::Bool         # should the output include average time per iteration
 end
 
-function ProgressUnknown(;dt::Real=0.1, desc::AbstractString="Progress: ", color::Symbol=:green, output::IO=stderr, enabled::Bool = true, showspeed::Bool = true)
+function ProgressUnknown(;dt::Real=0.1, desc::AbstractString="Progress: ", color::Symbol=:green, output::IO=stderr, enabled::Bool = true, showspeed::Bool = false)
     RUNNING_IJULIA_KERNEL[] = running_ijulia_kernel()
     CLEAR_IJULIA[] = clear_ijulia()
     reentrantlocker = Threads.ReentrantLock()
@@ -196,12 +196,12 @@ ProgressUnknown(dt::Real, desc::AbstractString="Progress: ",
 
 ProgressUnknown(desc::AbstractString) = ProgressUnknown(desc=desc)
 
-#...length of percentage and ETA string with days is 29 characters
+#...length of percentage and ETA string with days is 29 characters, speed string is always 14 extra characters
 function tty_width(desc, output, showspeed::Bool)
     full_width = displaysize(output)[2]
     desc_width = length(desc)
     eta_width = 29
-    speed_width = showspeed ? 13 : 0
+    speed_width = showspeed ? 14 : 0
     return max(0, full_width - desc_width - eta_width - speed_width)
 end
 
