@@ -31,7 +31,8 @@ function noprog_perf(n)
     end
     return x
 end
-
-prog_perf(1)
-noprog_perf(1)
+prog_perf(10^7)
+noprog_perf(10^7)
+@time prog_perf(10^7)
+@time noprog_perf(10^7)
 @test @elapsed(prog_perf(10^7)) < 40*@elapsed(noprog_perf(10^7))
