@@ -83,6 +83,8 @@ mutable struct Progress <: AbstractProgress
                       start::Integer=0,
                       enabled::Bool = true
                      )
+        RUNNING_IJULIA_KERNEL[] = running_ijulia_kernel()
+        CLEAR_IJULIA[] = clear_ijulia()
         reentrantlocker = Threads.ReentrantLock()
         counter = start
         tfirst = tlast = time()
@@ -131,6 +133,8 @@ mutable struct ProgressThresh{T<:Real} <: AbstractProgress
                                output::IO=stderr,
                                offset::Integer=0,
                                enabled = true) where T
+        RUNNING_IJULIA_KERNEL[] = running_ijulia_kernel()
+        CLEAR_IJULIA[] = clear_ijulia()
         reentrantlocker = Threads.ReentrantLock()
         tfirst = tlast = time()
         printed = false
@@ -172,6 +176,8 @@ mutable struct ProgressUnknown <: AbstractProgress
 end
 
 function ProgressUnknown(;dt::Real=0.1, desc::AbstractString="Progress: ", color::Symbol=:green, output::IO=stderr, enabled::Bool = true)
+    RUNNING_IJULIA_KERNEL[] = running_ijulia_kernel()
+    CLEAR_IJULIA[] = clear_ijulia()
     reentrantlocker = Threads.ReentrantLock()
     tfirst = tlast = time()
     printed = false
@@ -200,12 +206,14 @@ function ijulia_behavior(b)
 end
 
 # Whether or not to use IJulia.clear_output
+const RUNNING_IJULIA_KERNEL = Ref{Bool}(false)
+const CLEAR_IJULIA = Ref{Bool}(false)
 running_ijulia_kernel() = isdefined(Main, :IJulia) && Main.IJulia.inited
 clear_ijulia() = (IJULIABEHAVIOR[] != IJuliaAppend) && running_ijulia_kernel()
 
 # update progress display
 function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0), desc::Union{Nothing,AbstractString} = nothing)
-    (!running_ijulia_kernel() & !p.enabled) && return
+    (!RUNNING_IJULIA_KERNEL[] & !p.enabled) && return
     if desc !== nothing
         if p.barlen !== nothing
             p.barlen += length(p.desc) - length(desc) #adjust bar length to accommodate new description
@@ -221,7 +229,7 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
             bar = barstring(barlen, percentage_complete, barglyphs=p.barglyphs)
             dur = durationstring(t-p.tfirst)
             msg = @sprintf "%s%3u%%%s Time: %s" p.desc round(Int, percentage_complete) bar dur
-            !clear_ijulia() && print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
+            !CLEAR_IJULIA[] && print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
             move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             printover(p.output, msg, p.color)
             printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
@@ -248,11 +256,11 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
             eta = "N/A"
         end
         msg = @sprintf "%s%3u%%%s  ETA: %s" p.desc round(Int, percentage_complete) bar eta
-        !clear_ijulia() && print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
+        !CLEAR_IJULIA[] && print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
         move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
         printover(p.output, msg, p.color)
         printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
-        !clear_ijulia() && print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+        !CLEAR_IJULIA[] && print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
         flush(p.output)
         # Compensate for any overhead of printing. This can be
         # especially important if you're running over a slow network
@@ -264,7 +272,7 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
 end
 
 function updateProgress!(p::ProgressThresh; showvalues = (), truncate_lines = false, valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0), desc = p.desc)
-    (!running_ijulia_kernel() & !p.enabled) && return
+    (!RUNNING_IJULIA_KERNEL[] & !p.enabled) && return
     p.offset = offset
     p.desc = desc
     t = time()
@@ -306,7 +314,7 @@ function updateProgress!(p::ProgressThresh; showvalues = (), truncate_lines = fa
 end
 
 function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = false, valuecolor = :blue, desc = p.desc)
-    (!running_ijulia_kernel() & !p.enabled) && return
+    (!RUNNING_IJULIA_KERNEL[] & !p.enabled) && return
     p.desc = desc
     t = time()
     if p.done
@@ -464,11 +472,11 @@ function printvalues!(p::AbstractProgress, showvalues; color = :normal, truncate
     p
 end
 
-# Internal method to print additional values below progress bar (lazy-showvalues version) 
+# Internal method to print additional values below progress bar (lazy-showvalues version)
 printvalues!(p::AbstractProgress, showvalues::Function; kwargs...) = printvalues!(p, showvalues(); kwargs...)
 
 function move_cursor_up_while_clearing_lines(io, numlinesup)
-    if numlinesup > 0 && clear_ijulia()
+    if numlinesup > 0 && CLEAR_IJULIA[]
         Main.IJulia.clear_output(true)
         if IJULIABEHAVIOR[] == IJuliaWarned
             @warn "ProgressMeter by default refresh meters with additional information in IJulia via `IJulia.clear_output`, which clears all outputs in the cell. \n - To prevent this behaviour, do `ProgressMeter.ijulia_behavior(:append)`. \n - To disable this warning message, do `ProgressMeter.ijulia_behavior(:clear)`."
