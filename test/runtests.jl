@@ -6,13 +6,20 @@ if get(ENV, "CI", "false") == "true"
     display(versioninfo())   # among other things, this shows the number of threads
 end
 
-include("core.jl")
-include("test.jl")
-include("test_showvalues.jl")
-include("test_map.jl")
-include("test_float.jl")
-include("test_threads.jl")
+@testset "Core" begin
+    include("core.jl")
+    include("test.jl")
+end
+@testset "Show Values" begin
+    include("test_showvalues.jl")
+end
+@testset "Mapping" begin
+    include("test_map.jl")
+end
+@testset "Float" begin
+    include("test_float.jl")
+end
+@testset "Threading" begin
+    include("test_threads.jl")
+end
 
-
-println("")
-println("All tests complete")
