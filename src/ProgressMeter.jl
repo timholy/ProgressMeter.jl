@@ -240,6 +240,12 @@ const CLEAR_IJULIA = Ref{Bool}(false)
 running_ijulia_kernel() = isdefined(Main, :IJulia) && Main.IJulia.inited
 clear_ijulia() = (IJULIABEHAVIOR[] != IJuliaAppend) && running_ijulia_kernel()
 
+function calc_check_iterations(p, t)
+    # Adjust the number of iterations that skips time check based on how accurate the last number was
+    iterations_per_dt = (p.check_iterations / (t - p.tlast)) * p.dt
+    return round(Int, clamp(iterations_per_dt, 1, p.check_iterations * 10))
+end
+
 # update progress display
 function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0), desc::Union{Nothing,AbstractString} = nothing)
     (!RUNNING_IJULIA_KERNEL[] & !p.enabled) && return
@@ -282,9 +288,7 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
     if p.counter - p.prev_update_count >= p.check_iterations
         t = time()
         if p.counter > 2
-            # Adjust the number of iterations that skips time check based on how accurate the last number was
-            iter_per_dt = ceil(Int, (p.check_iterations / (t - p.tlast)) * p.dt)
-            p.check_iterations = clamp(iter_per_dt, 1, Inf)
+            p.check_iterations = calc_check_iterations(p, t)
         end
         if t > p.tlast+p.dt
             barlen = p.barlen isa Nothing ? tty_width(p.desc, p.output, p.showspeed) : p.barlen
@@ -353,9 +357,7 @@ function updateProgress!(p::ProgressThresh; showvalues = (), truncate_lines = fa
     if p.counter - p.prev_update_count >= p.check_iterations
         t = time()
         if p.counter > 2
-            # Adjust the number of iterations that skips time check based on how accurate the last number was
-            iter_per_dt = ceil(Int, (p.check_iterations / (t - p.tlast)) * p.dt)
-            p.check_iterations = clamp(iter_per_dt, 1, Inf)
+            p.check_iterations = calc_check_iterations(p, t)
         end
         if t > p.tlast+p.dt && !p.triggered
             elapsed_time = t - p.tfirst
@@ -404,9 +406,7 @@ function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = f
     if p.counter - p.prev_update_count >= p.check_iterations
         t = time()
         if p.counter > 2
-            # Adjust the number of iterations that skips time check based on how accurate the last number was
-            iter_per_dt = ceil(Int, (p.check_iterations / (t - p.tlast)) * p.dt)
-            p.check_iterations = clamp(iter_per_dt, 1, Inf)
+            p.check_iterations = calc_check_iterations(p, t)
         end
         if t > p.tlast+p.dt
             dur = durationstring(t-p.tfirst)
