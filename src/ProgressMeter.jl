@@ -59,7 +59,8 @@ mutable struct Progress <: AbstractProgress
     reentrantlocker::Threads.ReentrantLock
     dt::Float64
     counter::Int
-    tfirst::Float64
+    tinit::Float64
+    tsecond::Float64           # ignore the first loop given usually uncharacteristically slow
     tlast::Float64
     printed::Bool              # true if we have issued at least one status update
     desc::String               # prefix to the percentage, e.g.  "Computing..."
@@ -87,9 +88,9 @@ mutable struct Progress <: AbstractProgress
         CLEAR_IJULIA[] = clear_ijulia()
         reentrantlocker = Threads.ReentrantLock()
         counter = start
-        tfirst = tlast = time()
+        tinit = tsecond = tlast = time()
         printed = false
-        new(n, reentrantlocker, dt, counter, tfirst, tlast, printed, desc, barlen, barglyphs, color, output, offset, 0, start, enabled)
+        new(n, reentrantlocker, dt, counter, tinit, tsecond, tlast, printed, desc, barlen, barglyphs, color, output, offset, 0, start, enabled)
     end
 end
 
@@ -116,7 +117,7 @@ mutable struct ProgressThresh{T<:Real} <: AbstractProgress
     val::T
     counter::Int
     triggered::Bool
-    tfirst::Float64
+    tinit::Float64
     tlast::Float64
     printed::Bool        # true if we have issued at least one status update
     desc::String         # prefix to the percentage, e.g.  "Computing..."
@@ -136,9 +137,9 @@ mutable struct ProgressThresh{T<:Real} <: AbstractProgress
         RUNNING_IJULIA_KERNEL[] = running_ijulia_kernel()
         CLEAR_IJULIA[] = clear_ijulia()
         reentrantlocker = Threads.ReentrantLock()
-        tfirst = tlast = time()
+        tinit = tlast = time()
         printed = false
-        new{T}(thresh, reentrantlocker, dt, typemax(T), 0, false, tfirst, tlast, printed, desc, color, output, 0, offset, enabled)
+        new{T}(thresh, reentrantlocker, dt, typemax(T), 0, false, tinit, tlast, printed, desc, color, output, 0, offset, enabled)
     end
 end
 ProgressThresh(thresh::Real; kwargs...) = ProgressThresh{typeof(thresh)}(thresh; kwargs...)
@@ -165,7 +166,7 @@ mutable struct ProgressUnknown <: AbstractProgress
     dt::Float64
     counter::Int
     triggered::Bool
-    tfirst::Float64
+    tinit::Float64
     tlast::Float64
     printed::Bool        # true if we have issued at least one status update
     desc::String         # prefix to the percentage, e.g.  "Computing..."
@@ -179,9 +180,9 @@ function ProgressUnknown(;dt::Real=0.1, desc::AbstractString="Progress: ", color
     RUNNING_IJULIA_KERNEL[] = running_ijulia_kernel()
     CLEAR_IJULIA[] = clear_ijulia()
     reentrantlocker = Threads.ReentrantLock()
-    tfirst = tlast = time()
+    tinit = tlast = time()
     printed = false
-    ProgressUnknown(false, reentrantlocker, dt, 0, false, tfirst, tlast, printed, desc, color, output, 0, enabled)
+    ProgressUnknown(false, reentrantlocker, dt, 0, false, tinit, tlast, printed, desc, color, output, 0, enabled)
 end
 
 ProgressUnknown(dt::Real, desc::AbstractString="Progress: ",
@@ -214,6 +215,9 @@ clear_ijulia() = (IJULIABEHAVIOR[] != IJuliaAppend) && running_ijulia_kernel()
 # update progress display
 function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0), desc::Union{Nothing,AbstractString} = nothing)
     (!RUNNING_IJULIA_KERNEL[] & !p.enabled) && return
+    if p.counter == 2 # ignore the first loop given usually uncharacteristically slow
+        p.tsecond = time()
+    end
     if desc !== nothing
         if p.barlen !== nothing
             p.barlen += length(p.desc) - length(desc) #adjust bar length to accommodate new description
@@ -227,7 +231,7 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
             barlen = p.barlen isa Nothing ? tty_width(p.desc, p.output) : p.barlen
             percentage_complete = 100.0 * p.counter / p.n
             bar = barstring(barlen, percentage_complete, barglyphs=p.barglyphs)
-            dur = durationstring(t-p.tfirst)
+            dur = durationstring(t - p.tinit)
             msg = @sprintf "%s%3u%%%s Time: %s" p.desc round(Int, percentage_complete) bar dur
             !CLEAR_IJULIA[] && print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
             move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
@@ -247,10 +251,10 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
         barlen = p.barlen isa Nothing ? tty_width(p.desc, p.output) : p.barlen
         percentage_complete = 100.0 * p.counter / p.n
         bar = barstring(barlen, percentage_complete, barglyphs=p.barglyphs)
-        elapsed_time = t - p.tfirst
-        est_total_time = elapsed_time * (p.n - p.start) / (p.counter - p.start)
+        elapsed_time = t - p.tsecond # ignore the first loop given usually uncharacteristically slow
+        est_total_time = elapsed_time * (p.n - p.start) / ((p.counter - 1) - p.start)
         if 0 <= est_total_time <= typemax(Int)
-            eta_sec = round(Int, est_total_time - elapsed_time )
+            eta_sec = round(Int, est_total_time - elapsed_time)
             eta = durationstring(eta_sec)
         else
             eta = "N/A"
@@ -280,7 +284,7 @@ function updateProgress!(p::ProgressThresh; showvalues = (), truncate_lines = fa
         p.triggered = true
         if p.printed
             p.triggered = true
-            dur = durationstring(t-p.tfirst)
+            dur = durationstring(t-p.tinit)
             msg = @sprintf "%s Time: %s (%d iterations)" p.desc dur p.counter
             print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
             move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
@@ -297,7 +301,6 @@ function updateProgress!(p::ProgressThresh; showvalues = (), truncate_lines = fa
     end
 
     if t > p.tlast+p.dt && !p.triggered
-        elapsed_time = t - p.tfirst
         msg = @sprintf "%s (thresh = %g, value = %g)" p.desc p.thresh p.val
         print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
         move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
@@ -319,7 +322,7 @@ function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = f
     t = time()
     if p.done
         if p.printed
-            dur = durationstring(t-p.tfirst)
+            dur = durationstring(t-p.tinit)
             msg = @sprintf "%s %d \t Time: %s" p.desc p.counter dur
             move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             printover(p.output, msg, p.color)
@@ -331,7 +334,7 @@ function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = f
     end
 
     if t > p.tlast+p.dt
-        dur = durationstring(t-p.tfirst)
+        dur = durationstring(t-p.tinit)
         msg = @sprintf "%s %d \t Time: %s" p.desc p.counter dur
         move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
         printover(p.output, msg, p.color)
