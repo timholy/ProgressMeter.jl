@@ -346,3 +346,44 @@ end
 
 println("Testing start offset")
 testfunc17()
+
+# speed display option
+function testfunc18A(n, dt, tsleep; start=15)
+    p = ProgressMeter.Progress(n; dt=dt, start=start, showspeed=true)
+    for i in start+1:start+n
+        sleep(tsleep)
+        ProgressMeter.next!(p)
+    end
+end
+
+function testfunc18B(n, dt, tsleep)
+    p = ProgressMeter.ProgressUnknown(n; dt=dt, showspeed=true)
+    for _ in 1:n
+        sleep(tsleep)
+        ProgressMeter.next!(p)
+    end
+    ProgressMeter.finish!(p)
+end
+
+function testfunc18C()
+    p = ProgressMeter.ProgressThresh(1e-5; desc="Minimizing:", showspeed=true)
+    for val in 10 .^ range(2, stop=-6, length=20)
+        ProgressMeter.update!(p, val)
+        sleep(0.1)
+    end
+end
+
+println("Testing speed display")
+testfunc18A(1_000, 0.01, 0.002)
+testfunc18B(1_000, 0.01, 0.002)
+testfunc18C()
+
+function testfunc19()
+    p = ProgressMeter.ProgressThresh(1e-5; desc="Minimizing:", showspeed=true)
+    for val in 10 .^ range(2, stop=-6, length=20)
+        ProgressMeter.update!(p, val; increment=false)
+        sleep(0.1)
+    end
+end
+println("Testing speed display with no update")
+testfunc19()
