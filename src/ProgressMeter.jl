@@ -308,11 +308,11 @@ function updateProgress!(p::ProgressThresh; showvalues = (), truncate_lines = fa
     p.offset = offset
     p.desc = desc
     t = time()
+    elapsed_time = t - p.tinit
     if p.val <= p.thresh && !p.triggered
         p.triggered = true
         if p.printed
             p.triggered = true
-            elapsed_time = t - p.tinit
             dur = durationstring(elapsed_time)
             msg = @sprintf "%s Time: %s (%d iterations)" p.desc dur p.counter
             if p.showspeed
