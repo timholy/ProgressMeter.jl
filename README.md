@@ -318,26 +318,34 @@ can be accomplished with a `RemoteChannel`:
 using ProgressMeter
 using Distributed
 
-p = Progress(10)
-channel = RemoteChannel(()->Channel{Bool}(10), 1)
+n_steps = 20
+p = Progress(n_steps)
+channel = RemoteChannel(()->Channel{Bool}(), 1)
 
-@sync begin
-    # this task prints the progress bar
+# introduce a long-running dummy task to all workers
+@everywhere long_task() = sum([ 1/x for x in 1:100_000_000 ])
+@time long_task() # a single execution is about 0.3 seconds
+
+@sync begin # start two tasks which will be synced in the very end
+    # the first task updates the progress bar
     @async while take!(channel)
         next!(p)
     end
 
-    # this task does the computation
+    # the second task does the computation
     @async begin
-        @distributed (+) for i in 1:10
-            sleep(0.1)
-            put!(channel, true)
+        @distributed (+) for i in 1:n_steps
+            long_task()
+            put!(channel, true) # trigger a progress bar update
             i^2
         end
         put!(channel, false) # this tells the printing task to finish
     end
 end
 ```
+
+Here, returning some number `i^2` and reducing it somehow `(+)`
+is necessary to make the distribution happen.
 
 ### `progress_map`
 
