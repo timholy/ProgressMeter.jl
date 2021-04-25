@@ -245,7 +245,7 @@ for iter = 1:10
     sleep(0.5)
 # unlike `showvalues=generate_showvalues(iter, x)()`, this version only evaluate the function when necessary
 ProgressMeter.next!(p; showvalues = generate_showvalues(iter, x))
-end**
+end
 ```
 
 ### Showing average time per iteration
@@ -358,7 +358,7 @@ It possible to disable the progress meter when the use is optional.
 
 ```julia
 x,n = 1,10
-p = Progress(n; disable = true)
+p = Progress(n; enabled = false)
 for iter = 1:10
     x *= 2
     sleep(0.5)
@@ -371,7 +371,7 @@ In cases where the output is text output such as CI or in an HPC scheduler, the 
 
 ```julia
 is_logging(io) = isa(io, Base.TTY) == false || (get(ENV, "CI", nothing) == "true")
-p = Progress(n; output = stderr, disable = is_logging(stderr))
+p = Progress(n; output = stderr, enabled = !is_logging(stderr))
 ````
 
 ## Credits
