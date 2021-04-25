@@ -285,7 +285,7 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
         end
         return nothing
     end
-    if p.counter - p.prev_update_count >= p.check_iterations
+    if predicted_updates_per_dt_have_passed(p)
         t = time()
         if p.counter > 2
             p.check_iterations = calc_check_iterations(p, t)
@@ -354,7 +354,7 @@ function updateProgress!(p::ProgressThresh; showvalues = (), truncate_lines = fa
         return
     end
 
-    if p.counter - p.prev_update_count >= p.check_iterations
+    if predicted_updates_per_dt_have_passed(p)
         t = time()
         if p.counter > 2
             p.check_iterations = calc_check_iterations(p, t)
@@ -403,7 +403,7 @@ function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = f
         end
         return
     end
-    if p.counter - p.prev_update_count >= p.check_iterations
+    if predicted_updates_per_dt_have_passed(p)
         t = time()
         if p.counter > 2
             p.check_iterations = calc_check_iterations(p, t)
@@ -431,7 +431,10 @@ function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = f
     end
 end
 
+predicted_updates_per_dt_have_passed(p::AbstractProgress) = p.counter - p.prev_update_count >= p.check_iterations
+
 function is_threading(p::AbstractProgress)
+    Threads.nthreads() == 1 && return false
     length(p.threads_used) > 1 && return true
     if !in(Threads.threadid(), p.threads_used)
         push!(p.threads_used, Threads.threadid())
