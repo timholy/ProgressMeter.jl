@@ -294,7 +294,7 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
             barlen = p.barlen isa Nothing ? tty_width(p.desc, p.output, p.showspeed) : p.barlen
             percentage_complete = 100.0 * p.counter / p.n
             bar = barstring(barlen, percentage_complete, barglyphs=p.barglyphs)
-            elapsed_time = t - p.tfirst
+            elapsed_time = t - p.tinit
             est_total_time = elapsed_time * (p.n - p.start) / (p.counter - p.start)
             if 0 <= est_total_time <= typemax(Int)
                 eta_sec = round(Int, est_total_time - elapsed_time )
@@ -360,9 +360,9 @@ function updateProgress!(p::ProgressThresh; showvalues = (), truncate_lines = fa
             p.check_iterations = calc_check_iterations(p, t)
         end
         if t > p.tlast+p.dt && !p.triggered
-            elapsed_time = t - p.tfirst
             msg = @sprintf "%s (thresh = %g, value = %g)" p.desc p.thresh p.val
             if p.showspeed
+                elapsed_time = t - p.tinit
                 sec_per_iter = elapsed_time / p.counter
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
             end
@@ -409,9 +409,10 @@ function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = f
             p.check_iterations = calc_check_iterations(p, t)
         end
         if t > p.tlast+p.dt
-            dur = durationstring(t-p.tfirst)
+            dur = durationstring(t-p.tinit)
             msg = @sprintf "%s %d \t Time: %s" p.desc p.counter dur
             if p.showspeed
+                elapsed_time = t - p.tinit
                 sec_per_iter = elapsed_time / p.counter
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
             end
