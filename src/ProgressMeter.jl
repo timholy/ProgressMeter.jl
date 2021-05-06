@@ -537,7 +537,9 @@ end
 See also `cancel`.
 """
 function finish!(p::Progress; options...)
-    update!(p, p.n; options...)
+    if p.counter < p.n
+        update!(p, p.n; options...)
+    end
 end
 
 function finish!(p::ProgressThresh; options...)
