@@ -247,12 +247,14 @@ function calc_check_iterations(p, t)
 end
 
 # update progress display
-function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0), desc::Union{Nothing,AbstractString} = nothing)
+function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, valuecolor = :blue,
+                        offset::Integer = p.offset, keep = (offset == 0), desc::Union{Nothing,AbstractString} = nothing,
+                        ignore_predictor = false)
     (!RUNNING_IJULIA_KERNEL[] & !p.enabled) && return
     if p.counter == 2 # ignore the first loop given usually uncharacteristically slow
         p.tsecond = time()
     end
-    if desc !== nothing
+    if desc !== nothing && desc !== p.desc
         if p.barlen !== nothing
             p.barlen += length(p.desc) - length(desc) #adjust bar length to accommodate new description
         end
@@ -285,7 +287,7 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
         end
         return nothing
     end
-    if predicted_updates_per_dt_have_passed(p)
+    if ignore_predictor || predicted_updates_per_dt_have_passed(p)
         t = time()
         if p.counter > 2
             p.check_iterations = calc_check_iterations(p, t)
@@ -324,7 +326,8 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
     return nothing
 end
 
-function updateProgress!(p::ProgressThresh; showvalues = (), truncate_lines = false, valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0), desc = p.desc)
+function updateProgress!(p::ProgressThresh; showvalues = (), truncate_lines = false, valuecolor = :blue,
+                        offset::Integer = p.offset, keep = (offset == 0), desc = p.desc, ignore_predictor = false)
     (!RUNNING_IJULIA_KERNEL[] & !p.enabled) && return
     p.offset = offset
     p.desc = desc
@@ -354,7 +357,7 @@ function updateProgress!(p::ProgressThresh; showvalues = (), truncate_lines = fa
         return
     end
 
-    if predicted_updates_per_dt_have_passed(p)
+    if ignore_predictor || predicted_updates_per_dt_have_passed(p)
         t = time()
         if p.counter > 2
             p.check_iterations = calc_check_iterations(p, t)
@@ -382,7 +385,8 @@ function updateProgress!(p::ProgressThresh; showvalues = (), truncate_lines = fa
     end
 end
 
-function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = false, valuecolor = :blue, desc = p.desc)
+function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = false, valuecolor = :blue, desc = p.desc,
+                        ignore_predictor = false)
     (!RUNNING_IJULIA_KERNEL[] & !p.enabled) && return
     p.desc = desc
     if p.done
@@ -403,7 +407,7 @@ function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = f
         end
         return
     end
-    if predicted_updates_per_dt_have_passed(p)
+    if ignore_predictor || predicted_updates_per_dt_have_passed(p)
         t = time()
         if p.counter > 2
             p.check_iterations = calc_check_iterations(p, t)
@@ -463,7 +467,7 @@ You may optionally change the color of the display. See also `update!`.
 function next!(p::Union{Progress, ProgressUnknown}; step::Int = 1, options...)
     lock_if_threading(p) do
         p.counter += step
-        updateProgress!(p; options...)
+        updateProgress!(p; ignore_predictor = step == 0, options...)
     end
 end
 
@@ -471,7 +475,7 @@ function next!(p::Union{Progress, ProgressUnknown}, color::Symbol; step::Int = 1
     lock_if_threading(p) do
         p.color = color
         p.counter += step
-        updateProgress!(p; options...)
+        updateProgress!(p; ignore_predictor = step == 0, options...)
     end
 end
 
@@ -488,9 +492,10 @@ You may optionally change the color of the display. See also `next!`.
 """
 function update!(p::Union{Progress, ProgressUnknown}, counter::Int=p.counter, color::Symbol=p.color; options...)
     lock_if_threading(p) do
+        counter_changed = p.counter != counter
         p.counter = counter
         p.color = color
-        updateProgress!(p; options...)
+        updateProgress!(p; ignore_predictor = !counter_changed, options...)
     end
 end
 
