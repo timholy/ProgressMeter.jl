@@ -8,7 +8,7 @@ Progress meter for long-running operations in Julia
 
 Within julia, execute
 ```julia
-Pkg.add("ProgressMeter")
+using Pkg; Pkg.add("ProgressMeter")
 ```
 
 ## Usage
@@ -18,6 +18,7 @@ Pkg.add("ProgressMeter")
 This works for functions that process things in loops or with `map`/`pmap`/`reduce`:
 
 ```julia
+using Distributed
 using ProgressMeter
 
 @showprogress 1 "Computing..." for i in 1:50
