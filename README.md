@@ -277,11 +277,11 @@ Progress:  XX%|█████████████████████�
 
 ### Conditionally disabling a progress meter
 
-In addition to the `showspeed` optional keyword argument, all the progress meters also support the optional `enable` keyword argument. You can use this to conditionally disable a progress bar in cases where you want less verbose output or are using another progress bar to track progress in looping over a function that itself uses a progress bar.
+In addition to the `showspeed` optional keyword argument, all the progress meters also support the optional `enabled` keyword argument. You can use this to conditionally disable a progress bar in cases where you want less verbose output or are using another progress bar to track progress in looping over a function that itself uses a progress bar.
 
 ```julia
 function my_awesome_slow_loop(n: Integer; show_progress=true)
-    p = Progress(n; enable=show_progress)
+    p = Progress(n; enabled=show_progress)
     for i in 1:n
         sleep(0.1)
         next!(p)
@@ -292,7 +292,7 @@ const SHOW_PROGRESS_BARS = parse(Bool, get(ENV, "PROGRESS_BARS", "true"))
 
 m = 100
 # let environment variable disable outer loop progress bar
-p = Progress(m; enable=SHOW_PROGRESS_BARS)
+p = Progress(m; enabled=SHOW_PROGRESS_BARS)
 for i in 1:m
     # disable inner loop progress bar since we are tracking progress in the outer loop
     my_awesome_slow_loop(i; show_progress=false)

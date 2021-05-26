@@ -53,7 +53,7 @@ task with `n` iterations or stages starting from `start`. Output will be
 generated at intervals at least `dt` seconds apart, and perhaps longer if each
 iteration takes longer than `dt`. `desc` is a description of
 the current task. Optionally you can disable the progress bar by setting
-`enable=false`. You can also append a per-iteration average duration like
+`enabled=false`. You can also append a per-iteration average duration like
 "(12.34 ms/it)" to the description by setting `showspeed=true`.
 """
 mutable struct Progress <: AbstractProgress
@@ -116,7 +116,7 @@ which will terminate once a value less than or equal to `thresh` is
 reached. Output will be generated at intervals at least `dt` seconds
 apart, and perhaps longer if each iteration takes longer than
 `dt`. `desc` is a description of the current task. Optionally you can disable
-the progress meter by setting `enable=false`. You can also append a
+the progress meter by setting `enabled=false`. You can also append a
 per-iteration average duration like "(12.34 ms/it)" to the description by
 setting `showspeed=true`.
 """
@@ -174,7 +174,7 @@ which has a non-deterministic termination criterion.
 Output will be generated at intervals at least `dt` seconds
 apart, and perhaps longer if each iteration takes longer than
 `dt`. `desc` is a description of the current task. Optionally you can disable
-the progress meter by setting `enable=false`. You can also append a
+the progress meter by setting `enabled=false`. You can also append a
 per-iteration average duration like "(12.34 ms/it)" to the description by
 setting `showspeed=true`.
 """
