@@ -233,8 +233,8 @@ for val in 1:100
 end
 ```
 By default, `finish!` changes the spinner to a `✓`, but you can
-use a different character by passing a `spinner_done` keyword
-to `finish!`, e.g. passing `spinner_done='✗'` on a failure condition:
+use a different character by passing a `spinner` keyword
+to `finish!`, e.g. passing `spinner='✗'` on a failure condition:
 ```julia
 prog = ProgressUnknown("Working hard:", spinner=true)
 for val in 1:100
@@ -245,8 +245,25 @@ for val in 1:100
     end
     sleep(0.1)
 end
-ProgressMeter.finish!(prog, spinner_done='✗')
+ProgressMeter.finish!(prog, spinner='✗')
 ```
+
+In fact, you can completely customize the spinner character
+by passing an string (array of characters) to animate as a `spinner`
+argument to `next!`, or alternatively a single character
+that you update manually as desired:
+```julia
+prog = ProgressUnknown("Working hard:", spinner=true)
+for val in 1:100
+    ProgressMeter.next!(prog, spinner="🌑🌒🌓🌔🌕🌖🌗🌘")
+    if val%10 == val÷10 == 5
+        ProgressMeter.finish!(prog)
+        break
+    end
+    sleep(0.1)
+end
+```
+(Other interesting-looking spinners include `"⌜⌝⌟⌞"`, `"⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"`, `"▖▘▝▗'"`, and `"▁▂▃▄▅▆▇█▇▆▅▄▃▂▁"`.)
 
 ### Printing additional information
 

@@ -313,7 +313,22 @@ for _ in 1:10
     ProgressMeter.next!(prog)
     sleep(0.1)
 end
-ProgressMeter.finish!(prog, spinner_done='✗')
+ProgressMeter.finish!(prog, spinner='✗')
+
+myspinner = ['🌑', '🌒', '🌓', '🌔', '🌕', '🌖', '🌗', '🌘']
+prog = ProgressUnknown("Custom spinner:", spinner=true)
+for val in 1:10
+    ProgressMeter.next!(prog, spinner=myspinner)
+    sleep(0.1)
+end
+ProgressMeter.finish!(prog, spinner='🌞')
+
+prog = ProgressUnknown("Custom spinner:", spinner=true)
+for val in 1:10
+    ProgressMeter.next!(prog, spinner="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
+    sleep(0.1)
+end
+ProgressMeter.finish!(prog)
 
 println("Testing fractional bars")
 for front in (['▏','▎','▍','▌','▋','▊', '▉'], ['▁' ,'▂' ,'▃' ,'▄' ,'▅' ,'▆', '▇'], ['░', '▒', '▓',])
