@@ -176,7 +176,8 @@ apart, and perhaps longer if each iteration takes longer than
 `dt`. `desc` is a description of the current task. Optionally you can disable
 the progress meter by setting `enable=false`. You can also append a
 per-iteration average duration like "(12.34 ms/it)" to the description by
-setting `showspeed=true`.
+setting `showspeed=true`.  Instead of displaying a counter, it
+can optionally display a spinning ball by passing `spinner=true`.
 """
 mutable struct ProgressUnknown <: AbstractProgress
     done::Bool
@@ -189,6 +190,7 @@ mutable struct ProgressUnknown <: AbstractProgress
     printed::Bool           # true if we have issued at least one status update
     desc::String            # prefix to the percentage, e.g.  "Computing..."
     color::Symbol           # default to green
+    spinner::Bool           # show a spinner
     output::IO              # output stream into which the progress is written
     numprintedvalues::Int   # num values printed below progress in last iteration
     enabled::Bool           # is the output enabled
@@ -198,20 +200,20 @@ mutable struct ProgressUnknown <: AbstractProgress
     threads_used::Vector{Int}
 end
 
-function ProgressUnknown(;dt::Real=0.1, desc::AbstractString="Progress: ", color::Symbol=:green, output::IO=stderr, enabled::Bool = true, showspeed::Bool = false)
+function ProgressUnknown(;dt::Real=0.1, desc::AbstractString="Progress: ", color::Symbol=:green, spinner::Bool=false, output::IO=stderr, enabled::Bool = true, showspeed::Bool = false)
     RUNNING_IJULIA_KERNEL[] = running_ijulia_kernel()
     CLEAR_IJULIA[] = clear_ijulia()
     reentrantlocker = Threads.ReentrantLock()
     tinit = tlast = time()
     printed = false
-    ProgressUnknown(false, reentrantlocker, dt, 0, false, tinit, tlast, printed, desc, color, output, 0, enabled, showspeed, 1, 1, Int[])
+    ProgressUnknown(false, reentrantlocker, dt, 0, false, tinit, tlast, printed, desc, color, spinner, output, 0, enabled, showspeed, 1, 1, Int[])
 end
 
 ProgressUnknown(dt::Real, desc::AbstractString="Progress: ",
          color::Symbol=:green, output::IO=stderr; kwargs...) =
     ProgressUnknown(dt=dt, desc=desc, color=color, output=output; kwargs...)
 
-ProgressUnknown(desc::AbstractString) = ProgressUnknown(desc=desc)
+ProgressUnknown(desc::AbstractString; kwargs...) = ProgressUnknown(desc=desc; kwargs...)
 
 #...length of percentage and ETA string with days is 29 characters, speed string is always 14 extra characters
 function tty_width(desc, output, showspeed::Bool)
@@ -385,8 +387,10 @@ function updateProgress!(p::ProgressThresh; showvalues = (), truncate_lines = fa
     end
 end
 
+const spinner_chars = ['◐','◓','◑','◒']
+
 function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = false, valuecolor = :blue, desc = p.desc,
-                        ignore_predictor = false)
+                        ignore_predictor = false, spinner_done::Char = '✓')
     (!RUNNING_IJULIA_KERNEL[] & !p.enabled) && return
     p.desc = desc
     if p.done
@@ -394,7 +398,12 @@ function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = f
             t = time()
             elapsed_time = t - p.tinit
             dur = durationstring(elapsed_time)
-            msg = @sprintf "%s %d \t Time: %s" p.desc p.counter dur
+            if p.spinner
+                c = p.done ? spinner_done : spinner_chars[p.counter % length(spinner_chars) + 1]
+                msg = @sprintf "%s %c \t Time: %s" p.desc c dur
+            else
+                msg = @sprintf "%s %d \t Time: %s" p.desc p.counter dur
+            end
             if p.showspeed
                 sec_per_iter = elapsed_time / p.counter
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
@@ -414,7 +423,12 @@ function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = f
         end
         if t > p.tlast+p.dt
             dur = durationstring(t-p.tinit)
-            msg = @sprintf "%s %d \t Time: %s" p.desc p.counter dur
+            if p.spinner
+                c = p.done ? spinner_done : spinner_chars[p.counter % length(spinner_chars) + 1]
+                msg = @sprintf "%s %c \t Time: %s" p.desc c dur
+            else
+                msg = @sprintf "%s %d \t Time: %s" p.desc p.counter dur
+            end
             if p.showspeed
                 elapsed_time = t - p.tinit
                 sec_per_iter = elapsed_time / p.counter

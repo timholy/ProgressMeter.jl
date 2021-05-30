@@ -219,6 +219,35 @@ for val in ["aaa" , "bb", "c", "d"]
 end
 ```
 
+Alternatively, you can display a "spinning ball" symbol
+by passing `spinner=true` to the `ProgressUnknown` constructor.
+```julia
+prog = ProgressUnknown("Working hard:", spinner=true)
+for val in 1:100
+    ProgressMeter.next!(prog)
+    if val%10 == val÷10 == 5
+        ProgressMeter.finish!(prog)
+        break
+    end
+    sleep(0.1)
+end
+```
+By default, `finish!` changes the spinner to a `✓`, but you can
+use a different character by passing a `spinner_done` keyword
+to `finish!`, e.g. passing `spinner_done='✗'` on a failure condition:
+```julia
+prog = ProgressUnknown("Working hard:", spinner=true)
+for val in 1:100
+    ProgressMeter.next!(prog)
+    if val%10 == val÷10 == 0 # never true for these inputs
+        ProgressMeter.finish!(prog)
+        break
+    end
+    sleep(0.1)
+end
+ProgressMeter.finish!(prog, spinner_done='✗')
+```
+
 ### Printing additional information
 
 You can also print and update information related to the computation by using
