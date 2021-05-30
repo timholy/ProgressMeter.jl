@@ -301,6 +301,20 @@ for k in 1:2:20
 end
 ProgressMeter.finish!(prog)
 
+prog = ProgressMeter.ProgressUnknown("Reading entry:", spinner=true)
+for _ in 1:10
+    ProgressMeter.next!(prog)
+    sleep(0.1)
+end
+ProgressMeter.finish!(prog)
+
+prog = ProgressMeter.ProgressUnknown("Reading entry:", spinner=true)
+for _ in 1:10
+    ProgressMeter.next!(prog)
+    sleep(0.1)
+end
+ProgressMeter.finish!(prog, spinner_done='✗')
+
 println("Testing fractional bars")
 for front in (['▏','▎','▍','▌','▋','▊', '▉'], ['▁' ,'▂' ,'▃' ,'▄' ,'▅' ,'▆', '▇'], ['░', '▒', '▓',])
     p = ProgressMeter.Progress(100, dt=0.01, barglyphs=ProgressMeter.BarGlyphs('|','█',front,' ','|'), barlen=10)
