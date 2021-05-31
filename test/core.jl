@@ -47,4 +47,7 @@ prog_perf(10^7)
 noprog_perf(10^7)
 @time prog_perf(10^7)
 @time noprog_perf(10^7)
-@test @elapsed(prog_perf(10^7)) < 9*@elapsed(noprog_perf(10^7))
+
+if get(ENV, "GITHUB_ACTIONS", "false") != "true" # CI environment is too unreliable for performance tests
+    @test @elapsed(prog_perf(10^7)) < 9*@elapsed(noprog_perf(10^7))
+end
