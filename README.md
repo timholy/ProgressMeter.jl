@@ -223,10 +223,9 @@ Alternatively, you can display a "spinning ball" symbol
 by passing `spinner=true` to the `ProgressUnknown` constructor.
 ```julia
 prog = ProgressUnknown("Working hard:", spinner=true)
-for val in 1:100
+while true
     ProgressMeter.next!(prog)
-    val%10 == val÷10 == 5 && break
-    sleep(0.1)
+    rand(1:2*10^8) == 42 && break
 end
 ProgressMeter.finish!(prog)
 ```
@@ -235,16 +234,15 @@ use a different character by passing a `spinner` keyword
 to `finish!`, e.g. passing `spinner='✗'` on a failure condition:
 ```julia
 let found=false
-    prog = ProgressUnknown("Working hard:", spinner=true)
-    for val in 1:100
+    prog = ProgressUnknown("Searching for the Answer:", spinner=true)
+    for tries = 1:10^8
         ProgressMeter.next!(prog)
-        if val%10 == val÷10 == 0 # never true for these inputs
+        if rand(1:2*10^8) == 42
             found=true
             break
         end
-        sleep(0.1)
     end
-    ProgressMeter.finish!(prog, spinner = found ? `✓` : '✗')
+    ProgressMeter.finish!(prog, spinner = found ? '✓' : '✗')
 end
 ```
 
@@ -252,11 +250,10 @@ In fact, you can completely customize the spinner character
 by passing a string (or array of characters) to animate as a `spinner`
 argument to `next!`:
 ```julia
-prog = ProgressUnknown("Working hard:", spinner=true)
-for val in 1:100
+prog = ProgressUnknown("Burning the midnight oil:", spinner=true)
+while true
     ProgressMeter.next!(prog, spinner="🌑🌒🌓🌔🌕🌖🌗🌘")
-    val%10 == val÷10 == 5 && break
-    sleep(0.1)
+    rand(1:10^8) == 0xB00 && break
 end
 ProgressMeter.finish!(prog)
 ```
