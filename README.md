@@ -236,16 +236,18 @@ By default, `finish!` changes the spinner to a `✓`, but you can
 use a different character by passing a `spinner` keyword
 to `finish!`, e.g. passing `spinner='✗'` on a failure condition:
 ```julia
-prog = ProgressUnknown("Working hard:", spinner=true)
-for val in 1:100
-    ProgressMeter.next!(prog)
-    if val%10 == val÷10 == 0 # never true for these inputs
-        ProgressMeter.finish!(prog)
-        break
+let found=false
+    prog = ProgressUnknown("Working hard:", spinner=true)
+    for val in 1:100
+        ProgressMeter.next!(prog)
+        if val%10 == val÷10 == 0 # never true for these inputs
+            found=true
+            break
+        end
+        sleep(0.1)
     end
-    sleep(0.1)
+    ProgressMeter.finish!(prog, spinner = found ? `✓` : '✗')
 end
-ProgressMeter.finish!(prog, spinner='✗')
 ```
 
 In fact, you can completely customize the spinner character
