@@ -225,12 +225,10 @@ by passing `spinner=true` to the `ProgressUnknown` constructor.
 prog = ProgressUnknown("Working hard:", spinner=true)
 for val in 1:100
     ProgressMeter.next!(prog)
-    if val%10 == val÷10 == 5
-        ProgressMeter.finish!(prog)
-        break
-    end
+    val%10 == val÷10 == 5 && break
     sleep(0.1)
 end
+ProgressMeter.finish!(prog)
 ```
 By default, `finish!` changes the spinner to a `✓`, but you can
 use a different character by passing a `spinner` keyword
@@ -257,12 +255,10 @@ argument to `next!`:
 prog = ProgressUnknown("Working hard:", spinner=true)
 for val in 1:100
     ProgressMeter.next!(prog, spinner="🌑🌒🌓🌔🌕🌖🌗🌘")
-    if val%10 == val÷10 == 5
-        ProgressMeter.finish!(prog)
-        break
-    end
+    val%10 == val÷10 == 5 && break
     sleep(0.1)
 end
+ProgressMeter.finish!(prog)
 ```
 (Other interesting-looking spinners include `"⌜⌝⌟⌞"`, `"⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"`, `"▖▘▝▗'"`, and `"▁▂▃▄▅▆▇█"`.)
 
