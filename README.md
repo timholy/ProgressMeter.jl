@@ -250,8 +250,7 @@ ProgressMeter.finish!(prog, spinner='✗')
 
 In fact, you can completely customize the spinner character
 by passing a string (or array of characters) to animate as a `spinner`
-argument to `next!`, or alternatively a single character
-that you update manually as desired:
+argument to `next!`:
 ```julia
 prog = ProgressUnknown("Working hard:", spinner=true)
 for val in 1:100

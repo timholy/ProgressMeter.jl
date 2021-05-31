@@ -184,6 +184,7 @@ mutable struct ProgressUnknown <: AbstractProgress
     reentrantlocker::Threads.ReentrantLock
     dt::Float64
     counter::Int
+    spincounter::Int
     triggered::Bool
     tinit::Float64
     tlast::Float64
@@ -206,7 +207,7 @@ function ProgressUnknown(;dt::Real=0.1, desc::AbstractString="Progress: ", color
     reentrantlocker = Threads.ReentrantLock()
     tinit = tlast = time()
     printed = false
-    ProgressUnknown(false, reentrantlocker, dt, 0, false, tinit, tlast, printed, desc, color, spinner, output, 0, enabled, showspeed, 1, 1, Int[])
+    ProgressUnknown(false, reentrantlocker, dt, 0, 0, false, tinit, tlast, printed, desc, color, spinner, output, 0, enabled, showspeed, 1, 1, Int[])
 end
 
 ProgressUnknown(dt::Real, desc::AbstractString="Progress: ",
@@ -392,9 +393,9 @@ const spinner_done = '✓'
 
 spinner_char(p::ProgressUnknown, spinner::AbstractChar) = spinner
 spinner_char(p::ProgressUnknown, spinner::AbstractVector{<:AbstractChar}) =
-    p.done ? spinner_done : spinner[(p.counter - 1) % length(spinner) + firstindex(spinner)]
+    p.done ? spinner_done : spinner[p.spincounter % length(spinner) + firstindex(spinner)]
 spinner_char(p::ProgressUnknown, spinner::AbstractString) =
-    p.done ? spinner_done : spinner[nextind(spinner, 1, (p.counter - 1) % length(spinner))]
+    p.done ? spinner_done : spinner[nextind(spinner, 1, p.spincounter % length(spinner))]
 
 function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = false, valuecolor = :blue, desc = p.desc,
                         ignore_predictor = false, spinner::Union{AbstractChar,AbstractString,AbstractVector{<:AbstractChar}} = spinner_chars)
@@ -406,6 +407,7 @@ function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = f
             elapsed_time = t - p.tinit
             dur = durationstring(elapsed_time)
             if p.spinner
+                p.spincounter += 1
                 msg = @sprintf "%s %c \t Time: %s" p.desc spinner_char(p, spinner) dur
             else
                 msg = @sprintf "%s %d \t Time: %s" p.desc p.counter dur
@@ -430,6 +432,7 @@ function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = f
         if t > p.tlast+p.dt
             dur = durationstring(t-p.tinit)
             if p.spinner
+                p.spincounter += 1
                 msg = @sprintf "%s %c \t Time: %s" p.desc spinner_char(p, spinner) dur
             else
                 msg = @sprintf "%s %d \t Time: %s" p.desc p.counter dur
