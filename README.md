@@ -219,6 +219,47 @@ for val in ["aaa" , "bb", "c", "d"]
 end
 ```
 
+Alternatively, you can display a "spinning ball" symbol
+by passing `spinner=true` to the `ProgressUnknown` constructor.
+```julia
+prog = ProgressUnknown("Working hard:", spinner=true)
+while true
+    ProgressMeter.next!(prog)
+    rand(1:2*10^8) == 1 && break
+end
+ProgressMeter.finish!(prog)
+```
+
+By default, `finish!` changes the spinner to a `✓`, but you can
+use a different character by passing a `spinner` keyword
+to `finish!`, e.g. passing `spinner='✗'` on a failure condition:
+```julia
+let found=false
+    prog = ProgressUnknown("Searching for the Answer:", spinner=true)
+    for tries = 1:10^8
+        ProgressMeter.next!(prog)
+        if rand(1:2*10^8) == 42
+            found=true
+            break
+        end
+    end
+    ProgressMeter.finish!(prog, spinner = found ? '✓' : '✗')
+end
+```
+
+In fact, you can completely customize the spinner character
+by passing a string (or array of characters) to animate as a `spinner`
+argument to `next!`:
+```julia
+prog = ProgressUnknown("Burning the midnight oil:", spinner=true)
+while true
+    ProgressMeter.next!(prog, spinner="🌑🌒🌓🌔🌕🌖🌗🌘")
+    rand(1:10^8) == 0xB00 && break
+end
+ProgressMeter.finish!(prog)
+```
+(Other interesting-looking spinners include `"⌜⌝⌟⌞"`, `"⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"`, `"▖▘▝▗'"`, and `"▁▂▃▄▅▆▇█"`.)
+
 ### Printing additional information
 
 You can also print and update information related to the computation by using
