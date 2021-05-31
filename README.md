@@ -249,7 +249,7 @@ ProgressMeter.finish!(prog, spinner='✗')
 ```
 
 In fact, you can completely customize the spinner character
-by passing an string (array of characters) to animate as a `spinner`
+by passing a string (or array of characters) to animate as a `spinner`
 argument to `next!`, or alternatively a single character
 that you update manually as desired:
 ```julia
