@@ -225,7 +225,7 @@ by passing `spinner=true` to the `ProgressUnknown` constructor.
 prog = ProgressUnknown("Working hard:", spinner=true)
 while true
     ProgressMeter.next!(prog)
-    rand(1:2*10^8) == 42 && break
+    rand(1:2*10^8) == 1 && break
 end
 ProgressMeter.finish!(prog)
 ```
