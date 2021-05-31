@@ -263,7 +263,7 @@ for val in 1:100
     sleep(0.1)
 end
 ```
-(Other interesting-looking spinners include `"⌜⌝⌟⌞"`, `"⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"`, `"▖▘▝▗'"`, and `"▁▂▃▄▅▆▇█▇▆▅▄▃▂▁"`.)
+(Other interesting-looking spinners include `"⌜⌝⌟⌞"`, `"⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"`, `"▖▘▝▗'"`, and `"▁▂▃▄▅▆▇█"`.)
 
 ### Printing additional information
 
