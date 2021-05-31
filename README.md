@@ -229,6 +229,7 @@ while true
 end
 ProgressMeter.finish!(prog)
 ```
+
 By default, `finish!` changes the spinner to a `✓`, but you can
 use a different character by passing a `spinner` keyword
 to `finish!`, e.g. passing `spinner='✗'` on a failure condition:
