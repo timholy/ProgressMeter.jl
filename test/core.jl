@@ -57,4 +57,4 @@ prog = Progress(10)
 prog.check_iterations = 999
 t = time()
 prog.tlast = t
-@test ProgressMeter.calc_check_iterations(p, t) == 999
+@test ProgressMeter.calc_check_iterations(prog, t) == 999
