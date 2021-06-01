@@ -50,3 +50,11 @@ if get(ENV, "GITHUB_ACTIONS", "false") != "true" # CI environment is too unrelia
     @time noprog_perf(10^7)
     @test @elapsed(prog_perf(10^7)) < 9*@elapsed(noprog_perf(10^7))
 end
+
+# Avoid a NaN due to the estimated print time compensation
+# https://github.com/timholy/ProgressMeter.jl/issues/209
+prog = Progress(10)
+prog.check_iterations = 999
+t = time()
+prog.tlast = t
+@test calc_check_iterations(p, t) == 999
