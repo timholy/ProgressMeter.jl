@@ -258,7 +258,7 @@ while true
 end
 ProgressMeter.finish!(prog)
 ```
-(Other interesting-looking spinners include `"⌜⌝⌟⌞"`, `"⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"`, `"▖▘▝▗'"`, and `"▁▂▃▄▅▆▇█"`.)
+(Other interesting-looking spinners include `"⌜⌝⌟⌞"`, `"⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"`, `"🕐🕑🕒🕓🕔🕕🕖🕗🕘🕙🕚🕛"`, `"▖▘▝▗'"`, and `"▁▂▃▄▅▆▇█"`.)
 
 ### Printing additional information
 
@@ -276,7 +276,9 @@ for iter = 1:10
 end
 ```
 
-In the above example, the data passed to `showvalues` is evaluated even if the progress bar is not updated. To avoid this unnecessary computation and reduce the overhead you can alternatively pass a zero-argument function as a callback to the `showvalues` keyword.
+In the above example, the data passed to `showvalues` is evaluated even if the progress bar is not updated.
+To avoid this unnecessary computation and reduce the overhead,
+you can alternatively pass a zero-argument function as a callback to the `showvalues` keyword.
 
 ```julia
 x,n = 1,10
@@ -292,7 +294,9 @@ end
 
 ### Showing average time per iteration
 
-You can include an average per-iteration duration in your progress meter by setting the optional keyword argument `showspeed=true` when constructing a `Progress`, `ProgressUnknown`, or `ProgressThresh`.
+You can include an average per-iteration duration in your progress meter
+by setting the optional keyword argument `showspeed=true`
+when constructing a `Progress`, `ProgressUnknown`, or `ProgressThresh`.
 
 ```julia
 x,n = 1,10
@@ -318,7 +322,10 @@ Progress:  XX%|█████████████████████�
 
 ### Conditionally disabling a progress meter
 
-In addition to the `showspeed` optional keyword argument, all the progress meters also support the optional `enabled` keyword argument. You can use this to conditionally disable a progress bar in cases where you want less verbose output or are using another progress bar to track progress in looping over a function that itself uses a progress bar.
+In addition to the `showspeed` optional keyword argument,
+all the progress meters also support the optional `enabled` keyword argument.
+You can use this to conditionally disable a progress bar in cases where you want less verbose output
+or are using another progress bar to track progress in looping over a function that itself uses a progress bar.
 
 ```julia
 function my_awesome_slow_loop(n: Integer; show_progress=true)
