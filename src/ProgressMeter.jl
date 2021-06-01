@@ -412,7 +412,7 @@ function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = f
             elapsed_time = t - p.tinit
             dur = durationstring(elapsed_time)
             if p.spinner
-                msg = @sprintf "%s %c \t Time: %s" p.desc spinner_char(p, spinner) dur
+                msg = @sprintf "%c %s \t Time: %s" spinner_char(p, spinner) p.desc dur
                 p.spincounter += 1
             else
                 msg = @sprintf "%s %d \t Time: %s" p.desc p.counter dur
@@ -437,7 +437,7 @@ function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = f
         if t > p.tlast+p.dt
             dur = durationstring(t-p.tinit)
             if p.spinner
-                msg = @sprintf "%s %c \t Time: %s" p.desc spinner_char(p, spinner) dur
+                msg = @sprintf "%c %s \t Time: %s" spinner_char(p, spinner) p.desc dur
                 p.spincounter += 1
             else
                 msg = @sprintf "%s %d \t Time: %s" p.desc p.counter dur
