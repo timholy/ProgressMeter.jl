@@ -244,6 +244,11 @@ running_ijulia_kernel() = isdefined(Main, :IJulia) && Main.IJulia.inited
 clear_ijulia() = (IJULIABEHAVIOR[] != IJuliaAppend) && running_ijulia_kernel()
 
 function calc_check_iterations(p, t)
+    if t == p.tlast
+        # avoid a NaN which could happen because the print time compensation makes an assumption about how long printing
+        # takes, therefore it's possible (but rare) for `t == p.tlast`
+        return p.check_iterations
+    end
     # Adjust the number of iterations that skips time check based on how accurate the last number was
     iterations_per_dt = (p.check_iterations / (t - p.tlast)) * p.dt
     return round(Int, clamp(iterations_per_dt, 1, p.check_iterations * 10))
