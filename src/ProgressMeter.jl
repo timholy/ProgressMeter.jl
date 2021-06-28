@@ -492,6 +492,7 @@ or may not result in a change to the display.
 You may optionally change the color of the display. See also `update!`.
 """
 function next!(p::Union{Progress, ProgressUnknown}; step::Int = 1, options...)
+    (!p.enabled) && return nothing
     lock_if_threading(p) do
         p.counter += step
         updateProgress!(p; ignore_predictor = step == 0, options...)
@@ -499,6 +500,7 @@ function next!(p::Union{Progress, ProgressUnknown}; step::Int = 1, options...)
 end
 
 function next!(p::Union{Progress, ProgressUnknown}, color::Symbol; step::Int = 1, options...)
+    (!p.enabled) && return nothing
     lock_if_threading(p) do
         p.color = color
         p.counter += step
