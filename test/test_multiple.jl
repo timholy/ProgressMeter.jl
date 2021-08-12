@@ -6,8 +6,8 @@ nworkers() == 1 && addprocs(4)
 
 @testset "MultipleProgress() tests" begin
 
-    procs = nworkers()
-    procs == 1 && @info "incomplete tests: nworkers() == 1"
+    np = nworkers()
+    np == 1 && @info "incomplete tests: nworkers() == 1"
     @test all([@fetchfrom w @isdefined(ProgressMeter) for w in workers()])
 
     println("Testing MultipleProgress")
@@ -89,10 +89,10 @@ nworkers() == 1 && addprocs(4)
     sleep(0.1)
     @test p[2].channel.channel isa FakeChannel # ParallelProgress finished
 
-    println("Testing bar remplacement with $procs workers and pmap")
-    lengths = rand(20:40, 2*procs)
-    p = MultipleProgress(lengths; dt=0.01, kws=[(desc=" task $i   ",) for i in 1:2*procs])
-    ids = pmap(1:2*procs) do ip
+    println("Testing bar remplacement with $np workers and pmap")
+    lengths = rand(20:40, 2*np)
+    p = MultipleProgress(lengths; dt=0.01, kws=[(desc=" task $i   ",) for i in 1:2*np])
+    ids = pmap(1:2*np) do ip
         for _ in 1:lengths[ip]
             sleep(0.05)
             next!(p[ip])
@@ -100,7 +100,7 @@ nworkers() == 1 && addprocs(4)
         myid()
     end
     sleep(0.1)
-    @test length(unique(ids)) == procs
+    @test length(unique(ids)) == np
     @test p[1].channel.channel isa FakeChannel # finished
 
     println("Testing changing color with next! and update!")

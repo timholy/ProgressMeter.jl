@@ -6,8 +6,8 @@ nworkers() == 1 && addprocs(4)
 
 @testset "ParallelProgress() tests" begin
 
-    procs = nworkers()
-    procs == 1 && @info "incomplete tests: nworkers() == 1"
+    np = nworkers()
+    np == 1 && @info "incomplete tests: nworkers() == 1"
     @test all([@fetchfrom w @isdefined(ProgressMeter) for w in workers()])
 
     println("Testing ParallelProgress")
@@ -76,27 +76,27 @@ nworkers() == 1 && addprocs(4)
     sleep(0.1)
     @test p.channel isa FakeChannel # ParallelProgress finished
 
-    println("Testing across $procs workers with @distributed")
+    println("Testing across $np workers with @distributed")
     n = 20 #per core
-    p = ParallelProgress(n*procs)
-    @sync @distributed for _ in 1:n*procs
+    p = ParallelProgress(n*np)
+    @sync @distributed for _ in 1:n*np
         sleep(0.05)
         next!(p)
     end
     sleep(0.1)
     @test p.channel isa FakeChannel # ParallelProgress finished
 
-    println("Testing across $procs workers with pmap")
+    println("Testing across $np workers with pmap")
     n = 20
-    p = ParallelProgress(n*procs)
-    ids = pmap(1:n*procs) do i
+    p = ParallelProgress(n*np)
+    ids = pmap(1:n*np) do i
         sleep(0.05)
         next!(p)
         return myid()
     end
     sleep(0.1)
     @test p.channel isa FakeChannel # ParallelProgress finished
-    @test length(unique(ids)) == procs
+    @test length(unique(ids)) == np
 
     println("Testing changing color with next! and update!")
     p = ParallelProgress(100)

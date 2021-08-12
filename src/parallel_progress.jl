@@ -64,6 +64,10 @@ function ParallelProgress(progress::AbstractProgress)
                     error("not recognized: $(repr(f))")
                 end
             end
+        catch e
+            println("ERROR")
+            println(e)
+            println()
         finally
             close(pp)
         end
@@ -150,7 +154,7 @@ function MultipleProgress(lengths::AbstractVector{<:Integer};
     progresses = Union{Progress,Nothing}[nothing for _ in 1:amount]
     taken_offsets = Set{Int}()
     mainprogress && push!(taken_offsets, 0)
-    channel = RemoteChannel(() -> Channel{NTuple{4,Any}}())
+    channel = RemoteChannel(() -> Channel{NTuple{4,Any}}(1024))
 
     max_offsets = 0
 
@@ -184,7 +188,7 @@ function MultipleProgress(lengths::AbstractVector{<:Integer};
                 else
 
                     # first time calling progress p
-                    if isnothing(progresses[p])
+                    if progresses[p] === nothing
                         # find first available offset
                         offset = 0
                         while offset in taken_offsets
