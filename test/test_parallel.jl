@@ -10,6 +10,7 @@ nworkers() == 1 && addprocs(4)
     procs == 1 && @info "incomplete tests: nworkers() == 1"
     @test all([@fetchfrom w @isdefined(ProgressMeter) for w in workers()])
 
+    println("Testing ParallelProgress")
     println("Testing simultaneous updates")
     p = ParallelProgress(100)
     @sync for _ in 1:10
@@ -19,7 +20,7 @@ nworkers() == 1 && addprocs(4)
         end
     end
     sleep(0.1)
-    @test p.channel isa FakeChannel #ParallelProgress finished
+    @test p.channel isa FakeChannel # ParallelProgress finished
 
     println("Testing update!")
     prog = Progress(100)
@@ -34,7 +35,7 @@ nworkers() == 1 && addprocs(4)
         next!(p)
     end
     sleep(0.1)
-    @test p.channel isa FakeChannel #ParallelProgress finished
+    @test p.channel isa FakeChannel # ParallelProgress finished
 
     println("Testing over-shooting")
     p = ParallelProgress(10)
@@ -43,7 +44,7 @@ nworkers() == 1 && addprocs(4)
         next!(p)
     end
     sleep(0.1)
-    @test p.channel isa FakeChannel #ParallelProgress finished
+    @test p.channel isa FakeChannel # ParallelProgress finished
 
     println("Testing under-shooting")
     p = ParallelProgress(200)
@@ -53,7 +54,7 @@ nworkers() == 1 && addprocs(4)
     end
     finish!(p)
     sleep(0.1)
-    @test p.channel isa FakeChannel #ParallelProgress finished
+    @test p.channel isa FakeChannel # ParallelProgress finished
 
     println("Testing rapid over-shooting")
     p = ParallelProgress(100)
@@ -63,7 +64,7 @@ nworkers() == 1 && addprocs(4)
         next!(p)
     end
     sleep(0.1)
-    @test p.channel isa FakeChannel #ParallelProgress finished
+    @test p.channel isa FakeChannel # ParallelProgress finished
 
     println("Testing early cancel")
     p = ParallelProgress(100)
@@ -73,7 +74,7 @@ nworkers() == 1 && addprocs(4)
     end
     cancel(p)
     sleep(0.1)
-    @test p.channel isa FakeChannel #ParallelProgress finished
+    @test p.channel isa FakeChannel # ParallelProgress finished
 
     println("Testing across $procs workers with @distributed")
     n = 20 #per core
@@ -83,7 +84,7 @@ nworkers() == 1 && addprocs(4)
         next!(p)
     end
     sleep(0.1)
-    @test p.channel isa FakeChannel #ParallelProgress finished
+    @test p.channel isa FakeChannel # ParallelProgress finished
 
     println("Testing across $procs workers with pmap")
     n = 20
@@ -94,7 +95,7 @@ nworkers() == 1 && addprocs(4)
         return myid()
     end
     sleep(0.1)
-    @test p.channel isa FakeChannel #ParallelProgress finished
+    @test p.channel isa FakeChannel # ParallelProgress finished
     @test length(unique(ids)) == procs
 
     println("Testing changing color with next! and update!")
@@ -110,7 +111,7 @@ nworkers() == 1 && addprocs(4)
         end
     end
     sleep(0.1)
-    @test p.channel isa FakeChannel #ParallelProgress finished
+    @test p.channel isa FakeChannel # ParallelProgress finished
 
     println("Testing changing desc with next! and update!")
     p = ParallelProgress(100)
@@ -162,5 +163,4 @@ nworkers() == 1 && addprocs(4)
     end
     sleep(0.1)
     @test p.channel isa FakeChannel # ParallelProgress finished
-
 end

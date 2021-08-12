@@ -1,22 +1,4 @@
-"""
-`prog = ParallelProgress(n; kw...)`
 
-works like `Progress` but can be used from other workers
-Extra arguments after `update` or `cancel` are ignored
-
-# Example:
-```jldoctest
-julia> using Distributed
-julia> addprocs()
-julia> @everywhere using ProgressMeter
-julia> prog = ParallelProgress(10; desc="test ")
-julia> pmap(1:10) do
-           sleep(rand())
-           next!(prog)
-           return myid()
-       end
-```
-"""
 mutable struct ParallelProgress <: AbstractProgress
     channel
 end
@@ -31,37 +13,60 @@ cancel(pp::ParallelProgress, args...; kw...) = (put!(pp.channel, (PP_CANCEL, arg
 finish!(pp::ParallelProgress, args...; kw...) = (put!(pp.channel, (PP_FINISH, args, kw)); nothing)
 update!(pp::ParallelProgress, args...; kw...) = (put!(pp.channel, (PP_UPDATE, args, kw)); nothing)
 
+"""
+`ParallelProgress(n; kw...)`
+
+works like `Progress` but can be used from other workers
+
+# Example:
+```jldoctest
+julia> using Distributed
+julia> addprocs()
+julia> @everywhere using ProgressMeter
+julia> prog = ParallelProgress(10; desc="test ")
+julia> pmap(1:10) do
+           sleep(rand())
+           next!(prog)
+           return myid()
+       end
+```
+"""
 function ParallelProgress(n::Integer; kw...)
     return ParallelProgress(Progress(n; kw...); kw...)
 end
 
+"""
+`ParallelProgress(p::AbstractProgress)`
+
+wrapper around any `Progress`, `ProgressThresh` and `ProgressUnknown` that can be used 
+from other workers
+
+"""
 function ParallelProgress(progress::AbstractProgress)
     channel = RemoteChannel(() -> Channel{NTuple{3,Any}}(1024))
     pp = ParallelProgress(channel)
     
     @async begin
-        while !has_finished(progress)
-            f, args, kw = take!(channel)
-            if f == PP_NEXT
-                next!(progress, args...; kw...)
-            elseif f == PP_CANCEL
-                cancel(progress, args...; kw...)
-                break
-            elseif f == PP_FINISH
-                finish!(progress, args...; kw...)
-                break
-            elseif f == PP_UPDATE
-                update!(progress, args...; kw...)
-            else
-                error("not recognized: $(repr(f))")
+        try
+            while !has_finished(progress)
+                f, args, kw = take!(channel)
+                if f == PP_NEXT
+                    next!(progress, args...; kw...)
+                elseif f == PP_CANCEL
+                    cancel(progress, args...; kw...)
+                    break
+                elseif f == PP_FINISH
+                    finish!(progress, args...; kw...)
+                    break
+                elseif f == PP_UPDATE
+                    update!(progress, args...; kw...)
+                else
+                    error("not recognized: $(repr(f))")
+                end
             end
+        finally
+            close(pp)
         end
-        
-        pp.channel = FakeChannel()
-        while isready(channel)
-            take!(channel)
-        end
-        close!(channel)
     end
     return pp
 end
@@ -70,7 +75,11 @@ has_finished(p::Progress) = p.counter >= p.n
 has_finished(p::ProgressThresh) = p.triggered
 has_finished(p::ProgressUnknown) = p.done
 
-# fake channel to allow over-shoot
+"""
+    FakeChannel()
+
+fake RemoteChannel that doesn't put anything anywhere (for allowing overshoot)
+"""
 struct FakeChannel end
 Distributed.put!(::FakeChannel, x) = nothing
 
@@ -80,8 +89,7 @@ struct MultipleChannel
 end
 Distributed.put!(mc::MultipleChannel, x) = put!(mc.channel, (mc.id, x...))
 
-
-mutable struct MultipleProgress
+mutable struct MultipleProgress <: AbstractProgress
     channel
     amount::Int
     lengths::Vector{Int}
@@ -91,31 +99,34 @@ Base.getindex(mp::MultipleProgress, n) = ParallelProgress.(MultipleChannel.(Ref(
 Base.lastindex(mp::MultipleProgress) = mp.amount
 
 """
-    prog = MultipleProgress(amount, lengths; kw...)
+    MultipleProgress(amount, lengths; kw...)
 
 equivalent to 
 
-    MultipleProgress(lengths*ones(T,amount); kw...)
+    MultipleProgress(fill(lengths, amount); kw...)
 
 """
-function MultipleProgress(amount::Integer, lengths::T; kw...) where T <: Integer
-    MultipleProgress(lengths*ones(T,amount); kw...)
+function MultipleProgress(amount::Integer, lengths::Integer; kw...)
+    MultipleProgress(fill(lengths, amount); kw...)
 end
 
-
 """
-    prog = MultipleProgress(lengths; kws, kw...)
+    MultipleProgress(lengths; mainprogress=true, count_overshoot=false, kws, kw...)
 
-generates one progressbar for each value in `lengths` and one for a global progressbar
+generates one progressbar for each value in `lengths`
  - `kw` arguments are applied on all progressbars
  - `kws[i]` arguments are applied on the i-th progressbar
+ - `mainprogress` adds a main progressmeter that sums the other ones
+ - `count_overshoot`: overshooting progressmeters will be counted in the main progressmeter
+
+use p[i] to access the i-th progressmeter, and p[0] to access the main one
 
 # Example
 ```jldoctest
 julia> using Distributed
 julia> addprocs(2)
 julia> @everywhere using ProgressMeter
-julia> p = MultipleProgress(5,10; desc="global ", kws=[(desc="task \$i ",) for i in 1:5])
+julia> p = MultipleProgress(5, 10; desc="global ", kws=[(desc="task \$i ",) for i in 1:5])
        pmap(1:5) do x
            for i in 1:10
                sleep(rand())
@@ -151,24 +162,24 @@ function MultipleProgress(lengths::AbstractVector{<:Integer};
         try
             while main_progress.counter < total_length
                 
-                p, f, args, kw = take!(channel)
+                p, f, args, kwt = take!(channel)
 
                 # main progressbar
                 if p == 0
-                    mainprogress || continue
                     if f == PP_CANCEL
-                        cancel(main_progress, args...; kw...)
+                        mainprogress || cancel(main_progress, args...; kwt...)
                         break
-                    elseif f == PP_UPDATE
+                    elseif mainprogress && f == PP_UPDATE
                         if !isempty(args) && args[1] == (:)
-                            update!(main_progress, main_progress.counter, args[2:end]...; kw...)
+                            update!(main_progress, main_progress.counter, args[2:end]...; kwt...)
                         else
-                            update!(main_progress, args...; kw...)
+                            update!(main_progress, args...; kwt...)
                         end
-                    elseif f == PP_NEXT
-                        next!(main_progress, args...; kw...)
+                    elseif mainprogress && f == PP_NEXT
+                        next!(main_progress, args...; kwt...)
                     elseif f == PP_FINISH
-                        finish!(main_progress, args...; kw...)
+                        mainprogress || finish!(main_progress, args...; kwt...)
+                        break
                     end
                 else
 
@@ -180,32 +191,32 @@ function MultipleProgress(lengths::AbstractVector{<:Integer};
                             offset += 1
                         end
                         max_offsets = max(max_offsets, offset)
-                        progresses[p] = Progress(lengths[p]; offset=offset, kws[p]...)
+                        progresses[p] = Progress(lengths[p]; offset=offset, kw..., kws[p]...)
                         push!(taken_offsets, offset)
                     end
 
 
                     if f == PP_NEXT
                         if count_overshoot || progresses[p].counter < lengths[p]
-                            next!(progresses[p], args...; kw...)
+                            next!(progresses[p], args...; kwt...)
                             mainprogress && next!(main_progress)
                         end
                     else
                         prev_p_value = progresses[p].counter
                         
                         if f == PP_FINISH
-                            finish!(progresses[p], args...; kw...)
+                            finish!(progresses[p], args...; kwt...)
                         elseif f == PP_CANCEL
                             finish!(progresses[p])
-                            cancel(progresses[p], args...; kw...)
+                            cancel(progresses[p], args...; kwt...)
                         elseif f == PP_UPDATE
                             if !isempty(args)
                                 value = args[1]
                                 value == (:) && (value = progresses[p].counter)
                                 !count_overshoot && (value = min(value, lengths[p]))
-                                update!(progresses[p], value, args[2:end]...; kw...)
+                                update!(progresses[p], value, args[2:end]...; kwt...)
                             else
-                                update!(progresses[p]; kw...)
+                                update!(progresses[p]; kwt...)
                             end
                         end
 
@@ -218,18 +229,20 @@ function MultipleProgress(lengths::AbstractVector{<:Integer};
                     end
                 end
             end
-        catch e
-            println("ERROR")
-            println(e)
+        finally
+            close(mp)
         end
-        mp.channel = FakeChannel()
-        while isready(channel)
-            take!(channel)
-        end
-        close(channel)
         print("\n" ^ max_offsets)
     end
 
     return mp
 end
 
+function Base.close(p::Union{ParallelProgress,MultipleProgress})
+    channel = p.channel
+    p.channel = FakeChannel()
+    while isready(channel)
+        take!(channel)
+    end
+    close(channel)
+end
