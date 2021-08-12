@@ -23,6 +23,6 @@ end
 #     include("test_threads.jl")
 # end
 @testset "Parallel" begin
-    include("test_parallel.jl")
+    #include("test_parallel.jl")
     include("test_multiple.jl")
 end

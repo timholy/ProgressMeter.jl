@@ -146,7 +146,7 @@ function MultipleProgress(lengths::AbstractVector{<:Integer};
     amount = length(lengths)
 
     total_length = sum(lengths)
-    mainprogress && (main_progress = Progress(total_length; offset=0, kw...))
+    main_progress = Progress(total_length; offset=0, enabled=mainprogress, kw...)
     progresses = Union{Progress,Nothing}[nothing for _ in 1:amount]
     taken_offsets = Set{Int}()
     mainprogress && push!(taken_offsets, 0)
@@ -169,16 +169,16 @@ function MultipleProgress(lengths::AbstractVector{<:Integer};
                     if f == PP_CANCEL
                         mainprogress || cancel(main_progress, args...; kwt...)
                         break
-                    elseif mainprogress && f == PP_UPDATE
+                    elseif f == PP_UPDATE
                         if !isempty(args) && args[1] == (:)
                             update!(main_progress, main_progress.counter, args[2:end]...; kwt...)
                         else
                             update!(main_progress, args...; kwt...)
                         end
-                    elseif mainprogress && f == PP_NEXT
+                    elseif f == PP_NEXT
                         next!(main_progress, args...; kwt...)
                     elseif f == PP_FINISH
-                        mainprogress || finish!(main_progress, args...; kwt...)
+                        finish!(main_progress, args...; kwt...)
                         break
                     end
                 else
@@ -199,7 +199,7 @@ function MultipleProgress(lengths::AbstractVector{<:Integer};
                     if f == PP_NEXT
                         if count_overshoot || progresses[p].counter < lengths[p]
                             next!(progresses[p], args...; kwt...)
-                            mainprogress && next!(main_progress)
+                            next!(main_progress)
                         end
                     else
                         prev_p_value = progresses[p].counter
@@ -220,7 +220,7 @@ function MultipleProgress(lengths::AbstractVector{<:Integer};
                             end
                         end
 
-                        mainprogress && update!(main_progress, 
+                        update!(main_progress, 
                                 main_progress.counter - prev_p_value + progresses[p].counter)
                     end
 
@@ -231,8 +231,8 @@ function MultipleProgress(lengths::AbstractVector{<:Integer};
             end
         finally
             close(mp)
+            print("\n" ^ max_offsets)
         end
-        print("\n" ^ max_offsets)
     end
 
     return mp
