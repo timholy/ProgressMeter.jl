@@ -17,7 +17,7 @@ julia> pmap(1:10) do
        end
 ```
 """
-mutable struct ParallelProgress
+mutable struct ParallelProgress <: AbstractProgress
     channel
 end
 
@@ -32,8 +32,11 @@ finish!(pp::ParallelProgress, args...; kw...) = put!(pp.channel, (PP_FINISH, arg
 update!(pp::ParallelProgress, args...; kw...) = put!(pp.channel, (PP_UPDATE, args, kw))
 
 function ParallelProgress(n::Integer; kw...)
-    channel = RemoteChannel(() -> Channel{Tuple}(n))
-    progress = Progress(n; kw...)
+    return ParallelProgress(Progress(n; kw...); kw...)
+end
+
+function ParallelProgress(progress::Progress)
+    channel = RemoteChannel(() -> Channel{Tuple}())
     pp = ParallelProgress(channel)
     
     @async begin 
@@ -80,7 +83,7 @@ mutable struct MultipleProgress
     lengths::Vector{Int}
 end
 
-Base.getindex(mp::MultipleProgress, n) = ParallelProgress.(MultipleChannel.(fill(mp.channel), n))
+Base.getindex(mp::MultipleProgress, n) = ParallelProgress.(MultipleChannel.(Ref(mp.channel), n))
 Base.lastindex(mp::MultipleProgress) = mp.amount
 finish!(mp::MultipleProgress, args...; kw...) = finish!.(mp[1:end])
 cancel(mp::MultipleProgress, args...; kw...) = cancel.(mp[1:end])
@@ -131,8 +134,8 @@ function MultipleProgress(lengths::AbstractVector{<:Integer};
     total_length = sum(lengths)
     main_progress = Progress(total_length; offset=0, kw...)
     progresses = Union{Progress,Nothing}[nothing for _ in 1:amount]
-    taken_offsets = Set(Int[])
-    channel = RemoteChannel(() -> Channel{Tuple}(max(2amount, 64)))
+    taken_offsets = Set{Int}()
+    channel = RemoteChannel(() -> Channel{Tuple}())
 
     max_offsets = 1
 

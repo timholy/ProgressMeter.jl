@@ -1,10 +1,11 @@
 using Distributed
+using ProgressMeter: FakeChannel
 
 if workers() != [1]
     rmprocs(workers())
 end
 addprocs(4)
-@everywhere import ProgressMeter
+@everywhere using ProgressMeter
 
 @testset "ParallelProgress() tests" begin
 
@@ -13,78 +14,78 @@ addprocs(4)
     @test all([@fetchfrom w @isdefined(ProgressMeter) for w in workers()])
 
     println("Testing simultaneous updates...")
-    p = ProgressMeter.ParallelProgress(100)
+    p = ParallelProgress(100)
     @sync for _ in 1:10
         @async for _ in 1:10
             sleep(0.1)
-            ProgressMeter.next!(p)
+            next!(p)
         end
     end
-    sleep(0.01)
+    sleep(0.1)
 
     println("Testing over-shooting...")
-    p = ProgressMeter.ParallelProgress(10)
+    p = ParallelProgress(10)
     for _ in 1:100
         sleep(0.01)
-        ProgressMeter.next!(p)
+        next!(p)
     end
-    sleep(0.01)
-    @test p.channel isa ProgressMeter.FakeChannel #ParallelProgress finished
+    sleep(0.1)
+    @test p.channel isa FakeChannel #ParallelProgress finished
 
     println("Testing under-shooting...")
-    p = ProgressMeter.ParallelProgress(200)
+    p = ParallelProgress(200)
     for _ in 1:100
         sleep(0.01)
-        ProgressMeter.next!(p)
+        next!(p)
     end
-    ProgressMeter.finish!(p)
-    sleep(0.01)
-    @test p.channel isa ProgressMeter.FakeChannel #ParallelProgress finished
+    finish!(p)
+    sleep(0.1)
+    @test p.channel isa FakeChannel #ParallelProgress finished
 
     println("Testing rapid over-shooting...")
-    p = ProgressMeter.ParallelProgress(100)
-    ProgressMeter.next!(p)
+    p = ParallelProgress(100)
+    next!(p)
     sleep(0.1)
     for _ in 1:10000
-        ProgressMeter.next!(p)
+        next!(p)
     end
-    sleep(0.01)
-    @test p.channel isa ProgressMeter.FakeChannel #ParallelProgress finished
+    sleep(0.1)
+    @test p.channel isa FakeChannel #ParallelProgress finished
 
 
     println("Testing early cancel...")
-    p = ProgressMeter.ParallelProgress(100)
+    p = ParallelProgress(100)
     for _ in 1:50
         sleep(0.02)
-        ProgressMeter.next!(p)
+        next!(p)
     end
-    ProgressMeter.cancel(p)
-    sleep(0.01)
-    @test p.channel isa ProgressMeter.FakeChannel #ParallelProgress finished
+    cancel(p)
+    sleep(0.1)
+    @test p.channel isa FakeChannel #ParallelProgress finished
 
 
 
     println("Testing across $procs workers with @distributed...")
     n = 20 #per core
-    p = ProgressMeter.ParallelProgress(n*procs)
+    p = ParallelProgress(n*procs)
     @sync @distributed for _ in 1:n*procs
         sleep(0.05)
-        ProgressMeter.next!(p)
+        next!(p)
     end
-    sleep(0.01)
-    @test p.channel isa ProgressMeter.FakeChannel #ParallelProgress finished
+    sleep(0.1)
+    @test p.channel isa FakeChannel #ParallelProgress finished
 
 
     println("Testing across $procs workers with pmap...")
     n = 20
-    p = ProgressMeter.ParallelProgress(n*procs)
+    p = ParallelProgress(n*procs)
     ids = pmap(1:n*procs) do i
         sleep(0.05)
-        ProgressMeter.next!(p)
+        next!(p)
         return myid()
     end
-    sleep(0.01)
-    @test p.channel isa ProgressMeter.FakeChannel #ParallelProgress finished
+    sleep(0.1)
+    @test p.channel isa FakeChannel #ParallelProgress finished
     @test length(unique(ids)) == procs
 
 end
@@ -96,23 +97,23 @@ end
 
     function test_MP_finished(lengths, finish; kwargs...)
         n = length(lengths)
-        p = ProgressMeter.MultipleProgress(lengths; kwargs...)
+        p = MultipleProgress(lengths; kwargs...)
         for _ in 1:100
             sleep(0.01)
             for i in 1:n
-                ProgressMeter.next!(p[i])
+                next!(p[i])
             end
         end
-        finish && ProgressMeter.finish!(p)
-        sleep(0.01)
+        finish && finish!(p)
+        sleep(0.1)
         for i in 1:n
-            @test p[i].channel.channel isa ProgressMeter.FakeChannel 
+            @test p[i].channel.channel isa FakeChannel 
         end
     end
 
     println("Testing custom titles and color...")
     test_MP_finished([100, 100], false; 
-                     desc="default ", color=:yellow, 
+                     desc="yellow  ", color=:yellow, 
                      kws=[(desc=" task A ",), (desc=" task B ",)])
 
     println("Testing over-shooting and under-shooting...")
@@ -123,51 +124,51 @@ end
 
 
     println("Testing rapid over-shooting...")
-    p = ProgressMeter.MultipleProgress([100]; dt=0.01, count_overshoot=true)
-    ProgressMeter.next!(p[1])
+    p = MultipleProgress([100]; dt=0.01, count_overshoot=true)
+    next!(p[1])
     sleep(0.1)
     for _ in 1:10000
-        ProgressMeter.next!(p[1])
+        next!(p[1])
     end
-    sleep(0.01)
-    @test p[1].channel.channel isa ProgressMeter.FakeChannel #ParallelProgress finished
+    sleep(0.1)
+    @test p[1].channel.channel isa FakeChannel #ParallelProgress finished
 
 
     println("Testing early cancel...")
-    p = ProgressMeter.MultipleProgress([100, 80])
+    p = MultipleProgress([100, 80])
     for _ in 1:50
         sleep(0.02)
-        ProgressMeter.next!(p[1])
-        ProgressMeter.next!(p[2])
+        next!(p[1])
+        next!(p[2])
     end
-    ProgressMeter.cancel(p[1])
-    ProgressMeter.finish!(p[2])
+    cancel(p[1])
+    finish!(p[2])
     sleep(0.1)
-    @test p[1].channel.channel isa ProgressMeter.FakeChannel #ParallelProgress finished
+    @test p[1].channel.channel isa FakeChannel #ParallelProgress finished
 
     println("Testing early global cancel...")
-    p = ProgressMeter.MultipleProgress([100, 80])
+    p = MultipleProgress([100, 80])
     for _ in 1:50
         sleep(0.02)
-        ProgressMeter.next!(p[1])
-        ProgressMeter.next!(p[2])
+        next!(p[1])
+        next!(p[2])
     end
-    ProgressMeter.cancel(p)
+    cancel(p)
     sleep(0.1)
-    @test p[2].channel.channel isa ProgressMeter.FakeChannel #ParallelProgress finished
+    @test p[2].channel.channel isa FakeChannel #ParallelProgress finished
 
     println("Testing bar remplacement with $procs workers and pmap...")
     lengths = rand(20:40, 2*procs)
-    p = ProgressMeter.MultipleProgress(lengths; dt=0.01, kws=[(desc=" task $i   ",) for i in 1:2*procs])
+    p = MultipleProgress(lengths; dt=0.01, kws=[(desc=" task $i   ",) for i in 1:2*procs])
     ids = pmap(1:2*procs) do ip
         for _ in 1:lengths[ip]
             sleep(0.05)
-            ProgressMeter.next!(p[ip])
+            next!(p[ip])
         end
         myid()
     end
-    sleep(0.01)
+    sleep(0.1)
     @test length(unique(ids)) == procs
-    @test p[1].channel.channel isa ProgressMeter.FakeChannel # finished
+    @test p[1].channel.channel isa FakeChannel # finished
 
 end
