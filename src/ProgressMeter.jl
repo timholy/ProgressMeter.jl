@@ -22,8 +22,6 @@ ProgressMeter
 
 abstract type AbstractProgress end
 
-
-
 """
 Holds the five characters that will be used to generate the progress bar.
 """
@@ -34,6 +32,7 @@ mutable struct BarGlyphs
     empty::Char
     rightend::Char
 end
+
 """
 String constructor for BarGlyphs - will split the string into 5 chars
 """
@@ -55,45 +54,57 @@ output=stderr, barlen=tty_width(desc), start=0)` creates a progress meter for a
 task with `n` iterations or stages starting from `start`. Output will be
 generated at intervals at least `dt` seconds apart, and perhaps longer if each
 iteration takes longer than `dt`. `desc` is a description of
-the current task.
+the current task. Optionally you can disable the progress bar by setting
+`enabled=false`. You can also append a per-iteration average duration like
+"(12.34 ms/it)" to the description by setting `showspeed=true`.
 """
 mutable struct Progress <: AbstractProgress
     n::Int
     reentrantlocker::Threads.ReentrantLock
     dt::Float64
     counter::Int
-    tfirst::Float64
+    tinit::Float64
+    tsecond::Float64           # ignore the first loop given usually uncharacteristically slow
     tlast::Float64
-    printed::Bool           # true if we have issued at least one status update
-    desc::AbstractString    # prefix to the percentage, e.g.  "Computing..."
-    barlen::Int             # progress bar size (default is available terminal width)
-    barglyphs::BarGlyphs    # the characters to be used in the bar
-    color::Symbol           # default to green
-    output::IO              # output stream into which the progress is written
-    offset::Int             # position offset of progress bar (default is 0)
-    numprintedvalues::Int   # num values printed below progress in last iteration
-    start::Int              # which iteration number to start from
+    printed::Bool              # true if we have issued at least one status update
+    desc::String               # prefix to the percentage, e.g.  "Computing..."
+    barlen::Union{Int,Nothing} # progress bar size (default is available terminal width)
+    barglyphs::BarGlyphs       # the characters to be used in the bar
+    color::Symbol              # default to green
+    output::IO                 # output stream into which the progress is written
+    offset::Int                # position offset of progress bar (default is 0)
+    numprintedvalues::Int      # num values printed below progress in last iteration
+    start::Int                 # which iteration number to start from
+    enabled::Bool              # is the output enabled
+    showspeed::Bool            # should the output include average time per iteration
+    check_iterations::Int
+    prev_update_count::Int
+    threads_used::Vector{Int}
 
     function Progress(n::Integer;
                       dt::Real=0.1,
                       desc::AbstractString="Progress: ",
                       color::Symbol=:green,
                       output::IO=stderr,
-                      barlen::Integer=tty_width(desc),
+                      barlen=nothing,
                       barglyphs::BarGlyphs=BarGlyphs('|','█', Sys.iswindows() ? '█' : ['▏','▎','▍','▌','▋','▊','▉'],' ','|',),
-                      offset::Int=0,
-                      start::Int=0
+                      offset::Integer=0,
+                      start::Integer=0,
+                      enabled::Bool = true,
+                      showspeed::Bool = false,
                      )
+        RUNNING_IJULIA_KERNEL[] = running_ijulia_kernel()
+        CLEAR_IJULIA[] = clear_ijulia()
         reentrantlocker = Threads.ReentrantLock()
         counter = start
-        tfirst = tlast = time()
+        tinit = tsecond = tlast = time()
         printed = false
-        new(n, reentrantlocker, dt, counter, tfirst, tlast, printed, desc, barlen, barglyphs, color, output, offset, 0, start)
+        new(n, reentrantlocker, dt, counter, tinit, tsecond, tlast, printed, desc, barlen, barglyphs, color, output, offset, 0, start, enabled, showspeed, 1, 1, Int[])
     end
 end
 
 Progress(n::Integer, dt::Real, desc::AbstractString="Progress: ",
-         barlen::Integer=tty_width(desc), color::Symbol=:green, output::IO=stderr;
+         barlen=nothing, color::Symbol=:green, output::IO=stderr;
          offset::Integer=0) =
     Progress(n, dt=dt, desc=desc, barlen=barlen, color=color, output=output, offset=offset)
 
@@ -106,7 +117,10 @@ color=:green, output=stderr)` creates a progress meter for a task
 which will terminate once a value less than or equal to `thresh` is
 reached. Output will be generated at intervals at least `dt` seconds
 apart, and perhaps longer if each iteration takes longer than
-`dt`. `desc` is a description of the current task.
+`dt`. `desc` is a description of the current task. Optionally you can disable
+the progress meter by setting `enabled=false`. You can also append a
+per-iteration average duration like "(12.34 ms/it)" to the description by
+setting `showspeed=true`.
 """
 mutable struct ProgressThresh{T<:Real} <: AbstractProgress
     thresh::T
@@ -115,34 +129,45 @@ mutable struct ProgressThresh{T<:Real} <: AbstractProgress
     val::T
     counter::Int
     triggered::Bool
-    tfirst::Float64
+    tinit::Float64
     tlast::Float64
-    printed::Bool        # true if we have issued at least one status update
-    desc::AbstractString # prefix to the percentage, e.g.  "Computing..."
-    color::Symbol        # default to green
-    output::IO           # output stream into which the progress is written
+    printed::Bool           # true if we have issued at least one status update
+    desc::String            # prefix to the percentage, e.g.  "Computing..."
+    color::Symbol           # default to green
+    output::IO              # output stream into which the progress is written
     numprintedvalues::Int   # num values printed below progress in last iteration
     offset::Int             # position offset of progress bar (default is 0)
+    enabled::Bool           # is the output enabled
+    showspeed::Bool         # should the output include average time per iteration
+    check_iterations::Int
+    prev_update_count::Int
+    threads_used::Vector{Int}
 
     function ProgressThresh{T}(thresh;
                                dt::Real=0.1,
                                desc::AbstractString="Progress: ",
                                color::Symbol=:green,
                                output::IO=stderr,
-                               offset::Int=0) where T
+                               offset::Integer=0,
+                               enabled = true,
+                               showspeed::Bool = false) where T
+        RUNNING_IJULIA_KERNEL[] = running_ijulia_kernel()
+        CLEAR_IJULIA[] = clear_ijulia()
         reentrantlocker = Threads.ReentrantLock()
-        tfirst = tlast = time()
+        tinit = tlast = time()
         printed = false
-        new{T}(thresh, reentrantlocker, dt, typemax(T), 0, false, tfirst, tlast, printed, desc, color, output, 0, offset)
+        new{T}(thresh, reentrantlocker, dt, typemax(T), 0, false, tinit, tlast, printed, desc, color, output, 0, offset, enabled, showspeed, 1, 1, Int[])
     end
 end
+ProgressThresh(thresh::Real; kwargs...) = ProgressThresh{typeof(thresh)}(thresh; kwargs...)
 
-ProgressThresh(thresh::Real, dt::Real=0.1, desc::AbstractString="Progress: ",
+# Legacy constructor calls
+ProgressThresh(thresh::Real, dt::Real, desc::AbstractString="Progress: ",
          color::Symbol=:green, output::IO=stderr;
          offset::Integer=0) =
-    ProgressThresh{typeof(thresh)}(thresh, dt=dt, desc=desc, color=color, output=output, offset=offset)
+    ProgressThresh(thresh; dt=dt, desc=desc, color=color, output=output, offset=offset)
 
-ProgressThresh(thresh::Real, desc::AbstractString, offset::Integer=0) = ProgressThresh{typeof(thresh)}(thresh, desc=desc, offset=offset)
+ProgressThresh(thresh::Real, desc::AbstractString, offset::Integer=0) = ProgressThresh(thresh; desc=desc, offset=offset)
 
 """
 `prog = ProgressUnknown(; dt=0.1, desc="Progress: ",
@@ -150,38 +175,57 @@ color=:green, output=stderr)` creates a progress meter for a task
 which has a non-deterministic termination criterion.
 Output will be generated at intervals at least `dt` seconds
 apart, and perhaps longer if each iteration takes longer than
-`dt`. `desc` is a description of the current task.
+`dt`. `desc` is a description of the current task. Optionally you can disable
+the progress meter by setting `enabled=false`. You can also append a
+per-iteration average duration like "(12.34 ms/it)" to the description by
+setting `showspeed=true`.  Instead of displaying a counter, it
+can optionally display a spinning ball by passing `spinner=true`.
 """
 mutable struct ProgressUnknown <: AbstractProgress
     done::Bool
     reentrantlocker::Threads.ReentrantLock
     dt::Float64
     counter::Int
+    spincounter::Int
     triggered::Bool
-    tfirst::Float64
+    tinit::Float64
     tlast::Float64
-    printed::Bool        # true if we have issued at least one status update
-    desc::AbstractString # prefix to the percentage, e.g.  "Computing..."
-    color::Symbol        # default to green
-    output::IO           # output stream into which the progress is written
+    printed::Bool           # true if we have issued at least one status update
+    desc::String            # prefix to the percentage, e.g.  "Computing..."
+    color::Symbol           # default to green
+    spinner::Bool           # show a spinner
+    output::IO              # output stream into which the progress is written
     numprintedvalues::Int   # num values printed below progress in last iteration
+    enabled::Bool           # is the output enabled
+    showspeed::Bool         # should the output include average time per iteration
+    check_iterations::Int
+    prev_update_count::Int
+    threads_used::Vector{Int}
 end
 
-function ProgressUnknown(;dt::Real=0.1, desc::AbstractString="Progress: ", color::Symbol=:green, output::IO=stderr)
+function ProgressUnknown(;dt::Real=0.1, desc::AbstractString="Progress: ", color::Symbol=:green, spinner::Bool=false, output::IO=stderr, enabled::Bool = true, showspeed::Bool = false)
+    RUNNING_IJULIA_KERNEL[] = running_ijulia_kernel()
+    CLEAR_IJULIA[] = clear_ijulia()
     reentrantlocker = Threads.ReentrantLock()
-    tfirst = tlast = time()
+    tinit = tlast = time()
     printed = false
-    ProgressUnknown(false, reentrantlocker, dt, 0, false, tfirst, tlast, printed, desc, color, output, 0)
+    ProgressUnknown(false, reentrantlocker, dt, 0, 0, false, tinit, tlast, printed, desc, color, spinner, output, 0, enabled, showspeed, 1, 1, Int[])
 end
 
 ProgressUnknown(dt::Real, desc::AbstractString="Progress: ",
          color::Symbol=:green, output::IO=stderr; kwargs...) =
     ProgressUnknown(dt=dt, desc=desc, color=color, output=output; kwargs...)
 
-ProgressUnknown(desc::AbstractString) = ProgressUnknown(desc=desc)
+ProgressUnknown(desc::AbstractString; kwargs...) = ProgressUnknown(desc=desc; kwargs...)
 
-#...length of percentage and ETA string with days is 29 characters
-tty_width(desc) = max(0, displaysize(stdout)[2] - (length(desc) + 29))
+#...length of percentage and ETA string with days is 29 characters, speed string is always 14 extra characters
+function tty_width(desc, output, showspeed::Bool)
+    full_width = displaysize(output)[2]
+    desc_width = length(desc)
+    eta_width = 29
+    speed_width = showspeed ? 14 : 0
+    return max(0, full_width - desc_width - eta_width - speed_width)
+end
 
 # Package level behavior of IJulia clear output
 @enum IJuliaBehavior IJuliaWarned IJuliaClear IJuliaAppend
@@ -196,24 +240,54 @@ function ijulia_behavior(b)
 end
 
 # Whether or not to use IJulia.clear_output
-clear_ijulia() = (IJULIABEHAVIOR[] != IJuliaAppend) && isdefined(Main, :IJulia) && Main.IJulia.inited
+const RUNNING_IJULIA_KERNEL = Ref{Bool}(false)
+const CLEAR_IJULIA = Ref{Bool}(false)
+running_ijulia_kernel() = isdefined(Main, :IJulia) && Main.IJulia.inited
+clear_ijulia() = (IJULIABEHAVIOR[] != IJuliaAppend) && running_ijulia_kernel()
+
+function calc_check_iterations(p, t)
+    if t == p.tlast
+        # avoid a NaN which could happen because the print time compensation makes an assumption about how long printing
+        # takes, therefore it's possible (but rare) for `t == p.tlast`
+        return p.check_iterations
+    end
+    # Adjust the number of iterations that skips time check based on how accurate the last number was
+    iterations_per_dt = (p.check_iterations / (t - p.tlast)) * p.dt
+    return round(Int, clamp(iterations_per_dt, 1, p.check_iterations * 10))
+end
 
 # update progress display
-function updateProgress!(p::Progress; showvalues = (), valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0), desc = p.desc)
+function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, valuecolor = :blue,
+                        offset::Integer = p.offset, keep = (offset == 0), desc::Union{Nothing,AbstractString} = nothing,
+                        ignore_predictor = false)
+    (!RUNNING_IJULIA_KERNEL[] & !p.enabled) && return
+    if p.counter == 2 # ignore the first loop given usually uncharacteristically slow
+        p.tsecond = time()
+    end
+    if desc !== nothing && desc !== p.desc
+        if p.barlen !== nothing
+            p.barlen += length(p.desc) - length(desc) #adjust bar length to accommodate new description
+        end
+        p.desc = desc
+    end
     p.offset = offset
-    p.barlen = p.barlen + (length(p.desc) - length(desc)) #adjust bar length to accomodate new description
-    p.desc = desc
-    t = time()
     if p.counter >= p.n
         if p.counter == p.n && p.printed
+            t = time()
+            barlen = p.barlen isa Nothing ? tty_width(p.desc, p.output, p.showspeed) : p.barlen
             percentage_complete = 100.0 * p.counter / p.n
-            bar = barstring(p.barlen, percentage_complete, barglyphs=p.barglyphs)
-            dur = durationstring(t-p.tfirst)
+            bar = barstring(barlen, percentage_complete, barglyphs=p.barglyphs)
+            elapsed_time = t - p.tinit
+            dur = durationstring(elapsed_time)
             msg = @sprintf "%s%3u%%%s Time: %s" p.desc round(Int, percentage_complete) bar dur
-            !clear_ijulia() && print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
+            if p.showspeed
+                sec_per_iter = elapsed_time / (p.counter - p.start)
+                msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
+            end
+            !CLEAR_IJULIA[] && print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
             move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             printover(p.output, msg, p.color)
-            printvalues!(p, showvalues; color = valuecolor)
+            printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
             if keep
                 println(p.output)
             else
@@ -223,48 +297,66 @@ function updateProgress!(p::Progress; showvalues = (), valuecolor = :blue, offse
         end
         return nothing
     end
-
-    if t > p.tlast+p.dt
-        percentage_complete = 100.0 * p.counter / p.n
-        bar = barstring(p.barlen, percentage_complete, barglyphs=p.barglyphs)
-        elapsed_time = t - p.tfirst
-        est_total_time = elapsed_time * (p.n - p.start) / (p.counter - p.start)
-        if 0 <= est_total_time <= typemax(Int)
-            eta_sec = round(Int, est_total_time - elapsed_time )
-            eta = durationstring(eta_sec)
-        else
-            eta = "N/A"
+    if ignore_predictor || predicted_updates_per_dt_have_passed(p)
+        t = time()
+        if p.counter > 2
+            p.check_iterations = calc_check_iterations(p, t)
         end
-        msg = @sprintf "%s%3u%%%s  ETA: %s" p.desc round(Int, percentage_complete) bar eta
-        !clear_ijulia() && print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
-        move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
-        printover(p.output, msg, p.color)
-        printvalues!(p, showvalues; color = valuecolor)
-        !clear_ijulia() && print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
-        flush(p.output)
-        # Compensate for any overhead of printing. This can be
-        # especially important if you're running over a slow network
-        # connection.
-        p.tlast = t + 2*(time()-t)
-        p.printed = true
+        if t > p.tlast+p.dt
+            barlen = p.barlen isa Nothing ? tty_width(p.desc, p.output, p.showspeed) : p.barlen
+            percentage_complete = 100.0 * p.counter / p.n
+            bar = barstring(barlen, percentage_complete, barglyphs=p.barglyphs)
+            elapsed_time = t - p.tinit
+            est_total_time = elapsed_time * (p.n - p.start) / (p.counter - p.start)
+            if 0 <= est_total_time <= typemax(Int)
+                eta_sec = round(Int, est_total_time - elapsed_time )
+                eta = durationstring(eta_sec)
+            else
+                eta = "N/A"
+            end
+            msg = @sprintf "%s%3u%%%s  ETA: %s" p.desc round(Int, percentage_complete) bar eta
+            if p.showspeed
+                sec_per_iter = elapsed_time / (p.counter - p.start)
+                msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
+            end
+            !CLEAR_IJULIA[] && print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
+            move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
+            printover(p.output, msg, p.color)
+            printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
+            !CLEAR_IJULIA[] && print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+            flush(p.output)
+            # Compensate for any overhead of printing. This can be
+            # especially important if you're running over a slow network
+            # connection.
+            p.tlast = t + 2*(time()-t)
+            p.printed = true
+            p.prev_update_count = p.counter
+        end
     end
     return nothing
 end
 
-function updateProgress!(p::ProgressThresh; showvalues = (), valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0), desc = p.desc)
+function updateProgress!(p::ProgressThresh; showvalues = (), truncate_lines = false, valuecolor = :blue,
+                        offset::Integer = p.offset, keep = (offset == 0), desc = p.desc, ignore_predictor = false)
+    (!RUNNING_IJULIA_KERNEL[] & !p.enabled) && return
     p.offset = offset
     p.desc = desc
-    t = time()
     if p.val <= p.thresh && !p.triggered
         p.triggered = true
         if p.printed
+            t = time()
+            elapsed_time = t - p.tinit
             p.triggered = true
-            dur = durationstring(t-p.tfirst)
+            dur = durationstring(elapsed_time)
             msg = @sprintf "%s Time: %s (%d iterations)" p.desc dur p.counter
+            if p.showspeed
+                sec_per_iter = elapsed_time / p.counter
+                msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
+            end
             print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
             move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             printover(p.output, msg, p.color)
-            printvalues!(p, showvalues; color = valuecolor)
+            printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
             if keep
                 println(p.output)
             else
@@ -275,75 +367,144 @@ function updateProgress!(p::ProgressThresh; showvalues = (), valuecolor = :blue,
         return
     end
 
-    if t > p.tlast+p.dt && !p.triggered
-        elapsed_time = t - p.tfirst
-        msg = @sprintf "%s (thresh = %g, value = %g)" p.desc p.thresh p.val
-        print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
-        move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
-        printover(p.output, msg, p.color)
-        printvalues!(p, showvalues; color = valuecolor)
-        print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
-        flush(p.output)
-        # Compensate for any overhead of printing. This can be
-        # especially important if you're running over a slow network
-        # connection.
-        p.tlast = t + 2*(time()-t)
-        p.printed = true
+    if ignore_predictor || predicted_updates_per_dt_have_passed(p)
+        t = time()
+        if p.counter > 2
+            p.check_iterations = calc_check_iterations(p, t)
+        end
+        if t > p.tlast+p.dt && !p.triggered
+            msg = @sprintf "%s (thresh = %g, value = %g)" p.desc p.thresh p.val
+            if p.showspeed
+                elapsed_time = t - p.tinit
+                sec_per_iter = elapsed_time / p.counter
+                msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
+            end
+            print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
+            move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
+            printover(p.output, msg, p.color)
+            printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
+            print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+            flush(p.output)
+            # Compensate for any overhead of printing. This can be
+            # especially important if you're running over a slow network
+            # connection.
+            p.tlast = t + 2*(time()-t)
+            p.printed = true
+            p.prev_update_count = p.counter
+        end
     end
 end
 
-function updateProgress!(p::ProgressUnknown; showvalues = (), valuecolor = :blue, desc = p.desc)
+const spinner_chars = ['◐','◓','◑','◒']
+const spinner_done = '✓'
+
+spinner_char(p::ProgressUnknown, spinner::AbstractChar) = spinner
+spinner_char(p::ProgressUnknown, spinner::AbstractVector{<:AbstractChar}) =
+    p.done ? spinner_done : spinner[p.spincounter % length(spinner) + firstindex(spinner)]
+spinner_char(p::ProgressUnknown, spinner::AbstractString) =
+    p.done ? spinner_done : spinner[nextind(spinner, 1, p.spincounter % length(spinner))]
+
+function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = false, valuecolor = :blue, desc = p.desc,
+                        ignore_predictor = false, spinner::Union{AbstractChar,AbstractString,AbstractVector{<:AbstractChar}} = spinner_chars)
+    (!RUNNING_IJULIA_KERNEL[] & !p.enabled) && return
     p.desc = desc
-    t = time()
     if p.done
         if p.printed
-            dur = durationstring(t-p.tfirst)
-            msg = @sprintf "%s %d \t Time: %s" p.desc p.counter dur
+            t = time()
+            elapsed_time = t - p.tinit
+            dur = durationstring(elapsed_time)
+            if p.spinner
+                msg = @sprintf "%c %s \t Time: %s" spinner_char(p, spinner) p.desc dur
+                p.spincounter += 1
+            else
+                msg = @sprintf "%s %d \t Time: %s" p.desc p.counter dur
+            end
+            if p.showspeed
+                sec_per_iter = elapsed_time / p.counter
+                msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
+            end
             move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             printover(p.output, msg, p.color)
-            printvalues!(p, showvalues; color = valuecolor)
+            printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
             println(p.output)
             flush(p.output)
         end
         return
     end
+    if ignore_predictor || predicted_updates_per_dt_have_passed(p)
+        t = time()
+        if p.counter > 2
+            p.check_iterations = calc_check_iterations(p, t)
+        end
+        if t > p.tlast+p.dt
+            dur = durationstring(t-p.tinit)
+            if p.spinner
+                msg = @sprintf "%c %s \t Time: %s" spinner_char(p, spinner) p.desc dur
+                p.spincounter += 1
+            else
+                msg = @sprintf "%s %d \t Time: %s" p.desc p.counter dur
+            end
+            if p.showspeed
+                elapsed_time = t - p.tinit
+                sec_per_iter = elapsed_time / p.counter
+                msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
+            end
+            move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
+            printover(p.output, msg, p.color)
+            printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
+            flush(p.output)
+            # Compensate for any overhead of printing. This can be
+            # especially important if you're running over a slow network
+            # connection.
+            p.tlast = t + 2*(time()-t)
+            p.printed = true
+            p.prev_update_count = p.counter
+            return
+        end
+    end
+end
 
-    if t > p.tlast+p.dt
-        dur = durationstring(t-p.tfirst)
-        msg = @sprintf "%s %d \t Time: %s" p.desc p.counter dur
-        move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
-        printover(p.output, msg, p.color)
-        printvalues!(p, showvalues; color = valuecolor)
-        flush(p.output)
-        # Compensate for any overhead of printing. This can be
-        # especially important if you're running over a slow network
-        # connection.
-        p.tlast = t + 2*(time()-t)
-        p.printed = true
-        return
+predicted_updates_per_dt_have_passed(p::AbstractProgress) = p.counter - p.prev_update_count >= p.check_iterations
+
+function is_threading(p::AbstractProgress)
+    Threads.nthreads() == 1 && return false
+    length(p.threads_used) > 1 && return true
+    if !in(Threads.threadid(), p.threads_used)
+        push!(p.threads_used, Threads.threadid())
+    end
+    return length(p.threads_used) > 1
+end
+
+function lock_if_threading(f::Function, p::AbstractProgress)
+    if is_threading(p)
+        lock(p.reentrantlocker) do
+            f()
+        end
+    else
+        f()
     end
 end
 
 # update progress display
 """
-`next!(prog, [color])` reports that one unit of progress has been
+`next!(prog, [color], step = 1)` reports that `step` units of progress have been
 made. Depending on the time interval since the last update, this may
 or may not result in a change to the display.
 
 You may optionally change the color of the display. See also `update!`.
 """
-function next!(p::Union{Progress, ProgressUnknown}; options...)
-    lock(p.reentrantlocker) do
-        p.counter += 1
-        updateProgress!(p; options...)
+function next!(p::Union{Progress, ProgressUnknown}; step::Int = 1, options...)
+    lock_if_threading(p) do
+        p.counter += step
+        updateProgress!(p; ignore_predictor = step == 0, options...)
     end
 end
 
-function next!(p::Union{Progress, ProgressUnknown}, color::Symbol; options...)
-    lock(p.reentrantlocker) do
+function next!(p::Union{Progress, ProgressUnknown}, color::Symbol; step::Int = 1, options...)
+    lock_if_threading(p) do
         p.color = color
-        p.counter += 1
-        updateProgress!(p; options...)
+        p.counter += step
+        updateProgress!(p; ignore_predictor = step == 0, options...)
     end
 end
 
@@ -359,15 +520,16 @@ the current value.
 You may optionally change the color of the display. See also `next!`.
 """
 function update!(p::Union{Progress, ProgressUnknown}, counter::Int=p.counter, color::Symbol=p.color; options...)
-    lock(p.reentrantlocker) do
+    lock_if_threading(p) do
+        counter_changed = p.counter != counter
         p.counter = counter
         p.color = color
-        updateProgress!(p; options...)
+        updateProgress!(p; ignore_predictor = !counter_changed, options...)
     end
 end
 
 function update!(p::ProgressThresh, val=p.val, color::Symbol=p.color; increment::Bool = true, options...)
-    lock(p.reentrantlocker) do
+    lock_if_threading(p) do
         p.val = val
         if increment
             p.counter += 1
@@ -385,14 +547,14 @@ message printed and its color.
 
 See also `finish!`.
 """
-function cancel(p::AbstractProgress, msg::AbstractString = "Aborted before all tasks were completed", color = :red; showvalues = (), valuecolor = :blue, offset = p.offset, keep = (offset == 0))
-    lock(p.reentrantlocker) do
+function cancel(p::AbstractProgress, msg::AbstractString = "Aborted before all tasks were completed", color = :red; showvalues = (), truncate_lines = false, valuecolor = :blue, offset = p.offset, keep = (offset == 0))
+    lock_if_threading(p) do
         p.offset = offset
         if p.printed
             print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
             move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             printover(p.output, msg, color)
-            printvalues!(p, showvalues; color = valuecolor)
+            printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
             if keep
                 println(p.output)
             else
@@ -409,8 +571,8 @@ end
 See also `cancel`.
 """
 function finish!(p::Progress; options...)
-    while p.counter < p.n
-        next!(p; options...)
+    if p.counter < p.n
+        update!(p, p.n; options...)
     end
 end
 
@@ -419,25 +581,42 @@ function finish!(p::ProgressThresh; options...)
 end
 
 function finish!(p::ProgressUnknown; options...)
-    lock(p.reentrantlocker) do
+    lock_if_threading(p) do
         p.done = true
         updateProgress!(p; options...)
     end
 end
 
 # Internal method to print additional values below progress bar
-function printvalues!(p::AbstractProgress, showvalues; color = false)
+function printvalues!(p::AbstractProgress, showvalues; color = :normal, truncate = false)
     length(showvalues) == 0 && return
     maxwidth = maximum(Int[length(string(name)) for (name, _) in showvalues])
+
+    p.numprintedvalues = 0
+
     for (name, value) in showvalues
         msg = "\n  " * rpad(string(name) * ": ", maxwidth+2+1) * string(value)
-        (color == false) ? print(p.output, msg) : printstyled(p.output, msg; color=color)
+        max_len = (displaysize(p.output)::Tuple{Int,Int})[2]
+        # I don't understand why the minus 1 is necessary here, but empircally
+        # it is needed.
+        msg_lines = ceil(Int, (length(msg)-1) / max_len)
+        if truncate && msg_lines >= 2
+            # For multibyte characters, need to index with nextind.
+            printover(p.output, msg[1:nextind(msg, 1, max_len-1)] * "…", color)
+            p.numprintedvalues += 1
+        else
+            printover(p.output, msg, color)
+            p.numprintedvalues += msg_lines
+        end
     end
-    p.numprintedvalues = length(showvalues)
+    p
 end
 
+# Internal method to print additional values below progress bar (lazy-showvalues version)
+printvalues!(p::AbstractProgress, showvalues::Function; kwargs...) = printvalues!(p, showvalues(); kwargs...)
+
 function move_cursor_up_while_clearing_lines(io, numlinesup)
-    if numlinesup > 0 && clear_ijulia()
+    if numlinesup > 0 && CLEAR_IJULIA[]
         Main.IJulia.clear_output(true)
         if IJULIABEHAVIOR[] == IJuliaWarned
             @warn "ProgressMeter by default refresh meters with additional information in IJulia via `IJulia.clear_output`, which clears all outputs in the cell. \n - To prevent this behaviour, do `ProgressMeter.ijulia_behavior(:append)`. \n - To disable this warning message, do `ProgressMeter.ijulia_behavior(:clear)`."
@@ -503,6 +682,27 @@ function durationstring(nsec)
         return @sprintf "%u days, %s" days hhmmss
     end
     hhmmss
+end
+
+function speedstring(sec_per_iter)
+    if sec_per_iter == Inf
+        return "  N/A  s/it"
+    end
+    ns_per_iter = 1_000_000_000 * sec_per_iter
+    for (divideby, unit) in (
+        (1, "ns"),
+        (1_000, "μs"),
+        (1_000_000, "ms"),
+        (1_000_000_000, "s"),
+        (60 * 1_000_000_000, "m"),
+        (60 * 60 * 1_000_000_000, "hr"),
+        (24 * 60 * 60 * 1_000_000_000, "d")
+    )
+        if round(ns_per_iter / divideby) < 100
+            return @sprintf "%5.2f %2s/it" (ns_per_iter / divideby) unit
+        end
+    end
+    return " >100  d/it"
 end
 
 function showprogress_process_expr(node, metersym)
@@ -640,9 +840,13 @@ interval between updates to the user. You may optionally supply a
 custom message to be printed that specifies the computation being
 performed.
 
-`@showprogress` works for loops, comprehensions, map, and pmap.
+`@showprogress` works for loops, comprehensions, map, reduce, and pmap.
 """
 macro showprogress(args...)
+    showprogress(args...)
+end
+
+function showprogress(args...)
     if length(args) < 1
         throw(ArgumentError("@showprogress requires at least one argument."))
     end
@@ -652,8 +856,12 @@ macro showprogress(args...)
         return showprogressdistributed(args...)
     end
     orig = expr = copy(expr)
+    if expr.args[1] == :|> # e.g. map(x->x^2) |> sum
+        expr.args[2] = showprogress(progressargs..., expr.args[2])
+        return expr
+    end
     metersym = gensym("meter")
-    mapfuns = (:map, :pmap)
+    mapfuns = (:map, :asyncmap, :reduce, :pmap)
     kind = :invalid # :invalid, :loop, or :map
 
     if isa(expr, Expr)
@@ -680,7 +888,7 @@ macro showprogress(args...)
     end
 
     if kind == :invalid
-        throw(ArgumentError("Final argument to @showprogress must be a for loop, comprehension, map, or pmap; got $expr"))
+        throw(ArgumentError("Final argument to @showprogress must be a for loop, comprehension, map, reduce, or pmap; got $expr"))
     elseif kind == :loop
         # As of julia 0.5, a comprehension's "loop" is actually one level deeper in the syntax tree.
         if expr.head !== :for
@@ -790,7 +998,7 @@ end
 
 Run a `map`-like function while displaying progress.
 
-`mapfun` can be any function, but it is only tested with `map` and `pmap`.
+`mapfun` can be any function, but it is only tested with `map`, `reduce` and `pmap`.
 """
 function progress_map(args...; mapfun=map,
                                progress=Progress(ncalls(mapfun, args)),
@@ -828,7 +1036,7 @@ Run `pmap` while displaying progress.
 progress_pmap(args...; kwargs...) = progress_map(args...; mapfun=pmap, kwargs...)
 
 """
-Infer the number of calls to the mapped function (i.e. the length of the returned array) given the input arguments to map or pmap.
+Infer the number of calls to the mapped function (i.e. the length of the returned array) given the input arguments to map, reduce or pmap.
 """
 function ncalls(mapfun::Function, map_args)
     if mapfun == pmap && length(map_args) >= 2 && isa(map_args[2], AbstractWorkerPool)

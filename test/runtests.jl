@@ -1,14 +1,28 @@
-import ProgressMeter
+using ProgressMeter
 using Test
 
-# include("core.jl")
-# include("test.jl")
-# include("test_showvalues.jl")
-# include("test_map.jl")
-# include("test_float.jl")
-# include("test_threads.jl")
-include("test_parallel.jl")
-#include("test_parallel_update.jl")
+if get(ENV, "CI", "false") == "true"
+    using InteractiveUtils
+    display(versioninfo())   # among other things, this shows the number of threads
+end
 
-println("")
-println("All tests complete")
+# @testset "Core" begin
+#     include("core.jl")
+#     include("test.jl")
+# end
+# @testset "Show Values" begin
+#     include("test_showvalues.jl")
+# end
+# @testset "Mapping" begin
+#     include("test_map.jl")
+# end
+# @testset "Float" begin
+#     include("test_float.jl")
+# end
+# @testset "Threading" begin
+#     include("test_threads.jl")
+# end
+@testset "Parallel" begin
+    include("test_parallel.jl")
+    #include("test_parallel_update.jl")
+end

@@ -72,7 +72,7 @@ function testfunc5B(n, dt, tsleep, desc, barlen)
     for i = 1:n
         sleep(tsleep)
         ProgressMeter.next!(p)
-        if i % 10 == 0 
+        if i % 10 == 0
             stepnum = floor(Int, i/10) + 1
             ProgressMeter.update!(p, desc = "Step $stepnum...")
         end
@@ -259,6 +259,8 @@ for val in 10 .^ range(2, stop=-6, length=20)
     ProgressMeter.update!(prog, val)
     sleep(0.1)
 end
+# issue #166
+@test ProgressMeter.ProgressThresh(1.0f0; desc = "Desc: ") isa ProgressMeter.ProgressThresh{Float32}
 
 # Threshold-based progress reports with increment=false
 println("Testing threshold-based progress")
@@ -295,6 +297,35 @@ colors = [:red, :blue, :green]
 prog = ProgressMeter.ProgressUnknown("Reading entry:")
 for k in 1:2:20
     ProgressMeter.update!(prog, k, rand(colors))
+    sleep(0.1)
+end
+ProgressMeter.finish!(prog)
+
+prog = ProgressMeter.ProgressUnknown("Reading entry:", spinner=true)
+for _ in 1:10
+    ProgressMeter.next!(prog)
+    sleep(0.1)
+end
+ProgressMeter.finish!(prog)
+
+prog = ProgressMeter.ProgressUnknown("Reading entry:", spinner=true)
+for _ in 1:10
+    ProgressMeter.next!(prog)
+    sleep(0.1)
+end
+ProgressMeter.finish!(prog, spinner='✗')
+
+myspinner = ['🌑', '🌒', '🌓', '🌔', '🌕', '🌖', '🌗', '🌘']
+prog = ProgressUnknown("Custom spinner:", spinner=true)
+for val in 1:10
+    ProgressMeter.next!(prog, spinner=myspinner)
+    sleep(0.1)
+end
+ProgressMeter.finish!(prog, spinner='🌞')
+
+prog = ProgressUnknown("Custom spinner:", spinner=true)
+for val in 1:10
+    ProgressMeter.next!(prog, spinner="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
     sleep(0.1)
 end
 ProgressMeter.finish!(prog)
@@ -344,3 +375,44 @@ end
 
 println("Testing start offset")
 testfunc17()
+
+# speed display option
+function testfunc18A(n, dt, tsleep; start=15)
+    p = ProgressMeter.Progress(n; dt=dt, start=start, showspeed=true)
+    for i in start+1:start+n
+        sleep(tsleep)
+        ProgressMeter.next!(p)
+    end
+end
+
+function testfunc18B(n, dt, tsleep)
+    p = ProgressMeter.ProgressUnknown(n; dt=dt, showspeed=true)
+    for _ in 1:n
+        sleep(tsleep)
+        ProgressMeter.next!(p)
+    end
+    ProgressMeter.finish!(p)
+end
+
+function testfunc18C()
+    p = ProgressMeter.ProgressThresh(1e-5; desc="Minimizing:", showspeed=true)
+    for val in 10 .^ range(2, stop=-6, length=20)
+        ProgressMeter.update!(p, val)
+        sleep(0.1)
+    end
+end
+
+println("Testing speed display")
+testfunc18A(1_000, 0.01, 0.002)
+testfunc18B(1_000, 0.01, 0.002)
+testfunc18C()
+
+function testfunc19()
+    p = ProgressMeter.ProgressThresh(1e-5; desc="Minimizing:", showspeed=true)
+    for val in 10 .^ range(2, stop=-6, length=20)
+        ProgressMeter.update!(p, val; increment=false)
+        sleep(0.1)
+    end
+end
+println("Testing speed display with no update")
+testfunc19()
