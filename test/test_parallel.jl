@@ -1,5 +1,5 @@
 using Distributed
-using ProgressMeter: FakeChannel
+using ProgressMeter: has_finished
 
 nworkers() == 1 && addprocs(4)
 @everywhere using ProgressMeter
@@ -20,7 +20,7 @@ nworkers() == 1 && addprocs(4)
         end
     end
     sleep(0.1)
-    @test p.channel isa FakeChannel # ParallelProgress finished
+    @test has_finished(p)
 
     println("Testing update!")
     prog = Progress(100)
@@ -35,7 +35,7 @@ nworkers() == 1 && addprocs(4)
         next!(p)
     end
     sleep(0.1)
-    @test p.channel isa FakeChannel # ParallelProgress finished
+    @test has_finished(p)
 
     println("Testing over-shooting")
     p = ParallelProgress(10)
@@ -44,7 +44,7 @@ nworkers() == 1 && addprocs(4)
         next!(p)
     end
     sleep(0.1)
-    @test p.channel isa FakeChannel # ParallelProgress finished
+    @test has_finished(p)
 
     println("Testing under-shooting")
     p = ParallelProgress(200)
@@ -54,7 +54,7 @@ nworkers() == 1 && addprocs(4)
     end
     finish!(p)
     sleep(0.1)
-    @test p.channel isa FakeChannel # ParallelProgress finished
+    @test has_finished(p)
 
     println("Testing rapid over-shooting")
     p = ParallelProgress(100)
@@ -64,7 +64,7 @@ nworkers() == 1 && addprocs(4)
         next!(p)
     end
     sleep(0.1)
-    @test p.channel isa FakeChannel # ParallelProgress finished
+    @test has_finished(p)
 
     println("Testing early cancel")
     p = ParallelProgress(100)
@@ -74,7 +74,7 @@ nworkers() == 1 && addprocs(4)
     end
     cancel(p)
     sleep(0.1)
-    @test p.channel isa FakeChannel # ParallelProgress finished
+    @test has_finished(p)
 
     println("Testing across $np workers with @distributed")
     n = 20 #per core
@@ -84,7 +84,7 @@ nworkers() == 1 && addprocs(4)
         next!(p)
     end
     sleep(0.1)
-    @test p.channel isa FakeChannel # ParallelProgress finished
+    @test has_finished(p)
 
     println("Testing across $np workers with pmap")
     n = 20
@@ -95,7 +95,7 @@ nworkers() == 1 && addprocs(4)
         return myid()
     end
     sleep(0.1)
-    @test p.channel isa FakeChannel # ParallelProgress finished
+    @test has_finished(p)
     @test length(unique(ids)) == np
 
     println("Testing changing color with next! and update!")
@@ -111,7 +111,7 @@ nworkers() == 1 && addprocs(4)
         end
     end
     sleep(0.1)
-    @test p.channel isa FakeChannel # ParallelProgress finished
+    @test has_finished(p)
 
     println("Testing changing desc with next! and update!")
     p = ParallelProgress(100)
@@ -126,7 +126,7 @@ nworkers() == 1 && addprocs(4)
         end
     end
     sleep(0.1)
-    @test p.channel isa FakeChannel # ParallelProgress finished
+    @test has_finished(p)
 
     println("Testing with showvalues")
     p = ParallelProgress(100)
@@ -139,7 +139,7 @@ nworkers() == 1 && addprocs(4)
         end
     end
     sleep(0.1)
-    @test p.channel isa FakeChannel # ParallelProgress finished
+    @test has_finished(p)
 
     println("Testing with ProgressUnknown")
     p = ParallelProgress(ProgressUnknown())
@@ -150,10 +150,10 @@ nworkers() == 1 && addprocs(4)
     sleep(0.5)
     update!(p, 200)
     sleep(0.5)
-    @test !(p.channel isa FakeChannel) # ParallelProgress not finished
+    @test !has_finished(p)
     finish!(p)
     sleep(0.1)
-    @test p.channel isa FakeChannel # ParallelProgress finished
+    @test has_finished(p)
 
     println("Testing with ProgressThresh")
     p = ParallelProgress(ProgressThresh(10))
@@ -162,5 +162,27 @@ nworkers() == 1 && addprocs(4)
         update!(p, i)
     end
     sleep(0.1)
-    @test p.channel isa FakeChannel # ParallelProgress finished
+    @test has_finished(p)
+
+    println("Testing early close (should not display error)")
+    p = ParallelProgress(100, desc="Close test")
+    for i in 1:30
+        sleep(0.01)
+        next!(p)
+    end
+    sleep(0.1)
+    @test !has_finished(p)
+    close(p)
+    sleep(0.1)
+    @test has_finished(p)
+
+    println("Testing errors in ParallelProgress (should display error)")
+    p = ParallelProgress(100, desc="Error test", color=:red)
+    for i in 1:30
+        sleep(0.01)
+        next!(p)
+    end
+    next!(p, 1)
+    sleep(2)
+    @test has_finished(p)
 end

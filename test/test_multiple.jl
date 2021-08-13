@@ -1,5 +1,5 @@
 using Distributed
-using ProgressMeter: FakeChannel
+using ProgressMeter: has_finished
 
 nworkers() == 1 && addprocs(4)
 @everywhere using ProgressMeter
@@ -23,10 +23,10 @@ nworkers() == 1 && addprocs(4)
         next!(p[1])
     end
     sleep(0.1)
-    @test !(p.channel isa FakeChannel) # ParallelProgress not finished yet
+    @test !has_finished(p)
     next!(p[1])
     sleep(0.1)
-    @test p.channel isa FakeChannel # ParallelProgress finished
+    @test has_finished(p)
 
     function test_MP_finished(lengths, finish; kwargs...)
         n = length(lengths)
@@ -40,7 +40,7 @@ nworkers() == 1 && addprocs(4)
         finish && finish!(p[0])
         sleep(0.1)
         for i in 1:n
-            @test p[i].channel.channel isa FakeChannel 
+            @test has_finished(p[i])
         end
     end
 
@@ -64,7 +64,7 @@ nworkers() == 1 && addprocs(4)
         next!(p[1])
     end
     sleep(0.1)
-    @test p[1].channel.channel isa FakeChannel # ParallelProgress finished
+    @test has_finished(p)
 
     println("Testing early cancel")
     p = MultipleProgress([100, 80])
@@ -76,9 +76,9 @@ nworkers() == 1 && addprocs(4)
     cancel(p[1])
     finish!(p[2])
     sleep(0.1)
-    @test p[1].channel.channel isa FakeChannel # ParallelProgress finished
+    @test has_finished(p)
 
-    println("Testing early global cancel")
+    println("Testing early cancel main progerss")
     p = MultipleProgress([100, 80])
     for _ in 1:50
         sleep(0.02)
@@ -87,7 +87,31 @@ nworkers() == 1 && addprocs(4)
     end
     cancel(p[0])
     sleep(0.1)
-    @test p[2].channel.channel isa FakeChannel # ParallelProgress finished
+    @test has_finished(p)
+
+
+    println("Testing early finish main progress")
+    p = MultipleProgress([100, 80])
+    for _ in 1:50
+        sleep(0.02)
+        next!(p[1])
+        next!(p[2])
+    end
+    finish!(p[0])
+    sleep(0.1)
+    @test has_finished(p)
+
+    println("Testing next! on main progress")
+    p = MultipleProgress([100])
+    for _ in 1:99
+        sleep(0.02)
+        next!(p[1])
+    end
+    sleep(0.1)
+    @test !has_finished(p)
+    next!(p[0])
+    sleep(0.1)
+    @test has_finished(p)
 
     println("Testing bar remplacement with $np workers and pmap")
     lengths = rand(20:40, 2*np)
@@ -101,7 +125,7 @@ nworkers() == 1 && addprocs(4)
     end
     sleep(0.1)
     @test length(unique(ids)) == np
-    @test p[1].channel.channel isa FakeChannel # finished
+    @test has_finished(p)
 
     println("Testing changing color with next! and update!")
     p = MultipleProgress([100,100])
@@ -122,28 +146,29 @@ nworkers() == 1 && addprocs(4)
         end
     end
     sleep(0.1)
-    @test p[1].channel.channel isa FakeChannel
+    @test has_finished(p)
 
     println("Testing changing desc with next! and update!")
-    p = MultipleProgress([100,100])
+    p = MultipleProgress([100,100,100])
     for i in 1:100
         sleep(0.05)
-        if i == 25
-            next!(p[1], desc="25% done ")
-            next!(p[2])
-        elseif i == 50
-            next!(p[1])
-            update!(p[2], 51, desc="50% done ")
+        if i == 20
+            next!(p[1], desc="20% done ")
+            next!.(p[2:3])
+        elseif i == 40
+            next!.(p[[1,3]])
+            update!(p[2], 41, desc="40% done ")
         else
-            if i == 75
-                update!(p[0], desc="75% done ")
+            if i == 60
+                update!(p[0], desc="60% done ")
+            elseif i == 80
+                update!(p[3], desc="80% done ")
             end
-            next!(p[1])
-            next!(p[2])
+            next!.(p[1:3])
         end
     end
     sleep(0.1)
-    @test p[1].channel.channel isa FakeChannel # ParallelProgress finished
+    @test has_finished(p)
 
     println("Update and finish all")
     p = MultipleProgress([100,100,100])
@@ -157,23 +182,59 @@ nworkers() == 1 && addprocs(4)
     sleep(0.5)
     finish!.(p[1:end])
     sleep(0.1)
-    @test p[1].channel.channel isa FakeChannel # ParallelProgress finished
+    @test has_finished(p)
 
-    println("Testing without main progressmeter and closing without finish")
+    println("Testing without main progressmeter and offset 0 finishes last")
     p = MultipleProgress([100,100,100], mainprogress=false)
     update!(p[0], 10, :red, desc="I shouldn't exist ")
-    for i in 1:100
-        rand() < 0.5 && next!(p[1], desc="task a ")
-        rand() < 0.3 && next!(p[2], desc="task b ")
-        rand() < 0.1 && next!(p[3], desc="task c ")
+    for i in 1:80
+        next!(p[1], desc="task a ")
+        rand() < 0.7 && next!(p[2], desc="task b ")
+        rand() < 0.4 && next!(p[3], desc="task c ")
         sleep(0.02)
     end
     sleep(0.1)
-    @test !(p.channel isa FakeChannel) # ParallelProgress not finished yet
-    close(p)
-    @test p.channel isa FakeChannel # ParallelProgress finished
-    print("\n"^3)
+    @test !has_finished(p)
+    finish!.(p[end:-1:1])
+    sleep(0.1)
+    @test has_finished(p)
 
+    println("Testing without main progressmeter and offset 0 finishes first (#215)")
+    p = MultipleProgress([100,100,100], mainprogress=false)
+    update!(p[0], 10, :red, desc="I shouldn't exist ")
+    for i in 1:80
+        next!(p[1], desc="task a ")
+        rand() < 0.7 && next!(p[2], desc="task b ")
+        rand() < 0.4 && next!(p[3], desc="task c ")
+        sleep(0.02)
+    end
+    sleep(0.1)
+    @test !has_finished(p)
+    finish!.(p[1:end])
+    sleep(0.1)
+    @test has_finished(p)
+
+    println("Testing early close (should not display error)")
+    p = MultipleProgress([100], desc="Close test")
+    for i in 1:30
+        sleep(0.01)
+        next!(p[1])
+    end
+    sleep(0.1)
+    @test !has_finished(p)
+    close(p)
+    sleep(0.1)
+    @test has_finished(p)
+
+    println("Testing errors in MultipleProgress (should display error)")
+    p = MultipleProgress([100], desc="Error test", color=:red)
+    for i in 1:30
+        sleep(0.01)
+        next!(p[1])
+    end
+    next!(p[1], 1)
+    sleep(2)
+    @test has_finished(p)
 
     println("Testing with showvalues (doesn't really work)")
     p = MultipleProgress([100,100])
@@ -183,5 +244,5 @@ nworkers() == 1 && addprocs(4)
         next!(p[2]; showvalues = [i=>i, "longstring"=>"WXYZ"^i])
     end
     sleep(0.1)
-    @test p.channel isa FakeChannel # ParallelProgress finished
+    @test has_finished(p)
 end
