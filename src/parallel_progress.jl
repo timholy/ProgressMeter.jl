@@ -94,10 +94,9 @@ struct MultipleChannel
 end
 Distributed.put!(mc::MultipleChannel, x) = put!(mc.channel, (mc.id, x...))
 
-mutable struct MultipleProgress <: AbstractProgress
+mutable struct MultipleProgress
     channel
     amount::Int
-    lengths::Vector{Int}
 end
 
 Base.getindex(mp::MultipleProgress, n) = ParallelProgress.(MultipleChannel.(Ref(mp.channel), n))
@@ -130,119 +129,136 @@ julia> p = MultipleProgress(fill(10,5); desc="global ", kws=[(desc="task \$i ",)
        end
 ```
 """
-function MultipleProgress(lengths::AbstractVector{<:Integer}; 
-                          count_overshoot = false,
-                          mainprogress = true,
-                          kws = [() for _ in lengths],
-                          kw...)
-    @assert length(lengths) == length(kws) "`length(lengths)` must be equal to `length(kws)`"
-    amount = length(lengths)
+function MultipleProgress(progresses::AbstractVector{Progress}; 
+                          count_finishes=false, kwmain=(), kw...)
+    main_length = count_finishes ? length(progresses) : sum(p->p.n, progresses)
+    mainprogress = Progress(main_length; kwmain...)
+    return MultipleProgress(progresses, mainprogress; count_finishes=count_finishes, kw...)
+end
 
-    total_length = sum(lengths)
-    main_progress = Progress(total_length; offset=0, enabled=mainprogress, kw...)
-    progresses = Union{Progress,Nothing}[nothing for _ in 1:amount]
-    taken_offsets = Set{Int}()
-    mainprogress && push!(taken_offsets, 0)
+function MultipleProgress(
+        progresses::AbstractVector{<:AbstractProgress},
+        mainprogress::AbstractProgress;
+        count_finishes = false,
+        count_overshoot = false,
+        auto_reset_timer = true
+    )
     channel = RemoteChannel(() -> Channel{NTuple{4,Any}}(1024))
+    mp = MultipleProgress(channel, length(progresses))
+    @async runMultipleProgress(progresses, mainprogress, mp;
+        count_finishes=count_finishes, 
+        count_overshoot=count_overshoot, 
+        auto_reset_timer=auto_reset_timer)
+    return mp
+end
 
-    max_offsets = 0
-
-    mp = MultipleProgress(channel, amount, collect(lengths))
-
-    # we must make sure that 2 progresses aren't updated at the same time, 
-    # that's why we use only one Channel
-    @async begin
-        try
-            while !has_finished(main_progress)
-                
-                p, f, args, kwt = take!(channel)
-
-                # main progressbar
-                if p == 0
-                    if f == PP_CANCEL
-                        main_progress.counter = main_progress.n
-                        cancel(main_progress, args...; kwt...)
-                        break
-                    elseif f == PP_UPDATE
-                        if !isempty(args) && args[1] == (:)
-                            update!(main_progress, main_progress.counter, args[2:end]...; kwt...)
-                        else
-                            update!(main_progress, args...; kwt...)
-                        end
-                    elseif f == PP_NEXT
-                        next!(main_progress, args...; kwt...)
-                    elseif f == PP_FINISH
-                        finish!(main_progress, args...; kwt...)
-                        break
-                    end
-                else
-
-                    # first time calling progress p
-                    if progresses[p] === nothing
-                        # find first available offset
-                        offset = 0
-                        while offset ∈ taken_offsets
-                            offset += 1
-                        end
-                        max_offsets = max(max_offsets, offset)
-                        progresses[p] = Progress(lengths[p]; offset=offset, kw..., kws[p]...)
-                        push!(taken_offsets, offset)
-                    end
-
-
-                    if f == PP_NEXT
-                        if count_overshoot || progresses[p].counter < lengths[p]
-                            next!(progresses[p], args...; kwt...)
-                            next!(main_progress)
-                        end
-                    else
-                        prev_p_value = progresses[p].counter
-                        
-                        if f == PP_FINISH
-                            finish!(progresses[p], args...; kwt...)
-                        elseif f == PP_CANCEL
-                            #finish!(progresses[p])
-                            cancel(progresses[p], args...; kwt...)
-                            progresses[p].counter = progresses[p].n
-                        elseif f == PP_UPDATE
-                            if !isempty(args)
-                                value = args[1]
-                                value == (:) && (value = progresses[p].counter)
-                                !count_overshoot && (value = min(value, lengths[p]))
-                                update!(progresses[p], value, args[2:end]...; kwt...)
-                            else
-                                update!(progresses[p]; kwt...)
-                            end
-                        end
-
-                        update!(main_progress, 
-                                main_progress.counter - prev_p_value + progresses[p].counter)
-                    end
-
-                    if progresses[p].counter >= lengths[p]
-                        delete!(taken_offsets, progresses[p].offset)
-                    end
-                end
-            end
-        catch err
-            # channel closed should only happen from Base.close(mp), which isn't an error
-            if err != Base.closed_exception()
-                bt = catch_backtrace()
-                println()
-                showerror(stderr, err, bt)
-                println()
-            end
-        finally
-            print("\n" ^ max_offsets)
-            # progress with offset 0 adds automatically a line break when finished (#215)
-            if !mainprogress || !has_finished(main_progress)
-                println()
-            end
-            close(mp)
-        end
+function runMultipleProgress(
+        progresses::AbstractVector{<:AbstractProgress},
+        mainprogress::AbstractProgress,
+        mp::MultipleProgress;
+        count_finishes = false,
+        count_overshoot = false,
+        auto_reset_timer = true
+    )
+    for p in progresses
+        p.offset = -1
     end
 
-    return mp
+    channel = mp.channel
+    taken_offsets = Set{Int}()        
+    max_offsets = 1
+    try
+        # we must make sure that 2 progresses aren't updated at the same time, 
+        # that's why we use only one Channel
+        while !has_finished(mainprogress) && !all(has_finished, progresses)
+            
+            p, f, args, kwt = take!(channel)
+
+            # main progressbar
+            if p == 0
+                if f == PP_CANCEL
+                    mainprogress.counter = mainprogress.n
+                    cancel(mainprogress, args...; kwt...)
+                    break
+                elseif f == PP_UPDATE
+                    if !isempty(args) && args[1] == (:)
+                        update!(mainprogress, mainprogress.counter, args[2:end]...; kwt...)
+                    else
+                        update!(mainprogress, args...; kwt...)
+                    end
+                elseif f == PP_NEXT
+                    next!(mainprogress, args...; kwt...)
+                elseif f == PP_FINISH
+                    finish!(mainprogress, args...; kwt...)
+                    break
+                end
+            else
+
+                # first time calling progress p
+                if progresses[p].offset == -1
+                    # find first available offset
+                    offset = 1
+                    while offset ∈ taken_offsets
+                        offset += 1
+                    end
+                    max_offsets = max(max_offsets, offset)
+                    progresses[p].offset = offset
+                    if auto_reset_timer
+                        progresses[p].tinit = progresses[p].tsecond = progresses[p].tlast = time()
+                    end
+                    push!(taken_offsets, offset)
+                end
+
+                if f == PP_NEXT
+                    if count_overshoot || !has_finished(progresses[p])
+                        next!(progresses[p], args...; kwt...)
+                        next!(mainprogress)
+                    end
+                else
+                    prev_p_value = progresses[p].counter
+                    
+                    if f == PP_FINISH
+                        finish!(progresses[p], args...; kwt...)
+                    elseif f == PP_CANCEL
+                        #finish!(progresses[p])
+                        cancel(progresses[p], args...; kwt...)
+                        progresses[p].counter = progresses[p].n
+                    elseif f == PP_UPDATE
+                        if !isempty(args)
+                            value = args[1]
+                            value == (:) && (value = progresses[p].counter)
+                            !count_overshoot && (value = min(value, progresses[p].n))
+                            update!(progresses[p], value, args[2:end]...; kwt...)
+                        else
+                            update!(progresses[p]; kwt...)
+                        end
+                    end
+
+                    update!(mainprogress, 
+                            mainprogress.counter - prev_p_value + progresses[p].counter)
+                end
+
+                if has_finished(progresses[p])
+                    delete!(taken_offsets, progresses[p].offset)
+                end
+            end
+        end
+    catch err
+        # channel closed should only happen from Base.close(mp), which isn't an error
+        if err != Base.closed_exception()
+            bt = catch_backtrace()
+            println()
+            showerror(stderr, err, bt)
+            println()
+        end
+    finally
+        print("\n" ^ max_offsets)
+        # progress with offset 0 adds automatically a line break when finished (#215)
+        if !has_finished(mainprogress) || mainprogress.enabled == false
+            println()
+        end
+        close(mp)
+    end
 end
 
 

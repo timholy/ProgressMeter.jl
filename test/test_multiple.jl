@@ -12,7 +12,7 @@ nworkers() == 1 && addprocs(4)
 
     println("Testing MultipleProgress")
     println("Testing update!")
-    p = MultipleProgress([100])
+    p = MultipleProgress([Progress(100)])
     for _ in 1:25
         sleep(0.05)
         next!(p[1])
@@ -28,36 +28,52 @@ nworkers() == 1 && addprocs(4)
     sleep(0.1)
     @test has_finished(p)
 
-    function test_MP_finished(lengths, finish; kwargs...)
-        n = length(lengths)
-        p = MultipleProgress(lengths; kwargs...)
-        for _ in 1:100
-            sleep(0.01)
-            for i in 1:n
-                next!(p[i])
-            end
-        end
-        finish && finish!(p[0])
-        sleep(0.1)
-        for i in 1:n
-            @test has_finished(p[i])
-        end
-    end
 
     println("Testing MultipleProgress with custom titles and color")
-    test_MP_finished([100, 100], false; 
-                     desc="yellow  ", color=:yellow, 
-                     kws=[(desc="red " , color=:red ),
-                          (desc="yellow too ", )])
+    p = MultipleProgress(
+        [Progress(100; color=:red, desc=" red "), 
+         Progress(100; desc=" default color ")],
+        kwmain=(desc="yellow ", color=:yellow)
+    )
+    for _ in 1:99
+        sleep(0.01)
+        next!.(p[1:2])
+    end
+    sleep(0.1)
+    @test !has_finished(p)
+    next!.(p[1:2])
+    sleep(0.1)
+    @test has_finished(p)
 
     println("Testing over-shooting and under-shooting")
-    test_MP_finished([10, 110], true; dt=0.01)
+    p = MultipleProgress(Progress.([50, 140]), count_overshoot=false)
+    for _ in 1:100
+        sleep(0.01)
+        next!.(p[1:2])
+    end
+    sleep(0.1)
+    @test !has_finished(p)
+    finish!(p[2])
+    sleep(0.1)
+    @test has_finished(p)
 
     println("Testing over-shooting with count_overshoot")
-    test_MP_finished([10, 190], false; count_overshoot=true, dt=0.01)
+    p = MultipleProgress(Progress.([52, 153]), count_overshoot=true)
+    next!.(p[1:2])
+    sleep(0.1)
+    next!.(p[1:2])
+    for _ in 1:200
+        sleep(0.01)
+        next!(p[2])
+    end
+    sleep(0.1)
+    @test !has_finished(p)
+    next!(p[2])
+    sleep(0.1)
+    @test has_finished(p)
 
     println("Testing rapid over-shooting")
-    p = MultipleProgress([10]; dt=0.01, count_overshoot=true)
+    p = MultipleProgress([Progress(10)], count_overshoot=true)
     next!(p[1])
     sleep(0.1)
     for i in 1:10000
@@ -67,7 +83,7 @@ nworkers() == 1 && addprocs(4)
     @test has_finished(p)
 
     println("Testing early cancel")
-    p = MultipleProgress([100, 80])
+    p = MultipleProgress(Progress.([100, 80]))
     for _ in 1:50
         sleep(0.02)
         next!(p[1])
@@ -79,7 +95,7 @@ nworkers() == 1 && addprocs(4)
     @test has_finished(p)
 
     println("Testing early cancel main progress")
-    p = MultipleProgress([100, 80])
+    p = MultipleProgress(Progress.([100, 80]))
     for _ in 1:50
         sleep(0.02)
         next!(p[1])
@@ -91,7 +107,7 @@ nworkers() == 1 && addprocs(4)
 
 
     println("Testing early finish main progress")
-    p = MultipleProgress([100, 80])
+    p = MultipleProgress(Progress.([100, 80]))
     for _ in 1:50
         sleep(0.02)
         next!(p[1])
@@ -102,7 +118,7 @@ nworkers() == 1 && addprocs(4)
     @test has_finished(p)
 
     println("Testing next! on main progress")
-    p = MultipleProgress([100])
+    p = MultipleProgress([Progress(100)])
     for _ in 1:99
         sleep(0.02)
         next!(p[1])
@@ -114,8 +130,9 @@ nworkers() == 1 && addprocs(4)
     @test has_finished(p)
 
     println("Testing bar remplacement with $np workers and pmap")
-    lengths = rand(20:40, 2*np)
-    p = MultipleProgress(lengths; dt=0.01, kws=[(desc=" task $i   ",) for i in 1:2*np])
+    lengths = rand(20:50, 2*np)
+    progresses = [Progress(lengths[i], desc=" task $i ") for i in 1:2np]
+    p = MultipleProgress(progresses)
     ids = pmap(1:2*np) do ip
         for _ in 1:lengths[ip]
             sleep(0.05)
@@ -128,7 +145,7 @@ nworkers() == 1 && addprocs(4)
     @test has_finished(p)
 
     println("Testing changing color with next! and update!")
-    p = MultipleProgress([100,100])
+    p = MultipleProgress(Progress.([100,100]))
     for i in 1:100
         sleep(0.01)
         if i == 25
@@ -149,7 +166,7 @@ nworkers() == 1 && addprocs(4)
     @test has_finished(p)
 
     println("Testing changing desc with next! and update!")
-    p = MultipleProgress([100,100,100])
+    p = MultipleProgress(Progress.([100,100,100]))
     for i in 1:100
         sleep(0.05)
         if i == 20
@@ -171,7 +188,7 @@ nworkers() == 1 && addprocs(4)
     @test has_finished(p)
 
     println("Update and finish all")
-    p = MultipleProgress([100,100,100])
+    p = MultipleProgress(Progress.([100,100,100]))
     for i in 1:100
         rand() < 0.5 && next!(p[1])
         rand() < 0.3 && next!(p[2])
@@ -185,7 +202,7 @@ nworkers() == 1 && addprocs(4)
     @test has_finished(p)
 
     println("Testing without main progressmeter and offset 0 finishes last")
-    p = MultipleProgress([100,100,100], mainprogress=false)
+    p = MultipleProgress(Progress.([100,100,100]), kwmain=(enabled=false,))
     update!(p[0], 10, :red, desc="I shouldn't exist ")
     for i in 1:80
         next!(p[1], desc="task a ")
@@ -200,7 +217,7 @@ nworkers() == 1 && addprocs(4)
     @test has_finished(p)
 
     println("Testing without main progressmeter and offset 0 finishes first (#215)")
-    p = MultipleProgress([100,100,100], mainprogress=false)
+    p = MultipleProgress(Progress.([100,100,100]), kwmain=(enabled=false,))
     update!(p[0], 10, :red, desc="I shouldn't exist ")
     for i in 1:80
         next!(p[1], desc="task a ")
@@ -215,7 +232,7 @@ nworkers() == 1 && addprocs(4)
     @test has_finished(p)
 
     println("Testing early close (should not display error)")
-    p = MultipleProgress([100], desc="Close test")
+    p = MultipleProgress([Progress(100, desc="Close test")])
     for i in 1:30
         sleep(0.01)
         next!(p[1])
@@ -227,7 +244,7 @@ nworkers() == 1 && addprocs(4)
     @test has_finished(p)
 
     println("Testing errors in MultipleProgress (should display error)")
-    p = MultipleProgress([100], desc="Error test", color=:red)
+    p = MultipleProgress(Progress.([100]), kwmain=(desc="Error test", color=:red))
     for i in 1:30
         sleep(0.01)
         next!(p[1])
@@ -237,7 +254,7 @@ nworkers() == 1 && addprocs(4)
     @test has_finished(p)
 
     println("Testing with showvalues (doesn't really work)")
-    p = MultipleProgress([100,100])
+    p = MultipleProgress(Progress.([100,100]))
     for i in 1:100
         sleep(0.02)
         next!(p[1]; showvalues = Dict(:i=>i))
