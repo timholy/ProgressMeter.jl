@@ -78,7 +78,7 @@ nworkers() == 1 && addprocs(4)
     sleep(0.1)
     @test has_finished(p)
 
-    println("Testing early cancel main progerss")
+    println("Testing early cancel main progress")
     p = MultipleProgress([100, 80])
     for _ in 1:50
         sleep(0.02)
