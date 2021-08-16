@@ -416,3 +416,15 @@ function testfunc19()
 end
 println("Testing speed display with no update")
 testfunc19()
+
+function testfunc20(r, p)
+    for i in r
+        sleep(0.05)
+        update!(p, i)
+    end
+    cancel(p)
+end
+println("Testing early cancel")
+testfunc20(1:50, Progress(100))
+testfunc20(1:50, ProgressUnknown())
+testfunc20(50:-1:1, ProgressThresh(0))

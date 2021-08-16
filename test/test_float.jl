@@ -61,3 +61,15 @@ function testfunc5(n, tsleep)
     print("\n" ^ 2)
 end
 testfunc5(5, 0.1)
+
+println("Testing floating unknown progress bar (offset 2)")
+function testfunc6(desc, n, tsleep, offset)
+    p = ProgressMeter.ProgressUnknown(desc; offset=offset)
+    for i = 1:n
+        sleep(tsleep)
+        ProgressMeter.next!(p)
+    end
+    ProgressMeter.finish!(p)
+    print("\n" ^ 3)
+end
+testfunc6("Computing... ", 100, 0.02, 2)
