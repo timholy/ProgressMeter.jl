@@ -3,10 +3,15 @@ mutable struct ParallelProgress <: AbstractProgress
     channel
 end
 
-const PP_NEXT = :next
-const PP_CANCEL = :cancel
-const PP_FINISH = :finish
-const PP_UPDATE = :update
+@enum ProgressAction begin
+    PP_NEXT
+    PP_CANCEL
+    PP_FINISH
+    PP_UPDATE
+    MP_ADD_THRESH
+    MP_ADD_UNKNOWN
+    MP_ADD_PROGRESS
+end
 
 next!(pp::ParallelProgress, args...; kw...) = (put!(pp.channel, (PP_NEXT, args, kw)); nothing)
 cancel(pp::ParallelProgress, args...; kw...) = (put!(pp.channel, (PP_CANCEL, args, kw)); nothing)
@@ -19,16 +24,16 @@ update!(pp::ParallelProgress, args...; kw...) = (put!(pp.channel, (PP_UPDATE, ar
 works like `Progress` but can be used from other workers
 
 # Example:
-```jldoctest
-julia> using Distributed
-julia> addprocs()
-julia> @everywhere using ProgressMeter
-julia> prog = ParallelProgress(10; desc="test ")
-julia> pmap(1:10) do
-           sleep(rand())
-           next!(prog)
-           return myid()
-       end
+```julia
+using Distributed
+addprocs()
+@everywhere using ProgressMeter
+prog = ParallelProgress(10; desc="test ")
+pmap(1:10) do
+    sleep(rand())
+    next!(prog)
+    return myid()
+end
 ```
 """
 function ParallelProgress(n::Integer; kw...)
@@ -103,13 +108,24 @@ Base.getindex(mp::MultipleProgress, n) = ParallelProgress.(MultipleChannel.(Ref(
 Base.lastindex(mp::MultipleProgress) = mp.amount
 
 """
-    MultipleProgress(lengths; mainprogress=true, count_overshoot=false, kws, kw...)
+    MultipleProgress(progresses::AbstractVector{<:AbstractProgress},
+                     mainprogress::AbstractProgress;
+                     enabled = true,
+                     auto_close = true,
+                     count_finishes = false,
+                     count_overshoot = false,
+                     auto_reset_timer = true)
 
-generates one progressbar for each value in `lengths`
- - `kw` arguments are applied on all progressbars
- - `kws[i]` arguments are applied on the i-th progressbar
- - `mainprogress` adds a main progressmeter that sums the other ones
+allows to call the `progresses` and `mainprogress` from different workers
+ - `progresses`: contains the different progressbars
+ - `mainprogress`: main progressbar
+ - `enabled`: `enabled == false` doesn't show anything and doesn't open a channel
+ - `auto_close`: if true, the channel will close when all progresses are finished, otherwise,
+ when mainprogress finishes or with `close(p)`
+ - `count_finishes`: if false, main_progress will be the sum of the individual progressbars,
+ if true, it will be equal to the number of finished progressbars
  - `count_overshoot`: overshooting progressmeters will be counted in the main progressmeter
+ - `auto_reset_timer`: tinit in progresses will be reset at first call
 
 use p[i] to access the i-th progressmeter, and p[0] to access the main one
 
@@ -131,18 +147,30 @@ julia> p = MultipleProgress(fill(10,5); desc="global ", kws=[(desc="task \$i ",)
 """
 function MultipleProgress(progresses::AbstractVector{<:AbstractProgress},
                           mainprogress::AbstractProgress;
+                          enabled = true,
+                          auto_close = true,
                           count_finishes = false,
                           count_overshoot = false,
                           auto_reset_timer = true)
+    !enabled && return MultipleProgress(FakeChannel(), length(progresses))
+
     channel = RemoteChannel(() -> Channel{NTuple{4,Any}}(1024))
     mp = MultipleProgress(channel, length(progresses))
     @async runMultipleProgress(progresses, mainprogress, mp;
+        auto_close=auto_close,
         count_finishes=count_finishes, 
         count_overshoot=count_overshoot, 
         auto_reset_timer=auto_reset_timer)
     return mp
 end
 
+"""
+    MultipleProgress(progresses::AbstractVector{Progress}; count_finishes=false, kwmain=(), kw...)
+
+is equivalent to:
+
+    MultipleProgress(progresses, Progress(main_length; kwmain...); count_finishes, kw...)
+"""
 function MultipleProgress(progresses::AbstractVector{Progress}; 
                           count_finishes=false, kwmain=(), kw...)
     main_length = count_finishes ? length(progresses) : sum(p->p.n, progresses)
@@ -150,6 +178,16 @@ function MultipleProgress(progresses::AbstractVector{Progress};
     return MultipleProgress(progresses, mainprogress; count_finishes=count_finishes, kw...)
 end
 
+"""
+    MultipleProgress(progresses::AbstractVector{<:AbstractProgress}; count_finishes=false, kwmain=(), kw...)
+
+is equivalent to:
+
+    MultipleProgress(progresses, prog; count_finishes, kw...)
+
+with `prog` a `Progress` of the same length as `progresses` if `count_finishes == true`, 
+otherwise, `prog` is a `ProgressUnknown`
+"""
 function MultipleProgress(progresses::AbstractVector{<:AbstractProgress}; 
                           count_finishes=false, kwmain=(), kw...)
     if count_finishes
@@ -159,9 +197,21 @@ function MultipleProgress(progresses::AbstractVector{<:AbstractProgress};
     end
 end
 
+"""
+    MultipleProgress(mainprogress::AbstractProgress; auto_close=false, kw...)
+
+is equivalent to
+
+    MultipleProgress(AbstractProgress[], mainprogress; auto_close, kw...)
+"""
+function MultipleProgress(mainprogress::AbstractProgress; auto_close=false, kw...)
+    return MultipleProgress(AbstractProgress[], mainprogress; auto_close=auto_close, kw...)
+end
+
 function runMultipleProgress(progresses::AbstractVector{<:AbstractProgress},
                              mainprogress::AbstractProgress,
                              mp::MultipleProgress;
+                             auto_close = true,
                              count_finishes = false,
                              count_overshoot = false,
                              auto_reset_timer = true)
@@ -175,12 +225,11 @@ function runMultipleProgress(progresses::AbstractVector{<:AbstractProgress},
     try
         # we must make sure that 2 progresses aren't updated at the same time, 
         # that's why we use only one Channel
-        while !has_finished(mainprogress) && any(!has_finished, progresses)
+        while !has_finished(mainprogress) && !(auto_close && all(has_finished, progresses))
             
             p, f, args, kwt = take!(channel)
 
-            # main progressbar
-            if p == 0
+            if p == 0 # main progressbar
                 if f == PP_CANCEL
                     finish!(mainprogress; keep=false)
                     cancel(mainprogress, args...; kwt..., keep=false)
@@ -198,6 +247,23 @@ function runMultipleProgress(progresses::AbstractVector{<:AbstractProgress},
                     break
                 end
             else
+                # add progress
+                if f == MP_ADD_PROGRESS
+                    resize!(progresses, max(length(progresses), p))
+                    mp.amount = length(progresses)
+                    progresses[p] = Progress(args...; kwt..., offset=-1)
+                    continue
+                elseif f == MP_ADD_UNKNOWN
+                    resize!(progresses, max(length(progresses), p))
+                    mp.amount = length(progresses)
+                    progresses[p] = ProgressUnknown(args...; kwt..., offset=-1)
+                    continue
+                elseif f == MP_ADD_THRESH
+                    resize!(progresses, max(length(progresses), p))
+                    mp.amount = length(progresses)
+                    progresses[p] = ProgressThresh(args...; kwt..., offset=-1)
+                    continue
+                end
 
                 # first time calling progress p
                 if progresses[p].offset == -1
@@ -222,7 +288,6 @@ function runMultipleProgress(progresses::AbstractVector{<:AbstractProgress},
                         !count_finishes && next!(mainprogress; keep=false)
                     end
                 else
-                    prev_p_value = valueorcounter(progresses[p])
                     prev_p_counter = progresses[p].counter
                     
                     if f == PP_FINISH
@@ -293,3 +358,28 @@ isfakechannel(mc::MultipleChannel) = isfakechannel(mc.channel)
 valueorcounter(p::Progress) = p.counter
 valueorcounter(p::ProgressThresh) = p.val
 valueorcounter(p::ProgressUnknown) = p.counter
+
+"""
+    addprogress!(mp[i], T::Type{<:AbstractProgress}, args...; kw...)
+
+will add the progressbar `T(args..., kw...)` to the MultipleProgress `mp` at index `i`
+
+# Example
+
+```julia
+p = MultipleProgress(Progress(N, "tasks done "); count_finishes=true)
+sleep(0.1)
+pmap(1:N) do i
+    L = rand(20:50)
+    ProgressMeter.addprogress!(p[i], Progress, L, desc=" task \$i ")
+    for _ in 1:L
+        sleep(0.05)
+        next!(p[i])
+    end
+end
+
+```
+"""
+addprogress!(p::ParallelProgress, ::Type{Progress}, args...; kw...) = (put!(p.channel, (MP_ADD_PROGRESS, args, kw)); nothing)
+addprogress!(p::ParallelProgress, ::Type{ProgressThresh}, args...; kw...) = (put!(p.channel, (MP_ADD_THRESH, args, kw)); nothing)
+addprogress!(p::ParallelProgress, ::Type{ProgressUnknown}, args...; kw...) = (put!(p.channel, (MP_ADD_UNKNOWN, args, kw)); nothing)
