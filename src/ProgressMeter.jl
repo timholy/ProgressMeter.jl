@@ -196,6 +196,7 @@ mutable struct ProgressUnknown <: AbstractProgress
     spinner::Bool           # show a spinner
     output::IO              # output stream into which the progress is written
     numprintedvalues::Int   # num values printed below progress in last iteration
+    offset::Int             # position offset of progress bar (default is 0)
     enabled::Bool           # is the output enabled
     showspeed::Bool         # should the output include average time per iteration
     check_iterations::Int
@@ -203,13 +204,21 @@ mutable struct ProgressUnknown <: AbstractProgress
     threads_used::Vector{Int}
 end
 
-function ProgressUnknown(;dt::Real=0.1, desc::AbstractString="Progress: ", color::Symbol=:green, spinner::Bool=false, output::IO=stderr, enabled::Bool = true, showspeed::Bool = false)
+function ProgressUnknown(;
+                         dt::Real=0.1, 
+                         desc::AbstractString="Progress: ", 
+                         color::Symbol=:green, 
+                         spinner::Bool=false, 
+                         output::IO=stderr, 
+                         offset::Integer=0,
+                         enabled::Bool = true, 
+                         showspeed::Bool = false)
     RUNNING_IJULIA_KERNEL[] = running_ijulia_kernel()
     CLEAR_IJULIA[] = clear_ijulia()
     reentrantlocker = Threads.ReentrantLock()
     tinit = tlast = time()
     printed = false
-    ProgressUnknown(false, reentrantlocker, dt, 0, 0, false, tinit, tlast, printed, desc, color, spinner, output, 0, enabled, showspeed, 1, 1, Int[])
+    ProgressUnknown(false, reentrantlocker, dt, 0, 0, false, tinit, tlast, printed, desc, color, spinner, output, 0, offset, enabled, showspeed, 1, 1, Int[])
 end
 
 ProgressUnknown(dt::Real, desc::AbstractString="Progress: ",
@@ -404,9 +413,12 @@ spinner_char(p::ProgressUnknown, spinner::AbstractVector{<:AbstractChar}) =
 spinner_char(p::ProgressUnknown, spinner::AbstractString) =
     p.done ? spinner_done : spinner[nextind(spinner, 1, p.spincounter % length(spinner))]
 
-function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = false, valuecolor = :blue, desc = p.desc,
-                        ignore_predictor = false, spinner::Union{AbstractChar,AbstractString,AbstractVector{<:AbstractChar}} = spinner_chars)
+function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = false, 
+                        valuecolor = :blue, desc = p.desc, ignore_predictor = false, 
+                        spinner::Union{AbstractChar,AbstractString,AbstractVector{<:AbstractChar}} = spinner_chars,
+                        offset::Integer = p.offset, keep = (offset == 0))
     (!RUNNING_IJULIA_KERNEL[] & !p.enabled) && return
+    p.offset = offset
     p.desc = desc
     if p.done
         if p.printed
@@ -423,10 +435,15 @@ function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = f
                 sec_per_iter = elapsed_time / p.counter
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
             end
+            print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
             move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             printover(p.output, msg, p.color)
             printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
-            println(p.output)
+            if keep
+                println(p.output)
+            else
+                print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+            end
             flush(p.output)
         end
         return
@@ -449,9 +466,11 @@ function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = f
                 sec_per_iter = elapsed_time / p.counter
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
             end
+            print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
             move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             printover(p.output, msg, p.color)
             printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
+            print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
             flush(p.output)
             # Compensate for any overhead of printing. This can be
             # especially important if you're running over a slow network
