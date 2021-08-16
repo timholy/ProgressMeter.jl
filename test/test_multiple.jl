@@ -262,17 +262,35 @@ nworkers() == 1 && addprocs(4)
     end
     sleep(0.1)
     @test has_finished(p)
+    print("\n"^5)
 
-    println("Testing MultipleProgress with ProgressUnknown")
-    p = MultipleProgress([Progress(100), Progress(100)], ProgressUnknown(); count_finishes=false)
+    println("Testing MultipleProgress with ProgressUnknown as mainprogress")
+    p = MultipleProgress([Progress(100), ProgressUnknown(),ProgressThresh(0.01)]; count_finishes=false)
     for i in 1:100
-        sleep(0.01)
+        sleep(0.02)
         next!(p[1])
-        rand() < 0.5 && next!(p[2])
+        next!(p[2])
+        update!(p[3], 1/i)
     end
     sleep(0.1)
     @test !has_finished(p)
     finish!(p[2])
+    sleep(0.1)
+    @test has_finished(p)
+
+    println("Testing MultipleProgress with count_finishes")
+    p = MultipleProgress([ProgressUnknown(), Progress(50), ProgressThresh(0.05)]; 
+                         count_finishes=true, kwmain=(dt=0, desc="Tasks finished "))
+    update!(p[0], 0)
+    for i in 1:100
+        sleep(0.02)
+        next!(p[1])
+        next!(p[2])
+        update!(p[3], 1/i)
+    end
+    sleep(0.1)
+    @test !has_finished(p)
+    finish!(p[1])
     sleep(0.1)
     @test has_finished(p)
 end

@@ -129,20 +129,11 @@ julia> p = MultipleProgress(fill(10,5); desc="global ", kws=[(desc="task \$i ",)
        end
 ```
 """
-function MultipleProgress(progresses::AbstractVector{Progress}; 
-                          count_finishes=false, kwmain=(), kw...)
-    main_length = count_finishes ? length(progresses) : sum(p->p.n, progresses)
-    mainprogress = Progress(main_length; kwmain...)
-    return MultipleProgress(progresses, mainprogress; count_finishes=count_finishes, kw...)
-end
-
-function MultipleProgress(
-        progresses::AbstractVector{<:AbstractProgress},
-        mainprogress::AbstractProgress;
-        count_finishes = false,
-        count_overshoot = false,
-        auto_reset_timer = true
-    )
+function MultipleProgress(progresses::AbstractVector{<:AbstractProgress},
+                          mainprogress::AbstractProgress;
+                          count_finishes = false,
+                          count_overshoot = false,
+                          auto_reset_timer = true)
     channel = RemoteChannel(() -> Channel{NTuple{4,Any}}(1024))
     mp = MultipleProgress(channel, length(progresses))
     @async runMultipleProgress(progresses, mainprogress, mp;
@@ -152,14 +143,28 @@ function MultipleProgress(
     return mp
 end
 
-function runMultipleProgress(
-        progresses::AbstractVector{<:AbstractProgress},
-        mainprogress::AbstractProgress,
-        mp::MultipleProgress;
-        count_finishes = false,
-        count_overshoot = false,
-        auto_reset_timer = true
-    )
+function MultipleProgress(progresses::AbstractVector{Progress}; 
+                          count_finishes=false, kwmain=(), kw...)
+    main_length = count_finishes ? length(progresses) : sum(p->p.n, progresses)
+    mainprogress = Progress(main_length; kwmain...)
+    return MultipleProgress(progresses, mainprogress; count_finishes=count_finishes, kw...)
+end
+
+function MultipleProgress(progresses::AbstractVector{<:AbstractProgress}; 
+                          count_finishes=false, kwmain=(), kw...)
+    if count_finishes
+        MultipleProgress(progresses, Progress(length(progresses); kwmain...); count_finishes=count_finishes, kw...)
+    else
+        MultipleProgress(progresses, ProgressUnknown(;kwmain...); count_finishes=count_finishes, kw...)
+    end
+end
+
+function runMultipleProgress(progresses::AbstractVector{<:AbstractProgress},
+                             mainprogress::AbstractProgress,
+                             mp::MultipleProgress;
+                             count_finishes = false,
+                             count_overshoot = false,
+                             auto_reset_timer = true)
     for p in progresses
         p.offset = -1
     end
@@ -170,7 +175,7 @@ function runMultipleProgress(
     try
         # we must make sure that 2 progresses aren't updated at the same time, 
         # that's why we use only one Channel
-        while !has_finished(mainprogress) && !all(has_finished, progresses)
+        while !has_finished(mainprogress) && any(!has_finished, progresses)
             
             p, f, args, kwt = take!(channel)
 
@@ -180,8 +185,8 @@ function runMultipleProgress(
                     finish!(mainprogress; keep=false)
                     cancel(mainprogress, args...; kwt..., keep=false)
                     break
-                elseif f == PP_UPDATE
-                    if !isempty(args) && args[1] == (:)
+                elseif f == PP_UPDATE 
+                    if !isempty(args) && args[1] == (:) # allow to update without knowing the counter with (:)
                         update!(mainprogress, valueorcounter(mainprogress), args[2:end]...; kwt..., keep=false)
                     else
                         update!(mainprogress, args...; kwt..., keep=false)
@@ -204,10 +209,12 @@ function runMultipleProgress(
                     max_offsets = max(max_offsets, offset)
                     progresses[p].offset = offset
                     if auto_reset_timer
-                        progresses[p].tinit = progresses[p].tsecond = progresses[p].tlast = time()
+                        progresses[p].tinit = time()
                     end
                     push!(taken_offsets, offset)
                 end
+
+                already_finished = has_finished(progresses[p])
 
                 if f == PP_NEXT
                     if count_overshoot || !has_finished(progresses[p])
@@ -216,6 +223,7 @@ function runMultipleProgress(
                     end
                 else
                     prev_p_value = valueorcounter(progresses[p])
+                    prev_p_counter = progresses[p].counter
                     
                     if f == PP_FINISH
                         finish!(progresses[p], args...; kwt..., keep=false)
@@ -223,7 +231,7 @@ function runMultipleProgress(
                         finish!(progresses[p]; keep=false)
                         cancel(progresses[p], args...; kwt..., keep=false)
                     elseif f == PP_UPDATE
-                        if !isempty(args)
+                        if !isempty(args) # allow to update without knowing the counter with (:)
                             value = args[1]
                             value == (:) && (value = valueorcounter(progresses[p]))
                             !count_overshoot && progresses[p] isa Progress && (value = min(value, progresses[p].n))
@@ -234,10 +242,10 @@ function runMultipleProgress(
                     end
 
                     !count_finishes && update!(mainprogress, 
-                            mainprogress.counter - prev_p_value + progresses[p].counter; keep=false)
+                        mainprogress.counter - prev_p_counter + progresses[p].counter; keep=false)
                 end
 
-                if has_finished(progresses[p])
+                if has_finished(progresses[p]) && !already_finished
                     delete!(taken_offsets, progresses[p].offset)
                     count_finishes && next!(mainprogress; keep=false)
                 end
@@ -256,8 +264,6 @@ function runMultipleProgress(
         close(mp)
     end
 end
-
-
 
 """
     close(p::Union{ParallelProgress,MultipleProgress})
