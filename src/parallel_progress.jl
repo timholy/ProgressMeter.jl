@@ -177,19 +177,19 @@ function runMultipleProgress(
             # main progressbar
             if p == 0
                 if f == PP_CANCEL
-                    mainprogress.counter = mainprogress.n
-                    cancel(mainprogress, args...; kwt...)
+                    finish!(mainprogress; keep=false)
+                    cancel(mainprogress, args...; kwt..., keep=false)
                     break
                 elseif f == PP_UPDATE
                     if !isempty(args) && args[1] == (:)
-                        update!(mainprogress, mainprogress.counter, args[2:end]...; kwt...)
+                        update!(mainprogress, valueorcounter(mainprogress), args[2:end]...; kwt..., keep=false)
                     else
-                        update!(mainprogress, args...; kwt...)
+                        update!(mainprogress, args...; kwt..., keep=false)
                     end
                 elseif f == PP_NEXT
-                    next!(mainprogress, args...; kwt...)
+                    next!(mainprogress, args...; kwt..., keep=false)
                 elseif f == PP_FINISH
-                    finish!(mainprogress, args...; kwt...)
+                    finish!(mainprogress, args...; kwt..., keep=false)
                     break
                 end
             else
@@ -211,35 +211,35 @@ function runMultipleProgress(
 
                 if f == PP_NEXT
                     if count_overshoot || !has_finished(progresses[p])
-                        next!(progresses[p], args...; kwt...)
-                        next!(mainprogress)
+                        next!(progresses[p], args...; kwt..., keep=false)
+                        !count_finishes && next!(mainprogress; keep=false)
                     end
                 else
-                    prev_p_value = progresses[p].counter
+                    prev_p_value = valueorcounter(progresses[p])
                     
                     if f == PP_FINISH
-                        finish!(progresses[p], args...; kwt...)
+                        finish!(progresses[p], args...; kwt..., keep=false)
                     elseif f == PP_CANCEL
-                        #finish!(progresses[p])
-                        cancel(progresses[p], args...; kwt...)
-                        progresses[p].counter = progresses[p].n
+                        finish!(progresses[p]; keep=false)
+                        cancel(progresses[p], args...; kwt..., keep=false)
                     elseif f == PP_UPDATE
                         if !isempty(args)
                             value = args[1]
-                            value == (:) && (value = progresses[p].counter)
-                            !count_overshoot && (value = min(value, progresses[p].n))
-                            update!(progresses[p], value, args[2:end]...; kwt...)
+                            value == (:) && (value = valueorcounter(progresses[p]))
+                            !count_overshoot && progresses[p] isa Progress && (value = min(value, progresses[p].n))
+                            update!(progresses[p], value, args[2:end]...; kwt..., keep=false)
                         else
-                            update!(progresses[p]; kwt...)
+                            update!(progresses[p]; kwt..., keep=false)
                         end
                     end
 
-                    update!(mainprogress, 
-                            mainprogress.counter - prev_p_value + progresses[p].counter)
+                    !count_finishes && update!(mainprogress, 
+                            mainprogress.counter - prev_p_value + progresses[p].counter; keep=false)
                 end
 
                 if has_finished(progresses[p])
                     delete!(taken_offsets, progresses[p].offset)
+                    count_finishes && next!(mainprogress; keep=false)
                 end
             end
         end
@@ -252,11 +252,7 @@ function runMultipleProgress(
             println()
         end
     finally
-        print("\n" ^ max_offsets)
-        # progress with offset 0 adds automatically a line break when finished (#215)
-        if !has_finished(mainprogress) || mainprogress.enabled == false
-            println()
-        end
+        print("\n" ^ (max_offsets+1))
         close(mp)
     end
 end
@@ -283,6 +279,11 @@ has_finished(p::ProgressThresh) = p.triggered
 has_finished(p::ProgressUnknown) = p.done
 has_finished(p::ParallelProgress) = isfakechannel(p.channel)
 has_finished(p::MultipleProgress) = isfakechannel(p.channel)
+
 isfakechannel(_) = false
 isfakechannel(::FakeChannel) = true
 isfakechannel(mc::MultipleChannel) = isfakechannel(mc.channel)
+
+valueorcounter(p::Progress) = p.counter
+valueorcounter(p::ProgressThresh) = p.val
+valueorcounter(p::ProgressUnknown) = p.counter
