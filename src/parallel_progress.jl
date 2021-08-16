@@ -235,11 +235,7 @@ function runMultipleProgress(progresses::AbstractVector{<:AbstractProgress},
                     cancel(mainprogress, args...; kwt..., keep=false)
                     break
                 elseif f == PP_UPDATE 
-                    if !isempty(args) && args[1] == (:) # allow to update without knowing the counter with (:)
-                        update!(mainprogress, valueorcounter(mainprogress), args[2:end]...; kwt..., keep=false)
-                    else
-                        update!(mainprogress, args...; kwt..., keep=false)
-                    end
+                    update!(mainprogress, args...; kwt..., keep=false)
                 elseif f == PP_NEXT
                     next!(mainprogress, args...; kwt..., keep=false)
                 elseif f == PP_FINISH
@@ -296,9 +292,8 @@ function runMultipleProgress(progresses::AbstractVector{<:AbstractProgress},
                         finish!(progresses[p]; keep=false)
                         cancel(progresses[p], args...; kwt..., keep=false)
                     elseif f == PP_UPDATE
-                        if !isempty(args) # allow to update without knowing the counter with (:)
+                        if !isempty(args)
                             value = args[1]
-                            value == (:) && (value = valueorcounter(progresses[p]))
                             !count_overshoot && progresses[p] isa Progress && (value = min(value, progresses[p].n))
                             update!(progresses[p], value, args[2:end]...; kwt..., keep=false)
                         else
@@ -310,7 +305,7 @@ function runMultipleProgress(progresses::AbstractVector{<:AbstractProgress},
                         mainprogress.counter - prev_p_counter + progresses[p].counter; keep=false)
                 end
 
-                if has_finished(progresses[p]) && !already_finished
+                if !already_finished && has_finished(progresses[p])
                     delete!(taken_offsets, progresses[p].offset)
                     count_finishes && next!(mainprogress; keep=false)
                 end
@@ -355,10 +350,6 @@ isfakechannel(_) = false
 isfakechannel(::FakeChannel) = true
 isfakechannel(mc::MultipleChannel) = isfakechannel(mc.channel)
 
-valueorcounter(p::Progress) = p.counter
-valueorcounter(p::ProgressThresh) = p.val
-valueorcounter(p::ProgressUnknown) = p.counter
-
 """
     addprogress!(mp[i], T::Type{<:AbstractProgress}, args...; kw...)
 
@@ -371,7 +362,7 @@ p = MultipleProgress(Progress(N, "tasks done "); count_finishes=true)
 sleep(0.1)
 pmap(1:N) do i
     L = rand(20:50)
-    ProgressMeter.addprogress!(p[i], Progress, L, desc=" task \$i ")
+    addprogress!(p[i], Progress, L, desc=" task \$i ")
     for _ in 1:L
         sleep(0.05)
         next!(p[i])

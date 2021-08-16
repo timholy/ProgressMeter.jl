@@ -28,7 +28,6 @@ nworkers() == 1 && addprocs(4)
     sleep(0.1)
     @test has_finished(p)
 
-
     println("Testing MultipleProgress with custom titles and color")
     p = MultipleProgress(
         [Progress(100; color=:red, desc=" red "), 
@@ -105,7 +104,6 @@ nworkers() == 1 && addprocs(4)
     sleep(0.1)
     @test has_finished(p)
 
-
     println("Testing early finish main progress")
     p = MultipleProgress(Progress.([100, 80]))
     for _ in 1:50
@@ -156,7 +154,7 @@ nworkers() == 1 && addprocs(4)
             update!(p[2], 51, :blue)
         else
             if i == 75
-                update!(p[0], :, :yellow)
+                next!(p[0], :yellow; step=0)
             end
             next!(p[1])
             next!(p[2])
@@ -195,7 +193,7 @@ nworkers() == 1 && addprocs(4)
         rand() < 0.1 && next!(p[3])
         sleep(0.02)
     end
-    update!.(p[0:end], :, :red)
+    next!.(p[0:end], :red; step=0)
     sleep(0.5)
     finish!.(p[1:end])
     sleep(0.1)
@@ -264,6 +262,16 @@ nworkers() == 1 && addprocs(4)
     @test has_finished(p)
     print("\n"^5)
 
+    println("Testing with enabled=false")
+    p = MultipleProgress(Progress.([100, 100]), Progress(200); enabled = false)
+    @test has_finished(p)
+    next!.(p[0:end])
+    update!.(p[0:end])
+    finish!.(p[0:end])
+    cancel.(p[0:end])
+    close(p)
+    addprogress!(p[3], Progress, 100)
+
     println("Testing MultipleProgress with ProgressUnknown as mainprogress")
     p = MultipleProgress([Progress(100), ProgressUnknown(),ProgressThresh(0.01)]; count_finishes=false)
     for i in 1:100
@@ -301,7 +309,7 @@ nworkers() == 1 && addprocs(4)
     @test !has_finished(p)
     pmap(1:N) do ip
         L = rand(20:50)
-        ProgressMeter.addprogress!(p[ip], Progress, L, desc=" $(string(ip,pad=2)) (id=$(myid())) ")
+        addprogress!(p[ip], Progress, L, desc=" $(string(ip,pad=2)) (id=$(myid())) ")
         for _ in 1:L
             sleep(0.05)
             next!(p[ip])
@@ -318,11 +326,11 @@ nworkers() == 1 && addprocs(4)
     pmap(1:N) do ip
         L = rand(20:50)
         if ip%3 == 0
-            ProgressMeter.addprogress!(p[ip], Progress, L, desc=" $(string(ip,pad=2)) (id=$(myid())) ")
+            addprogress!(p[ip], Progress, L, desc=" $(string(ip,pad=2)) (id=$(myid())) ")
         elseif ip%3 == 1
-            ProgressMeter.addprogress!(p[ip], ProgressUnknown, desc=" $(string(ip,pad=2)) (id=$(myid())) ", spinner=true)
+            addprogress!(p[ip], ProgressUnknown, desc=" $(string(ip,pad=2)) (id=$(myid())) ", spinner=true)
         else
-            ProgressMeter.addprogress!(p[ip], ProgressThresh, 1/L, desc=" $(string(ip,pad=2)) (id=$(myid())) ")
+            addprogress!(p[ip], ProgressThresh, 1/L, desc=" $(string(ip,pad=2)) (id=$(myid())) ")
         end
         for i in 1:L
             sleep(0.05)
