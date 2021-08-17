@@ -109,7 +109,7 @@ Base.lastindex(mp::MultipleProgress) = mp.amount
 
 """
     MultipleProgress(progresses::AbstractVector{<:AbstractProgress},
-                     mainprogress::AbstractProgress;
+                     [mainprogress::AbstractProgress];
                      enabled = true,
                      auto_close = true,
                      count_finishes = false,
@@ -118,7 +118,8 @@ Base.lastindex(mp::MultipleProgress) = mp.amount
 
 allows to call the `progresses` and `mainprogress` from different workers
  - `progresses`: contains the different progressbars
- - `mainprogress`: main progressbar
+ - `mainprogress`: main progressbar, defaults to `Progress` or `ProgressUnknown`,
+ according to `count_finishes` and whether all progresses have known length or not
  - `enabled`: `enabled == false` doesn't show anything and doesn't open a channel
  - `auto_close`: if true, the channel will close when all progresses are finished, otherwise,
  when mainprogress finishes or with `close(p)`
@@ -130,19 +131,19 @@ allows to call the `progresses` and `mainprogress` from different workers
 use p[i] to access the i-th progressmeter, and p[0] to access the main one
 
 # Example
-```jldoctest
-julia> using Distributed
-julia> addprocs(2)
-julia> @everywhere using ProgressMeter
-julia> p = MultipleProgress(fill(10,5); desc="global ", kws=[(desc="task \$i ",) for i in 1:5])
-       pmap(1:5) do x
-           for i in 1:10
-               sleep(rand())
-               next!(p[x])
-           end
-           sleep(0.01)
-           myid()
-       end
+```julia
+using Distributed
+addprocs(2)
+@everywhere using ProgressMeter
+p = MultipleProgress([Progress(10; desc="task \$i ") for i in 1:5], Progress(50; desc="global "))
+pmap(1:5) do x
+    for i in 1:10
+        sleep(rand())
+        next!(p[x])
+    end
+    sleep(0.01)
+    myid()
+end
 ```
 """
 function MultipleProgress(progresses::AbstractVector{<:AbstractProgress},
@@ -164,13 +165,6 @@ function MultipleProgress(progresses::AbstractVector{<:AbstractProgress},
     return mp
 end
 
-"""
-    MultipleProgress(progresses::AbstractVector{Progress}; count_finishes=false, kwmain=(), kw...)
-
-is equivalent to:
-
-    MultipleProgress(progresses, Progress(main_length; kwmain...); count_finishes, kw...)
-"""
 function MultipleProgress(progresses::AbstractVector{Progress}; 
                           count_finishes=false, kwmain=(), kw...)
     main_length = count_finishes ? length(progresses) : sum(p->p.n, progresses)
@@ -178,33 +172,27 @@ function MultipleProgress(progresses::AbstractVector{Progress};
     return MultipleProgress(progresses, mainprogress; count_finishes=count_finishes, kw...)
 end
 
-"""
-    MultipleProgress(progresses::AbstractVector{<:AbstractProgress}; count_finishes=false, kwmain=(), kw...)
-
-is equivalent to:
-
-    MultipleProgress(progresses, prog; count_finishes, kw...)
-
-with `prog` a `Progress` of the same length as `progresses` if `count_finishes == true`, 
-otherwise, `prog` is a `ProgressUnknown`
-"""
 function MultipleProgress(progresses::AbstractVector{<:AbstractProgress}; 
                           count_finishes=false, kwmain=(), kw...)
     if count_finishes
         MultipleProgress(progresses, Progress(length(progresses); kwmain...); count_finishes=count_finishes, kw...)
     else
-        MultipleProgress(progresses, ProgressUnknown(;kwmain...); count_finishes=count_finishes, kw...)
+        MultipleProgress(progresses, ProgressUnknown(; kwmain...); count_finishes=count_finishes, kw...)
     end
 end
 
 """
-    MultipleProgress(mainprogress::AbstractProgress; auto_close=false, kw...)
+    MultipleProgress(mainprogress=ProgressUnknown(); auto_close=false, kw...)
 
 is equivalent to
 
     MultipleProgress(AbstractProgress[], mainprogress; auto_close, kw...)
+
+See also: `addprogress!`
+
+Close the underlying channel with `finish!(p[0])` (finishes `mainprogress`) or `close(p)`.
 """
-function MultipleProgress(mainprogress::AbstractProgress; auto_close=false, kw...)
+function MultipleProgress(mainprogress::AbstractProgress=ProgressUnknown(); auto_close=false, kw...)
     return MultipleProgress(AbstractProgress[], mainprogress; auto_close=auto_close, kw...)
 end
 
