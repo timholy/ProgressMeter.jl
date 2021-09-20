@@ -4,6 +4,13 @@ using ProgressMeter: has_finished
 nworkers() == 1 && addprocs(4)
 @everywhere using ProgressMeter
 
+# additional time before checking if progressbar has finished during CI
+if get(ENV, "CI", "false") == "true"
+    s = 0.1
+else
+    s = 1.0
+end
+
 @testset "MultipleProgress() tests" begin
 
     np = nworkers()
@@ -22,10 +29,10 @@ nworkers() == 1 && addprocs(4)
         sleep(0.2)
         next!(p[1])
     end
-    sleep(0.1)
+    sleep(s)
     @test !has_finished(p)
     next!(p[1])
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 
     println("Testing MultipleProgress with custom titles and color")
@@ -38,10 +45,10 @@ nworkers() == 1 && addprocs(4)
         sleep(0.1)
         next!.(p[1:2])
     end
-    sleep(0.1)
+    sleep(s)
     @test !has_finished(p)
     next!.(p[1:2])
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 
     println("Testing over-shooting and under-shooting")
@@ -50,10 +57,10 @@ nworkers() == 1 && addprocs(4)
         sleep(0.1)
         next!.(p[1:2])
     end
-    sleep(0.1)
+    sleep(s)
     @test !has_finished(p)
     finish!(p[2])
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 
     println("Testing over-shooting with count_overshoot")
@@ -65,10 +72,10 @@ nworkers() == 1 && addprocs(4)
         sleep(0.1)
         next!(p[2])
     end
-    sleep(0.1)
+    sleep(s)
     @test !has_finished(p)
     next!(p[2])
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 
     println("Testing rapid over-shooting")
@@ -78,7 +85,7 @@ nworkers() == 1 && addprocs(4)
     for i in 1:10000
         next!(p[1])
     end
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 
     println("Testing early cancel")
@@ -90,7 +97,7 @@ nworkers() == 1 && addprocs(4)
     end
     cancel(p[1])
     finish!(p[2])
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 
     println("Testing early cancel main progress")
@@ -101,7 +108,7 @@ nworkers() == 1 && addprocs(4)
         next!(p[2])
     end
     cancel(p[0])
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 
     println("Testing early finish main progress")
@@ -112,7 +119,7 @@ nworkers() == 1 && addprocs(4)
         next!(p[2])
     end
     finish!(p[0])
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 
     println("Testing next! on main progress")
@@ -121,10 +128,10 @@ nworkers() == 1 && addprocs(4)
         sleep(0.02)
         next!(p[1])
     end
-    sleep(0.1)
+    sleep(s)
     @test !has_finished(p)
     next!(p[0])
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 
     println("Testing bar remplacement with $np workers and pmap")
@@ -138,7 +145,7 @@ nworkers() == 1 && addprocs(4)
         end
         myid()
     end
-    sleep(0.1)
+    sleep(s)
     @test length(unique(ids)) == np
     @test has_finished(p)
 
@@ -160,7 +167,7 @@ nworkers() == 1 && addprocs(4)
             next!(p[2])
         end
     end
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 
     println("Testing changing desc with next! and update!")
@@ -182,7 +189,7 @@ nworkers() == 1 && addprocs(4)
             next!.(p[1:3])
         end
     end
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 
     println("Update and finish all")
@@ -196,7 +203,7 @@ nworkers() == 1 && addprocs(4)
     next!.(p[0:end], :red; step=0)
     sleep(0.5)
     finish!.(p[1:end])
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 
     println("Testing without main progressmeter and offset 0 finishes last")
@@ -208,10 +215,10 @@ nworkers() == 1 && addprocs(4)
         rand() < 0.8 && next!(p[3], desc="task c ")
         sleep(0.2)
     end
-    sleep(0.1)
+    sleep(s)
     @test !has_finished(p)
     finish!.(p[end:-1:1])
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 
     println("Testing without main progressmeter and offset 0 finishes first (#215)")
@@ -223,10 +230,10 @@ nworkers() == 1 && addprocs(4)
         rand() < 0.8 && next!(p[3], desc="task c ")
         sleep(0.2)
     end
-    sleep(0.1)
+    sleep(s)
     @test !has_finished(p)
     finish!.(p[1:end])
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 
     println("Testing early close (should not display error)")
@@ -235,10 +242,10 @@ nworkers() == 1 && addprocs(4)
         sleep(0.1)
         next!(p[1])
     end
-    sleep(0.1)
+    sleep(s)
     @test !has_finished(p)
     close(p)
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 
     println("Testing errors in MultipleProgress (should display error)")
@@ -248,8 +255,7 @@ nworkers() == 1 && addprocs(4)
         next!(p[1])
     end
     next!(p[1], 1)
-    sleep(3)
-    get(ENV, "GITHUB_ACTIONS", "false") == "true" && sleep(10)
+    sleep(30s)
     @test has_finished(p)
 
     println("Testing with showvalues (doesn't really work)")
@@ -259,7 +265,7 @@ nworkers() == 1 && addprocs(4)
         next!(p[1]; showvalues = Dict(:i=>i))
         next!(p[2]; showvalues = [i=>i, "longstring"=>"WXYZ"^i])
     end
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
     print("\n"^5)
 
@@ -281,10 +287,10 @@ nworkers() == 1 && addprocs(4)
         next!(p[2])
         update!(p[3], 1/i)
     end
-    sleep(0.1)
+    sleep(s)
     @test !has_finished(p)
     finish!(p[2])
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 
     println("Testing MultipleProgress with count_finishes")
@@ -297,16 +303,16 @@ nworkers() == 1 && addprocs(4)
         next!(p[2])
         update!(p[3], 1/i)
     end
-    sleep(0.1)
+    sleep(s)
     @test !has_finished(p)
     finish!(p[1])
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 
     N = 4*np
     println("Testing adding $N progresses with $np workers")
     p = MultipleProgress(Progress(N, "tasks done "); count_finishes=true)
-    sleep(0.1)
+    sleep(s)
     @test !has_finished(p)
     pmap(1:N) do ip
         L = rand(20:50)
@@ -316,13 +322,13 @@ nworkers() == 1 && addprocs(4)
             next!(p[ip])
         end
     end
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 
     N = 4*np
     println("Testing adding $N mixed progresses with $np workers")
     p = MultipleProgress(ProgressUnknown(spinner=true))
-    sleep(0.1)
+    sleep(s)
     @test !has_finished(p)
     pmap(1:N) do ip
         L = rand(20:50)
@@ -343,9 +349,9 @@ nworkers() == 1 && addprocs(4)
         end
         ip%3 == 1 && finish!(p[ip])
     end
-    sleep(0.1)
+    sleep(s)
     @test !has_finished(p)
     finish!(p[0])
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 end

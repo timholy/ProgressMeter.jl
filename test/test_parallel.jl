@@ -4,6 +4,13 @@ using ProgressMeter: has_finished
 nworkers() == 1 && addprocs(4)
 @everywhere using ProgressMeter
 
+# additional time before checking if progressbar has finished during CI
+if get(ENV, "CI", "false") == "true"
+    s = 0.1
+else
+    s = 1.0
+end
+
 @testset "ParallelProgress() tests" begin
 
     np = nworkers()
@@ -19,7 +26,7 @@ nworkers() == 1 && addprocs(4)
             next!(p)
         end
     end
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 
     println("Testing update!")
@@ -34,7 +41,7 @@ nworkers() == 1 && addprocs(4)
         sleep(0.3)
         next!(p)
     end
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 
     println("Testing over-shooting")
@@ -43,7 +50,7 @@ nworkers() == 1 && addprocs(4)
         sleep(0.01)
         next!(p)
     end
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 
     println("Testing under-shooting")
@@ -53,7 +60,7 @@ nworkers() == 1 && addprocs(4)
         next!(p)
     end
     finish!(p)
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 
     println("Testing rapid over-shooting")
@@ -63,7 +70,7 @@ nworkers() == 1 && addprocs(4)
     for _ in 1:10000
         next!(p)
     end
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 
     println("Testing early cancel")
@@ -73,7 +80,7 @@ nworkers() == 1 && addprocs(4)
         next!(p)
     end
     cancel(p)
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 
     println("Testing across $np workers with @distributed")
@@ -83,7 +90,7 @@ nworkers() == 1 && addprocs(4)
         sleep(0.2)
         next!(p)
     end
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 
     println("Testing across $np workers with pmap")
@@ -94,7 +101,7 @@ nworkers() == 1 && addprocs(4)
         next!(p)
         return myid()
     end
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
     @test length(unique(ids)) == np
 
@@ -110,7 +117,7 @@ nworkers() == 1 && addprocs(4)
             next!(p)
         end
     end
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 
     println("Testing changing desc with next! and update!")
@@ -125,7 +132,7 @@ nworkers() == 1 && addprocs(4)
             next!(p)
         end
     end
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 
     println("Testing with showvalues")
@@ -138,7 +145,7 @@ nworkers() == 1 && addprocs(4)
             next!(p; showvalues=() -> [(:i, "$i"), ("halfdone", true)])
         end
     end
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 
     println("Testing with ProgressUnknown")
@@ -149,10 +156,10 @@ nworkers() == 1 && addprocs(4)
     end
     sleep(0.5)
     update!(p, 200)
-    sleep(0.5)
+    sleep(5s)
     @test !has_finished(p)
     finish!(p)
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 
     println("Testing with ProgressThresh")
@@ -161,7 +168,7 @@ nworkers() == 1 && addprocs(4)
         sleep(0.2)
         update!(p, i)
     end
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 
     println("Testing early close (should not display error)")
@@ -170,10 +177,10 @@ nworkers() == 1 && addprocs(4)
         sleep(0.1)
         next!(p)
     end
-    sleep(0.1)
+    sleep(s)
     @test !has_finished(p)
     close(p)
-    sleep(0.1)
+    sleep(s)
     @test has_finished(p)
 
     println("Testing errors in ParallelProgress (should display error)")
@@ -184,7 +191,6 @@ nworkers() == 1 && addprocs(4)
         next!(p)
     end
     next!(p, 1)
-    sleep(3)
-    get(ENV, "GITHUB_ACTIONS", "false") == "true" && sleep(10)
+    sleep(30s)
     @test has_finished(p)
 end
