@@ -93,7 +93,6 @@ mutable struct Progress <: AbstractProgress
                       enabled::Bool = true,
                       showspeed::Bool = false,
                      )
-        RUNNING_IJULIA_KERNEL[] = running_ijulia_kernel()
         CLEAR_IJULIA[] = clear_ijulia()
         reentrantlocker = Threads.ReentrantLock()
         counter = start
@@ -151,7 +150,6 @@ mutable struct ProgressThresh{T<:Real} <: AbstractProgress
                                offset::Integer=0,
                                enabled = true,
                                showspeed::Bool = false) where T
-        RUNNING_IJULIA_KERNEL[] = running_ijulia_kernel()
         CLEAR_IJULIA[] = clear_ijulia()
         reentrantlocker = Threads.ReentrantLock()
         tinit = tlast = time()
@@ -213,7 +211,6 @@ function ProgressUnknown(;
                          offset::Integer=0,
                          enabled::Bool = true, 
                          showspeed::Bool = false)
-    RUNNING_IJULIA_KERNEL[] = running_ijulia_kernel()
     CLEAR_IJULIA[] = clear_ijulia()
     reentrantlocker = Threads.ReentrantLock()
     tinit = tlast = time()
@@ -249,7 +246,6 @@ function ijulia_behavior(b)
 end
 
 # Whether or not to use IJulia.clear_output
-const RUNNING_IJULIA_KERNEL = Ref{Bool}(false)
 const CLEAR_IJULIA = Ref{Bool}(false)
 running_ijulia_kernel() = isdefined(Main, :IJulia) && Main.IJulia.inited
 clear_ijulia() = (IJULIABEHAVIOR[] != IJuliaAppend) && running_ijulia_kernel()
@@ -269,7 +265,7 @@ end
 function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, valuecolor = :blue,
                         offset::Integer = p.offset, keep = (offset == 0), desc::Union{Nothing,AbstractString} = nothing,
                         ignore_predictor = false)
-    (!RUNNING_IJULIA_KERNEL[] & !p.enabled) && return
+    !p.enabled && return
     if p.counter == 2 # ignore the first loop given usually uncharacteristically slow
         p.tsecond = time()
     end
@@ -347,7 +343,7 @@ end
 
 function updateProgress!(p::ProgressThresh; showvalues = (), truncate_lines = false, valuecolor = :blue,
                         offset::Integer = p.offset, keep = (offset == 0), desc = p.desc, ignore_predictor = false)
-    (!RUNNING_IJULIA_KERNEL[] & !p.enabled) && return
+    !p.enabled && return
     p.offset = offset
     p.desc = desc
     if p.val <= p.thresh && !p.triggered
@@ -417,7 +413,7 @@ function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = f
                         valuecolor = :blue, desc = p.desc, ignore_predictor = false, 
                         spinner::Union{AbstractChar,AbstractString,AbstractVector{<:AbstractChar}} = spinner_chars,
                         offset::Integer = p.offset, keep = (offset == 0))
-    (!RUNNING_IJULIA_KERNEL[] & !p.enabled) && return
+    !p.enabled && return
     p.offset = offset
     p.desc = desc
     if p.done
