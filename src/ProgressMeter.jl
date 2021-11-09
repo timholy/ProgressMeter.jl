@@ -257,7 +257,7 @@ end
 # update progress display
 function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, valuecolor = :blue,
                         offset::Integer = p.offset, keep = (offset == 0), desc::Union{Nothing,AbstractString} = nothing,
-                        ignore_predictor = false)
+                        ignore_predictor = false, keepall=false)
     (!RUNNING_IJULIA_KERNEL[] & !p.enabled) && return
     if p.counter == 2 # ignore the first loop given usually uncharacteristically slow
         p.tsecond = time()
@@ -321,7 +321,11 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
             move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             printover(p.output, msg, p.color)
             printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
-            !CLEAR_IJULIA[] && print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+            if keepall
+                println(p.output)
+            else
+                !CLEAR_IJULIA[] && print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+            end
             flush(p.output)
             # Compensate for any overhead of printing. This can be
             # especially important if you're running over a slow network
