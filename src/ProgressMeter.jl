@@ -102,10 +102,10 @@ end
 
 Progress(n::Integer, dt::Real, desc::AbstractString="Progress: ",
          barlen=nothing, color::Symbol=:green, output::IO=stderr;
-         offset::Integer=0) =
-    Progress(n, dt=dt, desc=desc, barlen=barlen, color=color, output=output, offset=offset)
+         offset::Integer=0, kw...) =
+    Progress(n, dt=dt, desc=desc, barlen=barlen, color=color, output=output, offset=offset; kw...)
 
-Progress(n::Integer, desc::AbstractString, offset::Integer=0) = Progress(n, desc=desc, offset=offset)
+Progress(n::Integer, desc::AbstractString, offset::Integer=0; kw...) = Progress(n, desc=desc, offset=offset; kw...)
 
 
 """
@@ -160,10 +160,10 @@ ProgressThresh(thresh::Real; kwargs...) = ProgressThresh{typeof(thresh)}(thresh;
 # Legacy constructor calls
 ProgressThresh(thresh::Real, dt::Real, desc::AbstractString="Progress: ",
          color::Symbol=:green, output::IO=stderr;
-         offset::Integer=0) =
-    ProgressThresh(thresh; dt=dt, desc=desc, color=color, output=output, offset=offset)
+         offset::Integer=0, kw...) =
+    ProgressThresh(thresh; dt=dt, desc=desc, color=color, output=output, offset=offset, kw...)
 
-ProgressThresh(thresh::Real, desc::AbstractString, offset::Integer=0) = ProgressThresh(thresh; desc=desc, offset=offset)
+ProgressThresh(thresh::Real, desc::AbstractString, offset::Integer=0; kw...) = ProgressThresh(thresh; desc=desc, offset=offset, kw...)
 
 """
 `prog = ProgressUnknown(; dt=0.1, desc="Progress: ",
