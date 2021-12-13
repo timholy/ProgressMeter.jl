@@ -328,7 +328,7 @@ You can use this to conditionally disable a progress bar in cases where you want
 or are using another progress bar to track progress in looping over a function that itself uses a progress bar.
 
 ```julia
-function my_awesome_slow_loop(n: Integer; show_progress=true)
+function my_awesome_slow_loop(n::Integer; show_progress=true)
     p = Progress(n; enabled=show_progress)
     for i in 1:n
         sleep(0.1)
