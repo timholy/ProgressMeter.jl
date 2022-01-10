@@ -90,6 +90,7 @@ mutable struct Progress <: AbstractProgress
     tlast::Float64
     printed::Bool              # true if we have issued at least one status update
     desc::String               # prefix to the percentage, e.g.  "Computing..."
+    rate_format::AbstractRateFormat
     barlen::Union{Int,Nothing} # progress bar size (default is available terminal width)
     barglyphs::BarGlyphs       # the characters to be used in the bar
     color::Symbol              # default to green
@@ -106,6 +107,7 @@ mutable struct Progress <: AbstractProgress
     function Progress(n::Integer;
                       dt::Real=0.1,
                       desc::AbstractString="Progress: ",
+                      rate_format=PercentRateFormat(0),
                       color::Symbol=:green,
                       output::IO=stderr,
                       barlen=nothing,
@@ -120,17 +122,20 @@ mutable struct Progress <: AbstractProgress
         counter = start
         tinit = tsecond = tlast = time()
         printed = false
-        new(n, reentrantlocker, dt, counter, tinit, tsecond, tlast, printed, desc, barlen, barglyphs, color, output, offset, 0, start, enabled, showspeed, 1, 1, Int[])
+        new(n, reentrantlocker, dt, counter, tinit, tsecond, tlast, printed, desc, rate_format, barlen, barglyphs, color, output, offset, 0, start, enabled, showspeed, 1, 1, Int[])
     end
 end
 
 Progress(n::Integer, dt::Real, desc::AbstractString="Progress: ",
+         rate_format::AbstractRateFormat=PercentRateFormat(0),
          barlen=nothing, color::Symbol=:green, output::IO=stderr;
          offset::Integer=0) =
-    Progress(n, dt=dt, desc=desc, barlen=barlen, color=color, output=output, offset=offset)
+    Progress(n, dt=dt, desc=desc, rate_format=rate_format, barlen=barlen, color=color, output=output, offset=offset)
 
 Progress(n::Integer, desc::AbstractString, offset::Integer=0) = Progress(n, desc=desc, offset=offset)
 
+Progress(n::Integer, desc::AbstractString, rate_format::AbstractRateFormat, offset::Integer=0) =
+    Progress(n, desc=desc, rate_format=rate_format, offset=offset)
 
 """
 `prog = ProgressThresh(thresh; dt=0.1, desc="Progress: ",
@@ -277,7 +282,7 @@ end
 # update progress display
 function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, valuecolor = :blue,
                         offset::Integer = p.offset, keep = (offset == 0), desc::Union{Nothing,AbstractString} = nothing,
-                        ignore_predictor = false, rate_format=PercentRateFormat(0))
+                        ignore_predictor = false)
     !p.enabled && return
     if p.counter == 2 # ignore the first loop given usually uncharacteristically slow
         p.tsecond = time()
@@ -297,7 +302,7 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
             bar = barstring(barlen, percentage_complete, barglyphs=p.barglyphs)
             elapsed_time = t - p.tinit
             dur = durationstring(elapsed_time)
-            rate_str = rate_string(p.counter, p.n, rate_format)
+            rate_str = rate_string(p.counter, p.n, p.rate_format)
             msg = @sprintf "%s%s%s Time: %s" p.desc rate_str bar dur
             if p.showspeed
                 sec_per_iter = elapsed_time / (p.counter - p.start)
@@ -333,7 +338,7 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
             else
                 eta = "N/A"
             end
-            rate_str = rate_string(p.counter, p.n, rate_format)
+            rate_str = rate_string(p.counter, p.n, p.rate_format)
             msg = @sprintf "%s%s%s Time: %s" p.desc rate_str bar eta
             if p.showspeed
                 sec_per_iter = elapsed_time / (p.counter - p.start)
