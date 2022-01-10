@@ -56,6 +56,7 @@ rate_string(c::Int, n::Int, ::EmptyRateFormat) = ""
 struct PercentRateFormat <: AbstractRateFormat
     digits::Int  # number of digits below decimal point
 end
+PercentRateFormat() = PercentRateFormat(0)
 function rate_string(c::Int, n::Int, p::PercentRateFormat)
     if p.digits==0
         return lpad(round(Int, 100c/n), 3) * "%"
@@ -107,7 +108,7 @@ mutable struct Progress <: AbstractProgress
     function Progress(n::Integer;
                       dt::Real=0.1,
                       desc::AbstractString="Progress: ",
-                      rate_format=PercentRateFormat(0),
+                      rate_format=PercentRateFormat(),
                       color::Symbol=:green,
                       output::IO=stderr,
                       barlen=nothing,
