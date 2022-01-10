@@ -127,7 +127,12 @@ mutable struct Progress <: AbstractProgress
 end
 
 Progress(n::Integer, dt::Real, desc::AbstractString="Progress: ",
-         rate_format::AbstractRateFormat=PercentRateFormat(0),
+         barlen=nothing, color::Symbol=:green, output::IO=stderr;
+         offset::Integer=0) =
+    Progress(n, dt=dt, desc=desc, barlen=barlen, color=color, output=output, offset=offset)
+
+Progress(n::Integer, dt::Real, desc::AbstractString="Progress: ",
+         rate_format::AbstractRateFormat=PercentRateFormat(),
          barlen=nothing, color::Symbol=:green, output::IO=stderr;
          offset::Integer=0) =
     Progress(n, dt=dt, desc=desc, rate_format=rate_format, barlen=barlen, color=color, output=output, offset=offset)
