@@ -4,7 +4,7 @@ using Printf: @sprintf
 using Distributed
 
 export Progress, ProgressThresh, ProgressUnknown, BarGlyphs, next!, update!, cancel, finish!, @showprogress, progress_map, progress_pmap, ijulia_behavior
-export EmptyRateFormat, PercentageRateFormat, FractionalRateFormat, IntegralRateFormat
+export EmptyRateFormat, PercentRateFormat, FractionRateFormat, IntegerRateFormat
 
 """
 `ProgressMeter` contains a suite of utilities for displaying progress
@@ -46,6 +46,29 @@ function BarGlyphs(s::AbstractString)
     end
     return BarGlyphs(glyphs...)
 end
+
+abstract type AbstractRateFormat end
+function rate_string end
+
+struct EmptyRateFormat <: AbstractRateFormat end
+rate_string(c::Int, n::Int, ::EmptyRateFormat) = ""
+
+struct PercentRateFormat <: AbstractRateFormat
+    digits::Int  # number of digits below decimal point
+end
+function rate_string(c::Int, n::Int, p::PercentRateFormat)
+    if p.digits==0
+        return lpad(round(Int, 100c/n), 3) * "%"
+    else
+        return lpad(round(100c/n, digits=p.digits), p.digits+4) * "%"  # p.precision + 3, and +1 for "."
+    end
+end
+
+struct FractionRateFormat <: AbstractRateFormat end
+rate_string(c::Int, n::Int, ::FractionRateFormat) = lpad(c, length(string(n))) * "/" * string(n)
+
+struct IntegerRateFormat <: AbstractRateFormat end
+rate_string(c::Int, n::Int, ::IntegerRateFormat) = lpad(c, length(string(n))) * " out of " * string(n)
 
 """
 `prog = Progress(n; dt=0.1, desc="Progress: ", color=:green,
@@ -213,29 +236,6 @@ ProgressUnknown(dt::Real, desc::AbstractString="Progress: ",
     ProgressUnknown(dt=dt, desc=desc, color=color, output=output; kwargs...)
 
 ProgressUnknown(desc::AbstractString; kwargs...) = ProgressUnknown(desc=desc; kwargs...)
-
-abstract type AbstractRateFormat end
-function rate_string end
-
-struct EmptyRateFormat <: AbstractRateFormat end
-rate_string(c::Int, n::Int, ::EmptyRateFormat) = ""
-
-struct PercentRateFormat <: AbstractRateFormat
-    digits::Int  # number of digits below decimal point
-end
-function rate_string(c::Int, n::Int, p::PercentRateFormat)
-    if p.digits==0
-        return lpad(round(Int, 100c/n), 3) * "%"
-    else
-        return lpad(round(100c/n, digits=p.digits), p.digits+4) * "%"  # p.precision + 3, and +1 for "."
-    end
-end
-
-struct FractionRateFormat <: AbstractRateFormat end
-rate_string(c::Int, n::Int, ::FractionRateFormat) = lpad(c, length(string(n))) * "/" * string(n)
-
-struct IntegerRateFormat <: AbstractRateFormat end
-rate_string(c::Int, n::Int, ::IntegerRateFormat) = lpad(c, length(string(n))) * " out of " * string(n)
 
 #...length of percentage and ETA string with days is 29 characters, speed string is always 14 extra characters
 function tty_width(desc, output, showspeed::Bool)
