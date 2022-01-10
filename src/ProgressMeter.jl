@@ -4,6 +4,7 @@ using Printf: @sprintf
 using Distributed
 
 export Progress, ProgressThresh, ProgressUnknown, BarGlyphs, next!, update!, cancel, finish!, @showprogress, progress_map, progress_pmap, ijulia_behavior
+export EmptyRateFormat, PercentageRateFormat, FractionalRateFormat, IntegralRateFormat
 
 """
 `ProgressMeter` contains a suite of utilities for displaying progress
@@ -213,6 +214,29 @@ ProgressUnknown(dt::Real, desc::AbstractString="Progress: ",
 
 ProgressUnknown(desc::AbstractString; kwargs...) = ProgressUnknown(desc=desc; kwargs...)
 
+abstract type AbstractRateFormat end
+function rate_string end
+
+struct EmptyRateFormat <: AbstractRateFormat end
+rate_string(c::Int, n::Int, ::EmptyRateFormat) = ""
+
+struct PercentRateFormat <: AbstractRateFormat
+    digits::Int  # number of digits below decimal point
+end
+function rate_string(c::Int, n::Int, p::PercentRateFormat)
+    if p.digits==0
+        return lpad(round(Int, 100c/n), 3) * "%"
+    else
+        return lpad(round(100c/n, digits=p.digits), p.digits+4) * "%"  # p.precision + 3, and +1 for "."
+    end
+end
+
+struct FractionRateFormat <: AbstractRateFormat end
+rate_string(c::Int, n::Int, ::FractionRateFormat) = lpad(c, length(string(n))) * "/" * string(n)
+
+struct IntegerRateFormat <: AbstractRateFormat end
+rate_string(c::Int, n::Int, ::IntegerRateFormat) = lpad(c, length(string(n))) * " out of " * string(n)
+
 #...length of percentage and ETA string with days is 29 characters, speed string is always 14 extra characters
 function tty_width(desc, output, showspeed::Bool)
     full_width = displaysize(output)[2]
@@ -253,7 +277,7 @@ end
 # update progress display
 function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, valuecolor = :blue,
                         offset::Integer = p.offset, keep = (offset == 0), desc::Union{Nothing,AbstractString} = nothing,
-                        ignore_predictor = false)
+                        ignore_predictor = false, rate_format=PercentRateFormat(0))
     !p.enabled && return
     if p.counter == 2 # ignore the first loop given usually uncharacteristically slow
         p.tsecond = time()
@@ -273,7 +297,8 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
             bar = barstring(barlen, percentage_complete, barglyphs=p.barglyphs)
             elapsed_time = t - p.tinit
             dur = durationstring(elapsed_time)
-            msg = @sprintf "%s%3u%%%s Time: %s" p.desc round(Int, percentage_complete) bar dur
+            rate_str = rate_string(p.counter, p.n, rate_format)
+            msg = @sprintf "%s%s%s Time: %s" p.desc rate_str bar dur
             if p.showspeed
                 sec_per_iter = elapsed_time / (p.counter - p.start)
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
@@ -308,7 +333,8 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
             else
                 eta = "N/A"
             end
-            msg = @sprintf "%s%3u%%%s  ETA: %s" p.desc round(Int, percentage_complete) bar eta
+            rate_str = rate_string(p.counter, p.n, rate_format)
+            msg = @sprintf "%s%s%s Time: %s" p.desc rate_str bar eta
             if p.showspeed
                 sec_per_iter = elapsed_time / (p.counter - p.start)
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
