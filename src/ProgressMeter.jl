@@ -72,7 +72,7 @@ struct FractionRateFormat <: AbstractRateFormat end
 rate_string(c::Int, n::Int, ::FractionRateFormat) = lpad(c, length(string(n))) * "/" * string(n)
 
 struct IntegerRateFormat <: AbstractRateFormat end
-rate_string(c::Int, n::Int, ::IntegerRateFormat) = lpad(c, length(string(n))) * " out of " * string(n)
+rate_string(c::Int, n::Int, ::IntegerRateFormat) = lpad(c, length(string(n))) * " of " * string(n)
 
 """
 `prog = Progress(n; dt=0.1, desc="Progress: ", color=:green,
