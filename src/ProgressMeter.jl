@@ -58,11 +58,14 @@ struct PercentRateFormat <: AbstractRateFormat
 end
 PercentRateFormat() = PercentRateFormat(0)
 function rate_string(c::Int, n::Int, p::PercentRateFormat)
-    if p.digits==0
-        return lpad(round(Int, 100c/n), 3) * "%"
-    else
-        return lpad(round(100c/n, digits=p.digits), p.digits+4) * "%"  # p.precision + 3, and +1 for "."
-    end
+    str = string(round(100c/n, digits=p.digits))  # e.g., round(10, digits=0) = 10.0
+    i, f = split(str, ".")  # integral, fractional parts
+
+    rate_str = lpad(i, 3)
+    p.digits≠0 && (rate_str *= "." * rpad(f, p.digits, "0"))
+    rate_str *= "%"
+
+    return rate_str
 end
 
 struct FractionRateFormat <: AbstractRateFormat end
