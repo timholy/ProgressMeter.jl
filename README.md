@@ -40,6 +40,29 @@ The first incantation will use a minimum update interval of 1 second, and show t
 final duration.  If your computation runs so quickly that it never needs to show progress,
 no extraneous output will be displayed.
 
+Different formats for progress rate string are supported:
+```julia
+# Empty string
+@showprogress 1 "Computing..." EmptyRateFormat() for i in 1:107
+    sleep(0.1)
+end
+
+# 2 digits below decimal point (e.g., "2.80%")
+@showprogress 1 "Computing..." PercentRateFormat(2) for i in 1:107
+    sleep(0.1)
+end
+
+# Fraction (e.g., "3/107")
+@showprogress 1 "Computing..." FractionRateFormat() for i in 1:107
+    sleep(0.1)
+end
+
+# Integer (e.g., "3 of 107")
+@showprogress 1 "Computing..." IntegerRateFormat() for i in 1:107
+    sleep(0.1)
+end
+```
+
 The `@showprogress` macro wraps a `for` loop, comprehension, `@distributed` for loop, or
 `map`/`pmap`/`reduce` as long as the object being iterated over implements the `length`
 method and will handle `continue` correctly.
