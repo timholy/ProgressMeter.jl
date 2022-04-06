@@ -311,8 +311,9 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
             bar = barstring(barlen, percentage_complete, barglyphs=p.barglyphs)
             elapsed_time = t - p.tinit
             dur = durationstring(elapsed_time)
+            spacer = endswith(p.desc, " ") ? "" : " "
             rate_str = rate_string(p.counter, p.n, p.rate_format)
-            msg = @sprintf "%s%s%s Time: %s" p.desc rate_str bar dur
+            msg = @sprintf "%s%s%s%s Time: %s" p.desc spacer rate_str bar dur
             if p.showspeed
                 sec_per_iter = elapsed_time / (p.counter - p.start)
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
@@ -347,8 +348,9 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
             else
                 eta = "N/A"
             end
+            spacer = endswith(p.desc, " ") ? "" : " "
             rate_str = rate_string(p.counter, p.n, p.rate_format)
-            msg = @sprintf "%s%s%s Time: %s" p.desc rate_str bar eta
+            msg = @sprintf "%s%s%s%s  ETA: %s" p.desc spacer rate_str bar eta
             if p.showspeed
                 sec_per_iter = elapsed_time / (p.counter - p.start)
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
