@@ -106,6 +106,7 @@ Threads.@threads for i in 1:10
     sleep(2*rand())
     next!(p)
 end
+finish!(p)
 ```
 
 ```julia
@@ -120,6 +121,7 @@ for i in 1:n
     end
 end
 wait.(tasks)
+finish!(p)
 ```
 
 ### Progress bar style
