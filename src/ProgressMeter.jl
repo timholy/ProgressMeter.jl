@@ -315,11 +315,16 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
                 sec_per_iter = elapsed_time / (p.counter - p.start)
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
             end
-            !CLEAR_IJULIA[] && print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
-            move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
-            printover(p.output, msg, p.color)
-            printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
-            !CLEAR_IJULIA[] && print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+            # Julia’s stdout is not buffered, and if we are in a tight
+            # loop we do not want to issue single-byte writes (see strace output)
+            io = IOBuffer(sizehint=1024)
+            # io = p.output
+            !CLEAR_IJULIA[] && print(io, "\n" ^ (p.offset + p.numprintedvalues))
+            move_cursor_up_while_clearing_lines(io, p.numprintedvalues)
+            printover(io, msg, p.color)
+            printvalues!(p, showvalues, io; color = valuecolor, truncate = truncate_lines)
+            !CLEAR_IJULIA[] && print(io, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+            write(p.output, take!(io))
             flush(p.output)
             # Compensate for any overhead of printing. This can be
             # especially important if you're running over a slow network
@@ -584,7 +589,7 @@ function finish!(p::ProgressUnknown; options...)
 end
 
 # Internal method to print additional values below progress bar
-function printvalues!(p::AbstractProgress, showvalues; color = :normal, truncate = false)
+function printvalues!(p::AbstractProgress, showvalues, io::IO=p.output; color = :normal, truncate = false)
     length(showvalues) == 0 && return
     maxwidth = maximum(Int[length(string(name)) for (name, _) in showvalues])
 
@@ -598,10 +603,10 @@ function printvalues!(p::AbstractProgress, showvalues; color = :normal, truncate
         msg_lines = ceil(Int, (length(msg)-1) / max_len)
         if truncate && msg_lines >= 2
             # For multibyte characters, need to index with nextind.
-            printover(p.output, msg[1:nextind(msg, 1, max_len-1)] * "…", color)
+            printover(io, msg[1:nextind(msg, 1, max_len-1)] * "…", color)
             p.numprintedvalues += 1
         else
-            printover(p.output, msg, color)
+            printover(io, msg, color)
             p.numprintedvalues += msg_lines
         end
     end
