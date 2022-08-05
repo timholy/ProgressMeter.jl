@@ -46,6 +46,31 @@ function BarGlyphs(s::AbstractString)
     return BarGlyphs(glyphs...)
 end
 
+"""    BarGlyphs(which::Symbol)
+
+- `:braille`, a gray code on Braille characters, approximately sorted by weight
+- `:blocks`, a gray code on unicode quarter-blocks
+
+Demonstration:
+```
+n=1000; progress = Progress(n, barglyphs=BarGlyphs(:blocks), showspeed=true, barlen=20, dt=0)
+for i=1:n; sleep(1/60); next!(progress, ignore_predictor=true); end
+```
+"""
+function BarGlyphs(which::Symbol)
+    if which == :braille
+        # Braille gray code in order of approximately (±1) increasing
+        # weight. See Knuth volume 4A. The second-last character used
+        # to be ⣿, but it is deleted to make the sequence loop: it’s
+        # not a valid Gray code.
+        BarGlyphs('│', '⣿', collect(" ⠁⠃⠂⠆⠄⠌⠈⠘⠐⠰⠠⡠⡀⣀⢀⢐⢘⢈⢨⢠⢢⢂⢃⢁⢅⢄⣄⡄⡆⡂⡃⡁⡑⡐⡘⡈⡨⠨⠬⠤⠦⠢⠣⠡⠱⠑⠕⠔⠖⠒⠚⠊⠋⠉⠍⠅⠇⠏⠎⠞⠜⠝⠙⠛⠓⠳⠲⠶⠴⠵⠥⠭⠩⠫⠪⠺⠸⡸⡰⡱⡡⡩⡉⡋⡊⡚⡒⡲⡢⡦⡤⡬⡌⡜⡔⡕⡅⣅⣁⣃⣂⣆⢆⢦⢤⢥⢡⣡⣠⣨⣈⣌⢌⢍⢉⢋⢊⢚⢒⢲⢰⣰⣐⣔⢔⢕⢑⣑⣱⢱⢳⢓⢛⢙⢝⢜⢼⢴⢶⢖⣖⣒⣚⣘⣸⢸⢺⢪⢮⢎⣎⣊⣋⣉⣩⢩⢭⢬⣬⣤⣦⣢⣣⢣⢧⢇⣇⡇⡏⡍⡭⡥⡵⡴⡶⡖⡞⡎⡮⡪⡫⡣⡳⡓⡛⡙⡹⠹⠽⠼⠾⠮⠯⠧⠷⠗⠟⠿⠻⡻⡺⡾⡼⡽⡝⡟⡗⡷⡧⣧⣥⣭⣍⣏⢏⢯⢫⣫⣪⣺⣲⣶⣴⣼⣜⣞⢞⢟⢗⢷⢵⢽⢹⣹⣙⣛⣓⣗⣕⣝⣽⣵⣷⣳⣻⢻⢿⢾⣾⣮⣯⡯⡿⣟"), ' ', '│')
+    elseif which == :blocks
+        BarGlyphs('│', '█', collect(" ▗▐▝▞▖▌▘▀▜▚▙▄▟▛"), ' ', '│')
+    else
+        error("Unrecognized default BarGlyphs name: $which")
+    end
+end
+
 """
 `prog = Progress(n; dt=0.1, desc="Progress: ", color=:green,
 output=stderr, barlen=tty_width(desc), start=0)` creates a progress meter for a
