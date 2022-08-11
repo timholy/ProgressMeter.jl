@@ -526,7 +526,7 @@ end
 """
     update!(p::ProgressThresh, [val,] [color]; increment::Bool=true, options...)
 
-Set the progress counter to current value `val`
+Set the progress counter to current value `val`.
 """
 function update!(p::ProgressThresh, val=p.val, color::Symbol=p.color; increment::Bool = true, options...)
     lock_if_threading(p) do
