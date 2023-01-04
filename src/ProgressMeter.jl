@@ -583,6 +583,13 @@ function finish!(p::ProgressUnknown; options...)
     end
 end
 
+function replace_EOL_with_space(s)
+    width = displaysize(stdout)[2]
+    lines = split(s, "\n")
+    filled = lines .* " ".^(width .- sizeof.(lines))
+    return join(filled)
+end
+
 # Internal method to print additional values below progress bar
 function printvalues!(p::AbstractProgress, showvalues; color = :normal, truncate = false)
     length(showvalues) == 0 && return
@@ -591,7 +598,7 @@ function printvalues!(p::AbstractProgress, showvalues; color = :normal, truncate
     p.numprintedvalues = 0
 
     for (name, value) in showvalues
-        msg = "\n  " * rpad(string(name) * ": ", maxwidth+2+1) * string(value)
+        msg = "\n  " * rpad(string(name) * ": ", maxwidth+2+1) * replace_EOL_with_space(string(value))
         max_len = (displaysize(p.output)::Tuple{Int,Int})[2]
         # I don't understand why the minus 1 is necessary here, but empircally
         # it is needed.
