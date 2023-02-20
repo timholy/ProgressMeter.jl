@@ -65,7 +65,7 @@ You can also control progress updates and reports manually:
 ```julia
 function my_long_running_function(filenames::Array)
     n = length(filenames)
-    p = Progress(n, 1)   # minimum update interval: 1 second
+    p = Progress(n, dt=1.0)   # minimum update interval: 1 second
     for f in filenames
         # Here's where you do all the hard, slow work
         next!(p)
@@ -86,7 +86,7 @@ function readFileLines(fileName::String)
     fileSize = position(file)
 
     seekstart(file)
-    p = Progress(fileSize, 1)   # minimum update interval: 1 second
+    p = Progress(fileSize, dt=1.0)   # minimum update interval: 1 second
     while !eof(file)
         line = readline(file)
         # Here's where you do all the hard, slow work
@@ -130,7 +130,7 @@ Optionally, a description string can be specified which will be prepended to the
 and a progress meter `M` characters long can be shown.  E.g.
 
 ```julia
-p = Progress(n, 1, "Computing initial pass...", 50)
+p = Progress(n, "Computing initial pass...", 50)
 ```
 
 will yield
