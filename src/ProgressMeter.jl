@@ -483,11 +483,12 @@ end
 
 # update progress display
 """
-`next!(prog, [color], step = 1)` reports that `step` units of progress have been
-made. Depending on the time interval since the last update, this may
-or may not result in a change to the display.
+    next!(p::Union{Progress, ProgressUnknown}, [color]; step::Int = 1, options...)
 
-You may optionally change the color of the display. See also `update!`.
+Report that `step` units of progress have been made. Depending on the time interval since
+the last update, this may or may not result in a change to the display.
+
+You may optionally change the `color` of the display. See also `update!`.
 """
 function next!(p::Union{Progress, ProgressUnknown}; step::Int = 1, options...)
     lock_if_threading(p) do
@@ -505,13 +506,11 @@ function next!(p::Union{Progress, ProgressUnknown}, color::Symbol; step::Int = 1
 end
 
 """
-`update!(prog, counter, [color])` sets the progress counter to
-`counter`, relative to the `n` units of progress specified when `prog`
-was initialized.  Depending on the time interval since the last
-update, this may or may not result in a change to the display.
+    update!(p::Union{Progress, ProgressUnknown}, [counter,] [color]; options...)
 
-If `prog` is a `ProgressThresh`, `update!(prog, val, [color])` specifies
-the current value.
+Set the progress counter to `counter`, relative to the `n` units of progress specified
+when `prog` was initialized.  Depending on the time interval since the last update,
+this may or may not result in a change to the display.
 
 You may optionally change the color of the display. See also `next!`.
 """
@@ -524,6 +523,11 @@ function update!(p::Union{Progress, ProgressUnknown}, counter::Int=p.counter, co
     end
 end
 
+"""
+    update!(p::ProgressThresh, [val,] [color]; increment::Bool=true, options...)
+
+Set the progress counter to current value `val`.
+"""
 function update!(p::ProgressThresh, val=p.val, color::Symbol=p.color; increment::Bool = true, options...)
     lock_if_threading(p) do
         p.val = val
@@ -537,9 +541,10 @@ end
 
 
 """
-`cancel(prog, [msg], [color=:red])` cancels the progress display
-before all tasks were completed. Optionally you can specify the
-message printed and its color.
+    cancel(p::AbstractProgress, [msg,] [color=:red]; options...)
+
+Cancel the progress display before all tasks were completed. Optionally you can specify
+the message printed and its color.
 
 See also `finish!`.
 """
@@ -562,7 +567,9 @@ function cancel(p::AbstractProgress, msg::AbstractString = "Aborted before all t
 end
 
 """
-`finish!(prog)` indicates that all tasks have been completed.
+    finish!(p::Progress; options...)
+
+Indicate that all tasks have been completed.
 
 See also `cancel`.
 """
