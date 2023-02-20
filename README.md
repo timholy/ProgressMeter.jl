@@ -431,6 +431,39 @@ is_logging(io) = isa(io, Base.TTY) == false || (get(ENV, "CI", nothing) == "true
 p = Progress(n; output = stderr, enabled = !is_logging(stderr))
 ````
 
+## Development/debugging tips
+
+When developing or debugging ProgressMeter it is convenient to redirect the output to
+another terminal window such that it does not interfer with the Julia REPL window you are
+using.
+
+On Linux/macOS you can find the file name corresponding to the other terminal by using the
+[`tty`](https://man7.org/linux/man-pages/man1/tty.1.html) command. This file can be `open`ed
+and passed as the `output` keyword argument to the
+`Progress`/`ProgressThresh`/`ProgressUnknown` constructors.
+
+#### Example
+
+Run `tty` from the other terminal window (the window where we want output to show up):
+
+```
+$ tty
+/dev/pts/3
+```
+
+From the Julia REPL, open the file for writing, wrap in `IOContext` (to enable color), and
+pass to the `Progress` constructor:
+
+```julia
+io = open("/dev/pts/3", "w")
+ioc = IOContext(io, :color => true)
+prog = Progress(10; output = ioc)
+```
+
+Output from `prog` will now print in the other terminal window when executing `update!`,
+`next!`, etc.
+
+
 ## Credits
 
 Thanks to Alan Bahm, Andrew Burroughs, and Jim Garrison for major enhancements to this package.
