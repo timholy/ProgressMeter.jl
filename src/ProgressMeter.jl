@@ -265,8 +265,9 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
         p.desc = desc
     end
     p.offset = offset
+    
     if p.counter >= p.n
-        if p.counter == p.n && p.printed
+        if p.counter == p.n #&& p.printed
             t = time()
             barlen = p.barlen isa Nothing ? tty_width(p.desc, p.output, p.showspeed) : p.barlen
             percentage_complete = 100.0 * p.counter / p.n
@@ -292,6 +293,7 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
         end
         return nothing
     end
+  
     if ignore_predictor || predicted_updates_per_dt_have_passed(p)
         t = time()
         if p.counter > 2
@@ -460,7 +462,9 @@ function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = f
     end
 end
 
-predicted_updates_per_dt_have_passed(p::AbstractProgress) = p.counter - p.prev_update_count >= p.check_iterations
+predicted_updates_per_dt_have_passed(p::AbstractProgress) = 
+    p.counter <= 2 || # otherwise the first 2 are never printed, independently of dt
+    p.counter - p.prev_update_count >= p.check_iterations
 
 function is_threading(p::AbstractProgress)
     Threads.nthreads() == 1 && return false
