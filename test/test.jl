@@ -12,6 +12,11 @@ end
 println("Testing original interface...")
 testfunc(107, 0.01, 0.01)
 
+println("Testing n=1") # Issue #258
+testfunc(1, 0.1, 1)
+
+println("Testing n=2") # Issue #258
+testfunc(1, 0.1, 1)
 
 function testfunc2(n, dt, tsleep, desc, barlen)
     p = ProgressMeter.Progress(n, dt, desc, barlen)
