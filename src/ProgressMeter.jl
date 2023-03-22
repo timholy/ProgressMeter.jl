@@ -105,7 +105,7 @@ Progress(n::Integer, dt::Real, desc::AbstractString="Progress: ",
          offset::Integer=0) =
     Progress(n, dt=dt, desc=desc, barlen=barlen, color=color, output=output, offset=offset)
 
-Progress(n::Integer, desc::AbstractString, offset::Integer=0) = Progress(n, desc=desc, offset=offset)
+Progress(n::Integer, desc::AbstractString, offset::Integer=0; kwargs...) = Progress(n; desc=desc, offset=offset, kwargs...)
 
 
 """
@@ -708,6 +708,15 @@ function speedstring(sec_per_iter)
     return " >100  d/it"
 end
 
+function showprogress_process_args(progressargs)
+    return map(progressargs) do arg
+        if Meta.isexpr(arg, :(=))
+            arg = Expr(:kw, arg.args...)
+        end
+        return esc(arg)
+    end
+end
+
 function showprogress_process_expr(node, metersym)
     if !isa(node, Expr)
         node
@@ -788,7 +797,7 @@ function showprogressdistributed(args...)
 
     setup = quote
         n = length($(esc(r)))
-        p = Progress(n, $([esc(arg) for arg in progressargs]...))
+        p = Progress(n, $(showprogress_process_args(progressargs)...))
         ch = RemoteChannel(() -> Channel{Bool}(n))
     end
 
@@ -936,7 +945,7 @@ function showprogress(args...)
 
         setup = quote
             iterable = $(esc(obj))
-            $(esc(metersym)) = Progress(length(iterable), $([esc(arg) for arg in progressargs]...))
+            $(esc(metersym)) = Progress(length(iterable), $(showprogress_process_args(progressargs)...))
         end
 
         if expr.head === :for
