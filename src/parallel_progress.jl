@@ -29,7 +29,7 @@ using Distributed
 addprocs()
 @everywhere using ProgressMeter
 prog = ParallelProgress(10; desc="test ")
-pmap(1:10) do
+pmap(1:10) do i
     sleep(rand())
     next!(prog)
     return myid()
