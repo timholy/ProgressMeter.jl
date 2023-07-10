@@ -839,9 +839,9 @@ end
 @showprogress dt "Computing..." pmap(x->x^2, 1:50)
 ```
 displays progress in performing a computation. `dt` is the minimum
-interval between updates to the user. You may optionally supply a
-custom message to be printed that specifies the computation being
-performed.
+interval in seconds between updates to the user. You may optionally 
+supply a custom message to be printed that specifies the computation 
+being performed.
 
 `@showprogress` works for loops, comprehensions, map, reduce, and pmap.
 """
