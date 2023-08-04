@@ -4,6 +4,7 @@ using Printf: @sprintf
 using Distributed
 
 export Progress, ProgressThresh, ProgressUnknown, BarGlyphs, next!, update!, cancel, finish!, @showprogress, progress_map, progress_pmap, ijulia_behavior
+export EmptyRateFormat, PercentRateFormat, FractionRateFormat, IntegerRateFormat
 
 """
 `ProgressMeter` contains a suite of utilities for displaying progress
@@ -46,6 +47,33 @@ function BarGlyphs(s::AbstractString)
     return BarGlyphs(glyphs...)
 end
 
+abstract type AbstractRateFormat end
+function rate_string end
+
+struct EmptyRateFormat <: AbstractRateFormat end
+rate_string(c::Int, n::Int, ::EmptyRateFormat) = ""
+
+struct PercentRateFormat <: AbstractRateFormat
+    digits::Int  # number of digits below decimal point
+end
+PercentRateFormat() = PercentRateFormat(0)
+function rate_string(c::Int, n::Int, p::PercentRateFormat)
+    str = string(round(100c/n, digits=p.digits))  # e.g., round(10, digits=0) = 10.0
+    i, f = split(str, ".")  # integral, fractional parts
+
+    rate_str = lpad(i, 3)
+    p.digits≠0 && (rate_str *= "." * rpad(f, p.digits, "0"))
+    rate_str *= "%"
+
+    return rate_str
+end
+
+struct FractionRateFormat <: AbstractRateFormat end
+rate_string(c::Int, n::Int, ::FractionRateFormat) = lpad(c, length(string(n))) * "/" * string(n)
+
+struct IntegerRateFormat <: AbstractRateFormat end
+rate_string(c::Int, n::Int, ::IntegerRateFormat) = lpad(c, length(string(n))) * " of " * string(n)
+
 """
 `prog = Progress(n; dt=0.1, desc="Progress: ", color=:green,
 output=stderr, barlen=tty_width(desc), start=0)` creates a progress meter for a
@@ -66,6 +94,7 @@ mutable struct Progress <: AbstractProgress
     tlast::Float64
     printed::Bool              # true if we have issued at least one status update
     desc::String               # prefix to the percentage, e.g.  "Computing..."
+    rate_format::AbstractRateFormat
     barlen::Union{Int,Nothing} # progress bar size (default is available terminal width)
     barglyphs::BarGlyphs       # the characters to be used in the bar
     color::Symbol              # default to green
@@ -82,6 +111,7 @@ mutable struct Progress <: AbstractProgress
     function Progress(n::Integer;
                       dt::Real=0.1,
                       desc::AbstractString="Progress: ",
+                      rate_format=PercentRateFormat(),
                       color::Symbol=:green,
                       output::IO=stderr,
                       barlen=nothing,
@@ -96,7 +126,7 @@ mutable struct Progress <: AbstractProgress
         counter = start
         tinit = tsecond = tlast = time()
         printed = false
-        new(n, reentrantlocker, dt, counter, tinit, tsecond, tlast, printed, desc, barlen, barglyphs, color, output, offset, 0, start, enabled, showspeed, 1, 1, Int[])
+        new(n, reentrantlocker, dt, counter, tinit, tsecond, tlast, printed, desc, rate_format, barlen, barglyphs, color, output, offset, 0, start, enabled, showspeed, 1, 1, Int[])
     end
 end
 
@@ -105,8 +135,16 @@ Progress(n::Integer, dt::Real, desc::AbstractString="Progress: ",
          offset::Integer=0) =
     Progress(n, dt=dt, desc=desc, barlen=barlen, color=color, output=output, offset=offset)
 
+Progress(n::Integer, dt::Real, desc::AbstractString="Progress: ",
+         rate_format::AbstractRateFormat=PercentRateFormat(),
+         barlen=nothing, color::Symbol=:green, output::IO=stderr;
+         offset::Integer=0) =
+    Progress(n, dt=dt, desc=desc, rate_format=rate_format, barlen=barlen, color=color, output=output, offset=offset)
+
 Progress(n::Integer, desc::AbstractString, offset::Integer=0) = Progress(n, desc=desc, offset=offset)
 
+Progress(n::Integer, desc::AbstractString, rate_format::AbstractRateFormat, offset::Integer=0) =
+    Progress(n, desc=desc, rate_format=rate_format, offset=offset)
 
 """
 `prog = ProgressThresh(thresh; dt=0.1, desc="Progress: ",
@@ -274,7 +312,8 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
             elapsed_time = t - p.tinit
             dur = durationstring(elapsed_time)
             spacer = endswith(p.desc, " ") ? "" : " "
-            msg = @sprintf "%s%s%3u%%%s Time: %s" p.desc spacer round(Int, percentage_complete) bar dur
+            rate_str = rate_string(p.counter, p.n, p.rate_format)
+            msg = @sprintf "%s%s%s%s Time: %s" p.desc spacer rate_str bar dur
             if p.showspeed
                 sec_per_iter = elapsed_time / (p.counter - p.start)
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
@@ -310,7 +349,8 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
                 eta = "N/A"
             end
             spacer = endswith(p.desc, " ") ? "" : " "
-            msg = @sprintf "%s%s%3u%%%s  ETA: %s" p.desc spacer round(Int, percentage_complete) bar eta
+            rate_str = rate_string(p.counter, p.n, p.rate_format)
+            msg = @sprintf "%s%s%s%s  ETA: %s" p.desc spacer rate_str bar eta
             if p.showspeed
                 sec_per_iter = elapsed_time / (p.counter - p.start)
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)

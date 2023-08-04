@@ -82,6 +82,20 @@ end
 println("\nTesting changing the description")
 testfunc5B(107, 0.01, 0.05, "Step 1...", 50)
 
+function testfunc5C(n, dt, tsleep, desc, rate_format)
+    p = ProgressMeter.Progress(n, dt, desc, rate_format)
+    for i = 1:n
+        sleep(tsleep)
+        ProgressMeter.next!(p)
+    end
+end
+
+println("\nTesting changing the progress rate format")
+testfunc5C(107, 0.01, 0.05, "Computing...", EmptyRateFormat())
+testfunc5C(107, 0.01, 0.05, "Computing...", PercentRateFormat())
+testfunc5C(107, 0.01, 0.05, "Computing...", PercentRateFormat(2))
+testfunc5C(107, 0.01, 0.05, "Computing...", FractionRateFormat())
+testfunc5C(107, 0.01, 0.05, "Computing...", IntegerRateFormat())
 
 function testfunc6(n, dt, tsleep)
     ProgressMeter.@showprogress dt for i in 1:n
