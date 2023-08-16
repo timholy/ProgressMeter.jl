@@ -438,3 +438,24 @@ function testfunc19()
 end
 println("Testing speed display with no update")
 testfunc19()
+
+
+# SimpleProgress tests
+
+function testfunc20(N)
+    p = SimpleProgress(N, showspeed=true)
+    for i = 1:N
+        sleep(0.03)
+        ProgressMeter.next!(p, showvalues=[(:i,i),(:x,sin(i))])
+    end
+end
+testfunc20(100)
+
+function testfunc21(N)
+    p = SimpleProgress(N)
+    for i = 1:N
+        sleep(0.01)
+        ProgressMeter.next!(p)
+    end
+end
+testfunc21(100)

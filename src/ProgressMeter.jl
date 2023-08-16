@@ -3,7 +3,7 @@ module ProgressMeter
 using Printf: @sprintf
 using Distributed
 
-export Progress, ProgressThresh, ProgressUnknown, BarGlyphs, next!, update!, cancel, finish!, @showprogress, progress_map, progress_pmap, ijulia_behavior
+export Progress, SimpleProgress, ProgressThresh, ProgressUnknown, BarGlyphs, next!, update!, cancel, finish!, @showprogress, progress_map, progress_pmap, ijulia_behavior
 
 """
 `ProgressMeter` contains a suite of utilities for displaying progress
@@ -107,6 +107,53 @@ Progress(n::Integer, dt::Real, desc::AbstractString="Progress: ",
 
 Progress(n::Integer, desc::AbstractString, offset::Integer=0; kwargs...) = Progress(n; desc=desc, offset=offset, kwargs...)
 
+"""
+`prog = SimpleProgress(n; dt=0.1, desc="Progress: ", output=stderr,
+start=0)` creates a simple progress meter for a task with `n`
+iterations or stages starting from `start`. Output will be generated
+at intervals at least `dt` seconds apart, and perhaps longer if each
+iteration takes longer than `dt`. Each entry will be printed on a new
+line, making `SimpleProgress` suitable for situation when the output
+is redirected to a file, such as when running on a cluster. `desc` is
+a description of the current task. Optionally you can disable the
+progress report by setting `enabled=false`. You can also append a
+per-iteration average duration like "(12.34 ms/it)" to the description
+by setting `showspeed=true`.
+"""
+mutable struct SimpleProgress <: AbstractProgress
+    n::Int
+    reentrantlocker::Threads.ReentrantLock
+    dt::Float64
+    counter::Int
+    tinit::Float64
+    tsecond::Float64           # ignore the first loop given usually uncharacteristically slow
+    tlast::Float64
+    printed::Bool              # true if we have issued at least one status update
+    desc::String               # prefix to the percentage, e.g.  "Computing..."
+    output::IO                 # output stream into which the progress is written
+    numprintedvalues::Int      # num values printed below progress in last iteration
+    start::Int                 # which iteration number to start from
+    enabled::Bool              # is the output enabled
+    showspeed::Bool            # should the output include average time per iteration
+    check_iterations::Int
+    prev_update_count::Int
+    threads_used::Vector{Int}
+
+    function SimpleProgress(n::Integer;
+                               dt::Real=0.1,
+                               desc::AbstractString="Progress: ",
+                               output::IO=stderr,
+                               start::Integer=0,
+                               enabled::Bool = true,
+                               showspeed::Bool = false,
+                               )
+        reentrantlocker = Threads.ReentrantLock()
+        counter = start
+        tinit = tsecond = tlast = time()
+        printed = false
+        new(n, reentrantlocker, dt, counter, tinit, tsecond, tlast, printed, desc, output, 0, start, enabled, showspeed, 1, 1, Int[])
+    end
+end
 
 """
 `prog = ProgressThresh(thresh; dt=0.1, desc="Progress: ",
@@ -332,6 +379,70 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
     return nothing
 end
 
+function updateProgress!(p::SimpleProgress;
+                         showvalues=(),
+                         desc::Union{Nothing,AbstractString} = nothing,
+                         ignore_predictor = false)
+    !p.enabled && return
+    if p.counter == 2 # ignore the first loop given usually uncharacteristically slow
+        p.tsecond = time()
+    end
+    if desc !== nothing && desc !== p.desc
+        p.desc = desc
+    end
+    if p.counter >= p.n
+        if p.counter == p.n && p.printed
+            t = time()
+            percentage_complete = 100.0 * p.counter / p.n
+            elapsed_time = t - p.tinit
+            dur = durationstring(elapsed_time)
+            msg = @sprintf "%s%3u%% Time: %s" p.desc round(Int, percentage_complete) dur
+            if p.showspeed
+                sec_per_iter = elapsed_time / (p.counter - p.start)
+                msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
+            end
+            print(p.output, msg)
+            printvalues!(p, showvalues)
+            println(p.output)
+            flush(p.output)
+        end
+        return nothing
+    end
+    if ignore_predictor || predicted_updates_per_dt_have_passed(p)
+        t = time()
+        if p.counter > 2
+            p.check_iterations = calc_check_iterations(p, t)
+        end
+        if t > p.tlast+p.dt
+            percentage_complete = 100.0 * p.counter / p.n
+            elapsed_time = t - p.tinit
+            est_total_time = elapsed_time * (p.n - p.start) / (p.counter - p.start)
+            if 0 <= est_total_time <= typemax(Int)
+                eta_sec = round(Int, est_total_time - elapsed_time )
+                eta = durationstring(eta_sec)
+            else
+                eta = "N/A"
+            end
+            msg = @sprintf "%s%3u%%  ETA: %s" p.desc round(Int, percentage_complete) eta
+            if p.showspeed
+                sec_per_iter = elapsed_time / (p.counter - p.start)
+                msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
+            end
+            print(p.output, msg)
+            printvalues!(p, showvalues)
+            println(p.output)
+            flush(p.output)
+            # Compensate for any overhead of printing. This can be
+            # especially important if you're running over a slow network
+            # connection.
+            p.tlast = t + 2*(time()-t)
+            p.printed = true
+            p.prev_update_count = p.counter
+        end
+    end
+    return nothing
+end
+
 function updateProgress!(p::ProgressThresh; showvalues = (), truncate_lines = false, valuecolor = :blue,
                         offset::Integer = p.offset, keep = (offset == 0), desc = p.desc, ignore_predictor = false)
     !p.enabled && return
@@ -490,7 +601,7 @@ the last update, this may or may not result in a change to the display.
 
 You may optionally change the `color` of the display. See also `update!`.
 """
-function next!(p::Union{Progress, ProgressUnknown}; step::Int = 1, options...)
+function next!(p::Union{Progress, ProgressUnknown, SimpleProgress}; step::Int = 1, options...)
     lock_if_threading(p) do
         p.counter += step
         updateProgress!(p; ignore_predictor = step == 0, options...)
@@ -611,6 +722,24 @@ function printvalues!(p::AbstractProgress, showvalues; color = :normal, truncate
             printover(p.output, msg, color)
             p.numprintedvalues += msg_lines
         end
+    end
+    p
+end
+
+function printvalues!(p::SimpleProgress, showvalues)
+    length(showvalues) == 0 && return
+    maxwidth = maximum(Int[length(string(name)) for (name, _) in showvalues])
+
+    p.numprintedvalues = 0
+
+    for (name, value) in showvalues
+        msg = "\n  " * rpad(string(name) * ": ", maxwidth+2+1) * string(value)
+        max_len = (displaysize(p.output)::Tuple{Int,Int})[2]
+        # I don't understand why the minus 1 is necessary here, but empircally
+        # it is needed.
+        msg_lines = ceil(Int, (length(msg)-1) / max_len)
+        print(p.output, msg)
+        p.numprintedvalues += msg_lines
     end
     p
 end
