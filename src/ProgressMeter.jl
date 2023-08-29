@@ -91,7 +91,6 @@ mutable struct Progress <: AbstractProgress
                       enabled::Bool = true,
                       showspeed::Bool = false,
                      )
-        RUNNING_IJULIA_KERNEL[] = running_ijulia_kernel()
         CLEAR_IJULIA[] = clear_ijulia()
         reentrantlocker = Threads.ReentrantLock()
         counter = start
@@ -106,7 +105,7 @@ Progress(n::Integer, dt::Real, desc::AbstractString="Progress: ",
          offset::Integer=0) =
     Progress(n, dt=dt, desc=desc, barlen=barlen, color=color, output=output, offset=offset)
 
-Progress(n::Integer, desc::AbstractString, offset::Integer=0) = Progress(n, desc=desc, offset=offset)
+Progress(n::Integer, desc::AbstractString, offset::Integer=0; kwargs...) = Progress(n; desc=desc, offset=offset, kwargs...)
 
 
 """
@@ -149,7 +148,6 @@ mutable struct ProgressThresh{T<:Real} <: AbstractProgress
                                offset::Integer=0,
                                enabled = true,
                                showspeed::Bool = false) where T
-        RUNNING_IJULIA_KERNEL[] = running_ijulia_kernel()
         CLEAR_IJULIA[] = clear_ijulia()
         reentrantlocker = Threads.ReentrantLock()
         tinit = tlast = time()
@@ -211,7 +209,6 @@ function ProgressUnknown(;
                          offset::Integer=0,
                          enabled::Bool = true, 
                          showspeed::Bool = false)
-    RUNNING_IJULIA_KERNEL[] = running_ijulia_kernel()
     CLEAR_IJULIA[] = clear_ijulia()
     reentrantlocker = Threads.ReentrantLock()
     tinit = tlast = time()
@@ -247,7 +244,6 @@ function ijulia_behavior(b)
 end
 
 # Whether or not to use IJulia.clear_output
-const RUNNING_IJULIA_KERNEL = Ref{Bool}(false)
 const CLEAR_IJULIA = Ref{Bool}(false)
 running_ijulia_kernel() = isdefined(Main, :IJulia) && Main.IJulia.inited
 clear_ijulia() = (IJULIABEHAVIOR[] != IJuliaAppend) && running_ijulia_kernel()
@@ -267,7 +263,7 @@ end
 function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, valuecolor = :blue,
                         offset::Integer = p.offset, keep = (offset == 0), desc::Union{Nothing,AbstractString} = nothing,
                         ignore_predictor = false)
-    (!RUNNING_IJULIA_KERNEL[] & !p.enabled) && return
+    !p.enabled && return
     if p.counter == 2 # ignore the first loop given usually uncharacteristically slow
         p.tsecond = time()
     end
@@ -286,7 +282,8 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
             bar = barstring(barlen, percentage_complete, barglyphs=p.barglyphs)
             elapsed_time = t - p.tinit
             dur = durationstring(elapsed_time)
-            msg = @sprintf "%s%3u%%%s Time: %s" p.desc round(Int, percentage_complete) bar dur
+            spacer = endswith(p.desc, " ") ? "" : " "
+            msg = @sprintf "%s%s%3u%%%s Time: %s" p.desc spacer round(Int, percentage_complete) bar dur
             if p.showspeed
                 sec_per_iter = elapsed_time / (p.counter - p.start)
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
@@ -321,7 +318,8 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
             else
                 eta = "N/A"
             end
-            msg = @sprintf "%s%3u%%%s  ETA: %s" p.desc round(Int, percentage_complete) bar eta
+            spacer = endswith(p.desc, " ") ? "" : " "
+            msg = @sprintf "%s%s%3u%%%s  ETA: %s" p.desc spacer round(Int, percentage_complete) bar eta
             if p.showspeed
                 sec_per_iter = elapsed_time / (p.counter - p.start)
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
@@ -345,7 +343,7 @@ end
 
 function updateProgress!(p::ProgressThresh; showvalues = (), truncate_lines = false, valuecolor = :blue,
                         offset::Integer = p.offset, keep = (offset == 0), desc = p.desc, ignore_predictor = false)
-    (!RUNNING_IJULIA_KERNEL[] & !p.enabled) && return
+    !p.enabled && return
     p.offset = offset
     p.desc = desc
     if p.val <= p.thresh && !p.triggered
@@ -415,7 +413,7 @@ function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = f
                         valuecolor = :blue, desc = p.desc, ignore_predictor = false, 
                         spinner::Union{AbstractChar,AbstractString,AbstractVector{<:AbstractChar}} = spinner_chars,
                         offset::Integer = p.offset, keep = (offset == 0))
-    (!RUNNING_IJULIA_KERNEL[] & !p.enabled) && return
+    !p.enabled && return
     p.offset = offset
     p.desc = desc
     if p.done
@@ -504,11 +502,12 @@ end
 
 # update progress display
 """
-`next!(prog, [color], step = 1)` reports that `step` units of progress have been
-made. Depending on the time interval since the last update, this may
-or may not result in a change to the display.
+    next!(p::Union{Progress, ProgressUnknown}, [color]; step::Int = 1, options...)
 
-You may optionally change the color of the display. See also `update!`.
+Report that `step` units of progress have been made. Depending on the time interval since
+the last update, this may or may not result in a change to the display.
+
+You may optionally change the `color` of the display. See also `update!`.
 """
 function next!(p::Union{Progress, ProgressUnknown}; step::Int = 1, options...)
     lock_if_threading(p) do
@@ -526,13 +525,11 @@ function next!(p::Union{Progress, ProgressUnknown}, color::Symbol; step::Int = 1
 end
 
 """
-`update!(prog, counter, [color])` sets the progress counter to
-`counter`, relative to the `n` units of progress specified when `prog`
-was initialized.  Depending on the time interval since the last
-update, this may or may not result in a change to the display.
+    update!(p::Union{Progress, ProgressUnknown}, [counter,] [color]; options...)
 
-If `prog` is a `ProgressThresh`, `update!(prog, val, [color])` specifies
-the current value.
+Set the progress counter to `counter`, relative to the `n` units of progress specified
+when `prog` was initialized.  Depending on the time interval since the last update,
+this may or may not result in a change to the display.
 
 You may optionally change the color of the display. See also `next!`.
 """
@@ -545,6 +542,11 @@ function update!(p::Union{Progress, ProgressUnknown}, counter::Int=p.counter, co
     end
 end
 
+"""
+    update!(p::ProgressThresh, [val,] [color]; increment::Bool=true, options...)
+
+Set the progress counter to current value `val`.
+"""
 function update!(p::ProgressThresh, val=p.val, color::Symbol=p.color; increment::Bool = true, options...)
     lock_if_threading(p) do
         p.val = val
@@ -558,9 +560,10 @@ end
 
 
 """
-`cancel(prog, [msg], [color=:red])` cancels the progress display
-before all tasks were completed. Optionally you can specify the
-message printed and its color.
+    cancel(p::AbstractProgress, [msg,] [color=:red]; options...)
+
+Cancel the progress display before all tasks were completed. Optionally you can specify
+the message printed and its color.
 
 See also `finish!`.
 """
@@ -583,7 +586,9 @@ function cancel(p::AbstractProgress, msg::AbstractString = "Aborted before all t
 end
 
 """
-`finish!(prog)` indicates that all tasks have been completed.
+    finish!(p::Progress; options...)
+
+Indicate that all tasks have been completed.
 
 See also `cancel`.
 """
@@ -722,6 +727,15 @@ function speedstring(sec_per_iter)
     return " >100  d/it"
 end
 
+function showprogress_process_args(progressargs)
+    return map(progressargs) do arg
+        if Meta.isexpr(arg, :(=))
+            arg = Expr(:kw, arg.args...)
+        end
+        return esc(arg)
+    end
+end
+
 function showprogress_process_expr(node, metersym)
     if !isa(node, Expr)
         node
@@ -802,7 +816,7 @@ function showprogressdistributed(args...)
 
     setup = quote
         n = length($(esc(r)))
-        p = Progress(n, $([esc(arg) for arg in progressargs]...))
+        p = Progress(n, $(showprogress_process_args(progressargs)...))
         ch = RemoteChannel(() -> Channel{Bool}(n))
     end
 
@@ -853,9 +867,9 @@ end
 @showprogress dt "Computing..." pmap(x->x^2, 1:50)
 ```
 displays progress in performing a computation. `dt` is the minimum
-interval between updates to the user. You may optionally supply a
-custom message to be printed that specifies the computation being
-performed.
+interval in seconds between updates to the user. You may optionally 
+supply a custom message to be printed that specifies the computation 
+being performed.
 
 `@showprogress` works for loops, comprehensions, map, reduce, and pmap.
 """
@@ -950,7 +964,7 @@ function showprogress(args...)
 
         setup = quote
             iterable = $(esc(obj))
-            $(esc(metersym)) = Progress(length(iterable), $([esc(arg) for arg in progressargs]...))
+            $(esc(metersym)) = Progress(length(iterable), $(showprogress_process_args(progressargs)...))
         end
 
         if expr.head === :for

@@ -43,7 +43,7 @@ function noprog_perf(n)
     return x
 end
 
-if get(ENV, "GITHUB_ACTIONS", "false") != "true" # CI environment is too unreliable for performance tests 
+if !parse(Bool, get(ENV, "CI", "false")) # CI environment is too unreliable for performance tests 
     prog_perf(10^7)
     noprog_perf(10^7)
     @time prog_perf(10^7)
