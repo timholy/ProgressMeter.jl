@@ -285,7 +285,7 @@ end
 @test ProgressMeter.ProgressThresh(1.0f0; desc = "Desc: ") isa ProgressMeter.ProgressThresh{Float32}
 
 # Threshold-based progress reports with increment=false
-println("Testing threshold-based progress")
+println("Testing threshold-based progress with increment=false")
 prog = ProgressMeter.ProgressThresh(1e-5, "Minimizing:")
 for val in 10 .^ range(2, stop=-6, length=20)
     ProgressMeter.update!(prog, val; increment=false)
@@ -438,3 +438,19 @@ function testfunc19()
 end
 println("Testing speed display with no update")
 testfunc19()
+
+function testfunc20(r, p)
+    for i in r
+        sleep(0.03)
+        update!(p, i)
+    end
+    cancel(p; keep=true)
+end
+println("Testing early cancel")
+testfunc20(1:50, Progress(100))
+testfunc20(1:50, ProgressUnknown())
+testfunc20(50:-1:1, ProgressThresh(0))
+println("Testing early cancel with offset 1 and keep")
+testfunc20(1:50, Progress(100, offset=1))
+testfunc20(1:50, ProgressUnknown(offset=1))
+testfunc20(50:-1:1, ProgressThresh(0, offset=1))
