@@ -88,12 +88,14 @@ end
     )
 
     println("Testing adding same key twice (should display error)")
-    p = MultipleProgress(; main="main")
+    p = MultipleProgress(; main="main", auto_close=false)
     addprogress!(p["a"], Progress, 10; color=:red)
-    for i in 1:5
-        next!(p["a"])
+    for i in 1:10
         sleep(0.1)
+        next!(p["a"])
     end
+    sleep(s)
+    @test !has_finished(p)
     println()
     addprogress!(p["a"], Progress, 100)
     sleep(5s)
