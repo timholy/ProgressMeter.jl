@@ -51,6 +51,30 @@ end
     sleep(s)
     @test has_finished(p)
 
+    println("Testing with Dicts, :main changes to red")
+    p = MultipleProgress(
+        Dict(:a => Progress(10, desc="task :a "),
+             :b => Progress(10, desc="task :b ")),
+        kwmain=(desc=":main ",)
+    )
+    @test isempty(setdiff(p.keys, [:a, :b]))
+    @test p.main == :main
+    for _ in 1:9
+        sleep(0.1)
+        next!(p[:a])
+        next!(p[:b])
+    end
+    update!(p[:main], 18, :red)
+    sleep(s)
+    @test !has_finished(p)
+    next!(p[:a])
+    next!(p[:b])
+    sleep(s)
+    @test has_finished(p)
+
+
+
+
     println("Testing over-shooting and under-shooting")
     p = MultipleProgress(Progress.([5, 14]), count_overshoot=false)
     for _ in 1:10
