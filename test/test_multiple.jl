@@ -6,9 +6,9 @@ nworkers() == 1 && addprocs(4)
 
 # additional time before checking if progressbar has finished during CI
 if get(ENV, "CI", "false") == "true"
-    s = 0.1
-else
     s = 1.0
+else
+    s = 0.1
 end
 
 @testset "MultipleProgress() tests" begin
@@ -87,6 +87,17 @@ end
         main=:a
     )
 
+    println("Testing adding same key twice (should display error)")
+    p = MultipleProgress(; main="main")
+    addprogress!(p["a"], Progress, 10; color=:red)
+    for i in 1:5
+        next!(p["a"])
+        sleep(0.1)
+    end
+    println()
+    addprogress!(p["a"], Progress, 100)
+    sleep(5s)
+    @test has_finished(p)
 
     println("Testing over-shooting and under-shooting")
     p = MultipleProgress(Progress.([5, 14]), count_overshoot=false)

@@ -6,9 +6,9 @@ nworkers() == 1 && addprocs(4)
 
 # additional time before checking if progressbar has finished during CI
 if get(ENV, "CI", "false") == "true"
-    s = 0.1
-else
     s = 1.0
+else
+    s = 0.1
 end
 
 @testset "ParallelProgress() tests" begin
