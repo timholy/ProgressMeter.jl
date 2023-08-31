@@ -65,7 +65,7 @@ You can also control progress updates and reports manually:
 ```julia
 function my_long_running_function(filenames::Array)
     n = length(filenames)
-    p = Progress(n, 1)   # minimum update interval: 1 second
+    p = Progress(n, dt=1.0)   # minimum update interval: 1 second
     for f in filenames
         # Here's where you do all the hard, slow work
         next!(p)
@@ -86,7 +86,7 @@ function readFileLines(fileName::String)
     fileSize = position(file)
 
     seekstart(file)
-    p = Progress(fileSize, 1)   # minimum update interval: 1 second
+    p = Progress(fileSize, dt=1.0)   # minimum update interval: 1 second
     while !eof(file)
         line = readline(file)
         # Here's where you do all the hard, slow work
@@ -106,6 +106,7 @@ Threads.@threads for i in 1:10
     sleep(2*rand())
     next!(p)
 end
+finish!(p)
 ```
 
 ```julia
@@ -120,6 +121,7 @@ for i in 1:n
     end
 end
 wait.(tasks)
+finish!(p)
 ```
 
 ### Progress bar style
@@ -128,7 +130,7 @@ Optionally, a description string can be specified which will be prepended to the
 and a progress meter `M` characters long can be shown.  E.g.
 
 ```julia
-p = Progress(n, 1, "Computing initial pass...", 50)
+p = Progress(n, "Computing initial pass...", 50)
 ```
 
 will yield
@@ -328,7 +330,7 @@ You can use this to conditionally disable a progress bar in cases where you want
 or are using another progress bar to track progress in looping over a function that itself uses a progress bar.
 
 ```julia
-function my_awesome_slow_loop(n: Integer; show_progress=true)
+function my_awesome_slow_loop(n::Integer; show_progress=true)
     p = Progress(n; enabled=show_progress)
     for i in 1:n
         sleep(0.1)
@@ -430,6 +432,39 @@ In cases where the output is text output such as CI or in an HPC scheduler, the 
 is_logging(io) = isa(io, Base.TTY) == false || (get(ENV, "CI", nothing) == "true")
 p = Progress(n; output = stderr, enabled = !is_logging(stderr))
 ````
+
+## Development/debugging tips
+
+When developing or debugging ProgressMeter it is convenient to redirect the output to
+another terminal window such that it does not interfer with the Julia REPL window you are
+using.
+
+On Linux/macOS you can find the file name corresponding to the other terminal by using the
+[`tty`](https://man7.org/linux/man-pages/man1/tty.1.html) command. This file can be `open`ed
+and passed as the `output` keyword argument to the
+`Progress`/`ProgressThresh`/`ProgressUnknown` constructors.
+
+#### Example
+
+Run `tty` from the other terminal window (the window where we want output to show up):
+
+```
+$ tty
+/dev/pts/3
+```
+
+From the Julia REPL, open the file for writing, wrap in `IOContext` (to enable color), and
+pass to the `Progress` constructor:
+
+```julia
+io = open("/dev/pts/3", "w")
+ioc = IOContext(io, :color => true)
+prog = Progress(10; output = ioc)
+```
+
+Output from `prog` will now print in the other terminal window when executing `update!`,
+`next!`, etc.
+
 
 ## Credits
 

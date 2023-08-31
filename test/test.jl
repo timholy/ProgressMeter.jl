@@ -212,7 +212,7 @@ function testfunc13()
         sleep(0.1)
         ProgressMeter.next!(p)
     end
-    # full keyword argumetns
+    # full keyword arguments
     start = 15
     p = ProgressMeter.Progress(n, dt=0.01, desc="", color=:red, output=stderr, barlen=40, start = start)
     for i in 1:n-start
@@ -221,8 +221,30 @@ function testfunc13()
     end
 end
 
+function testfunc13a()
+    # positional arguments
+    @showprogress 0.01 "Red:" 40 :red stderr for i=1:15
+        sleep(0.1)
+    end
+    # same with keyword arguments only
+    @showprogress dt=0.01 color=:red output=stderr barlen=40 for i=1:15
+        sleep(0.1)
+    end
+    # mixed cases
+    @showprogress "Blue: " color=:blue for i=1:10
+        sleep(0.1)
+    end
+    @showprogress color=:yellow "Yellow: " showspeed=true for i=1:10
+        sleep(0.1)
+    end
+    @showprogress "Invisible: " enabled=false for i=1:10
+        sleep(0.1)
+    end
+end
+
 println("Testing keyword arguments")
 testfunc13()
+testfunc13a()
 
 function testfunc14(barglyphs)
     n = 30
@@ -263,7 +285,7 @@ end
 @test ProgressMeter.ProgressThresh(1.0f0; desc = "Desc: ") isa ProgressMeter.ProgressThresh{Float32}
 
 # Threshold-based progress reports with increment=false
-println("Testing threshold-based progress")
+println("Testing threshold-based progress with increment=false")
 prog = ProgressMeter.ProgressThresh(1e-5, "Minimizing:")
 for val in 10 .^ range(2, stop=-6, length=20)
     ProgressMeter.update!(prog, val; increment=false)
