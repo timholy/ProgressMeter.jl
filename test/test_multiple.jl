@@ -200,9 +200,9 @@ end
         rand() < 0.7 && next!(p[3])
         sleep(0.2)
     end
-    next!.(p[0:end], :red; step=0)
+    next!.(p[0:3], :red; step=0)
     sleep(0.5)
-    finish!.(p[1:end])
+    finish!.(p[1:3])
     sleep(s)
     @test has_finished(p)
 
@@ -217,7 +217,7 @@ end
     end
     sleep(s)
     @test !has_finished(p)
-    finish!.(p[end:-1:1])
+    finish!.(p[3:-1:1])
     sleep(s)
     @test has_finished(p)
 
@@ -232,7 +232,7 @@ end
     end
     sleep(s)
     @test !has_finished(p)
-    finish!.(p[1:end])
+    finish!.(p[1:3])
     sleep(s)
     @test has_finished(p)
 
@@ -272,10 +272,10 @@ end
     println("Testing with enabled=false")
     p = MultipleProgress(Progress.([100, 100]), Progress(200); enabled = false)
     @test has_finished(p)
-    next!.(p[0:end])
-    update!.(p[0:end])
-    finish!.(p[0:end])
-    cancel.(p[0:end])
+    next!.(p[0:2])
+    update!.(p[0:2])
+    finish!.(p[0:2])
+    cancel.(p[0:2])
     close(p)
     addprogress!(p[3], Progress, 100)
 

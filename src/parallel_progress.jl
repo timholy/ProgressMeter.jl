@@ -101,15 +101,17 @@ Distributed.put!(mc::MultipleChannel, x) = put!(mc.channel, (mc.id, x...))
 
 mutable struct MultipleProgress
     channel
-    amount::Int
+    main
+    keys::Vector
 end
 
 Base.getindex(mp::MultipleProgress, n) = ParallelProgress.(MultipleChannel.(Ref(mp.channel), n))
-Base.lastindex(mp::MultipleProgress) = mp.amount
+Base.keys(mp::MultipleProgress) = mp.keys
 
 """
-    MultipleProgress(progresses::AbstractVector{<:AbstractProgress},
+    MultipleProgress(progresses::AbstractDict{T, <:AbstractProgress},
                      [mainprogress::AbstractProgress];
+                     main = T<:Number ? 0 : :main,
                      enabled = true,
                      auto_close = true,
                      count_finishes = false,
@@ -117,18 +119,18 @@ Base.lastindex(mp::MultipleProgress) = mp.amount
                      auto_reset_timer = true)
 
 allows to call the `progresses` and `mainprogress` from different workers
- - `progresses`: contains the different progressbars
- - `mainprogress`: main progressbar, defaults to `Progress` or `ProgressUnknown`,
+ - `progresses`: contains the different progressbars, can also be an `AbstractVector`
+ - `mainprogress`: main progressbar, defaults to `Progress` or `ProgressUnknown`, \
  according to `count_finishes` and whether all progresses have known length or not
+ - `main`: how `mainprogress` should be called. Defaults to `0` or `:main`
  - `enabled`: `enabled == false` doesn't show anything and doesn't open a channel
- - `auto_close`: if true, the channel will close when all progresses are finished, otherwise,
+ - `auto_close`: if true, the channel will close when all progresses are finished, otherwise, \
  when mainprogress finishes or with `close(p)`
- - `count_finishes`: if false, main_progress will be the sum of the individual progressbars,
+ - `count_finishes`: if false, main_progress will be the sum of the individual progressbars, \
  if true, it will be equal to the number of finished progressbars
  - `count_overshoot`: overshooting progressmeters will be counted in the main progressmeter
  - `auto_reset_timer`: tinit in progresses will be reset at first call
 
-use p[i] to access the i-th progressmeter, and p[0] to access the main one
 
 # Example
 ```julia
@@ -148,15 +150,48 @@ end
 """
 function MultipleProgress(progresses::AbstractVector{<:AbstractProgress},
                           mainprogress::AbstractProgress;
+                          main = 0,
+                          kw...)
+    return MultipleProgress(Dict(pairs(progresses)), mainprogress; main=main, kw...)
+end
+
+function MultipleProgress(progresses::AbstractVector{<:AbstractProgress}; main=0, kw...)
+    return MultipleProgress(Dict(pairs(progresses)); main=main, kw...)
+end
+
+function MultipleProgress(progresses::AbstractDict{T,<:AbstractProgress};
+                          kwmain = (),
+                          count_finishes = false,
+                          kw...) where T
+    if count_finishes
+        mainprogress = Progress(length(progresses); kwmain...)
+    elseif valtype(progresses) <: Progress
+        mainprogress = Progress(sum(p->p.n, values(progresses)); kwmain...)
+    else
+        mainprogress = ProgressUnknown(; kwmain...)
+    end
+    return MultipleProgress(progresses, mainprogress; count_finishes=count_finishes, kw...)
+end
+
+function MultipleProgress(progresses::AbstractDict{T,<:AbstractProgress},
+                          mainprogress::AbstractProgress;
+                          main = T<:Number ? 0 : :main,
+                          kwmain = (),
                           enabled = true,
                           auto_close = true,
                           count_finishes = false,
                           count_overshoot = false,
-                          auto_reset_timer = true)
-    !enabled && return MultipleProgress(FakeChannel(), length(progresses))
+                          auto_reset_timer = true) where T
+
+    !enabled && return MultipleProgress(FakeChannel(), main, collect(keys(progresses)))
+
+    if main ∈ keys(progresses)
+        error("`main=$main` cannot be used in `progresses`")
+    end
 
     channel = RemoteChannel(() -> Channel{NTuple{4,Any}}(1024))
-    mp = MultipleProgress(channel, length(progresses))
+
+    mp = MultipleProgress(channel, main, collect(keys(progresses)))
     @async runMultipleProgress(progresses, mainprogress, mp;
         auto_close=auto_close,
         count_finishes=count_finishes, 
@@ -165,59 +200,45 @@ function MultipleProgress(progresses::AbstractVector{<:AbstractProgress},
     return mp
 end
 
-function MultipleProgress(progresses::AbstractVector{Progress}; 
-                          count_finishes=false, kwmain=(), kw...)
-    main_length = count_finishes ? length(progresses) : sum(p->p.n, progresses)
-    mainprogress = Progress(main_length; kwmain...)
-    return MultipleProgress(progresses, mainprogress; count_finishes=count_finishes, kw...)
-end
-
-function MultipleProgress(progresses::AbstractVector{<:AbstractProgress}; 
-                          count_finishes=false, kwmain=(), kw...)
-    if count_finishes
-        MultipleProgress(progresses, Progress(length(progresses); kwmain...); count_finishes=count_finishes, kw...)
-    else
-        MultipleProgress(progresses, ProgressUnknown(; kwmain...); count_finishes=count_finishes, kw...)
-    end
-end
-
 """
-    MultipleProgress(mainprogress=ProgressUnknown(); auto_close=false, kw...)
+    MultipleProgress(mainprogress=ProgressUnknown(); main=0, auto_close=false, kw...)
 
 is equivalent to
 
-    MultipleProgress(AbstractProgress[], mainprogress; auto_close, kw...)
+    progresses = Dict{typeof(main), AbstractProgress}()
+    return MultipleProgress(progresses, mainprogress; main, auto_close, kw...)
 
 See also: `addprogress!`
-
-Close the underlying channel with `finish!(p[0])` (finishes `mainprogress`) or `close(p)`.
 """
-function MultipleProgress(mainprogress::AbstractProgress=ProgressUnknown(); auto_close=false, kw...)
-    return MultipleProgress(AbstractProgress[], mainprogress; auto_close=auto_close, kw...)
+function MultipleProgress(mainprogress::AbstractProgress=ProgressUnknown(); main=0, auto_close=false, kw...)
+    progresses = Dict{typeof(main), AbstractProgress}()
+    return MultipleProgress(progresses, mainprogress; main=main, auto_close=auto_close, kw...)
 end
 
-function runMultipleProgress(progresses::AbstractVector{<:AbstractProgress},
+function runMultipleProgress(progresses::AbstractDict{T,<:AbstractProgress},
                              mainprogress::AbstractProgress,
                              mp::MultipleProgress;
                              auto_close = true,
                              count_finishes = false,
                              count_overshoot = false,
-                             auto_reset_timer = true)
-    for p in progresses
-        p.offset = -1
-    end
-
-    channel = mp.channel
-    taken_offsets = Set{Int}()        
+                             auto_reset_timer = true) where T
     max_offsets = 1
     try
+        for p in values(progresses)
+            p.offset = -1
+        end
+
+        channel = mp.channel
+        taken_offsets = Set{Int}()
+
+        mainprogress.offset = 0
         # we must make sure that 2 progresses aren't updated at the same time, 
         # that's why we use only one Channel
-        while !has_finished(mainprogress) && !(auto_close && all(has_finished, progresses))
+        while !has_finished(mainprogress)
             
             p, f, args, kwt = take!(channel)
 
-            if p == 0 # main progressbar
+            if p == mp.main # main progressbar
                 if f == PP_CANCEL
                     finish!(mainprogress; keep=false)
                     cancel(mainprogress, args...; kwt..., keep=false)
@@ -229,27 +250,27 @@ function runMultipleProgress(progresses::AbstractVector{<:AbstractProgress},
                 elseif f == PP_FINISH
                     finish!(mainprogress, args...; kwt..., keep=false)
                     break
+                else
+                    error("action `$f` not applicable to main progressmeter")
                 end
             else
                 # add progress
-                if f == MP_ADD_PROGRESS
-                    resize!(progresses, max(length(progresses), p))
-                    mp.amount = length(progresses)
-                    progresses[p] = Progress(args...; kwt..., offset=-1)
-                    continue
-                elseif f == MP_ADD_UNKNOWN
-                    resize!(progresses, max(length(progresses), p))
-                    mp.amount = length(progresses)
-                    progresses[p] = ProgressUnknown(args...; kwt..., offset=-1)
-                    continue
-                elseif f == MP_ADD_THRESH
-                    resize!(progresses, max(length(progresses), p))
-                    mp.amount = length(progresses)
-                    progresses[p] = ProgressThresh(args...; kwt..., offset=-1)
+                if f ∈ (MP_ADD_PROGRESS, MP_ADD_THRESH, MP_ADD_UNKNOWN)
+                    if p ∈ keys(progresses)
+                        error("key `$p` already in use")
+                    end
+                    if f == MP_ADD_PROGRESS
+                        progresses[p] = Progress(args...; kwt..., offset=-1)
+                    elseif f == MP_ADD_UNKNOWN
+                        progresses[p] = ProgressUnknown(args...; kwt..., offset=-1)
+                    else
+                        progresses[p] = ProgressThresh(args...; kwt..., offset=-1)
+                    end
+                    push!(mp.keys, p)
                     continue
                 end
 
-                # first time calling progress p
+                # if first time calling progress p
                 if progresses[p].offset == -1
                     # find first available offset
                     offset = 1
@@ -282,20 +303,27 @@ function runMultipleProgress(progresses::AbstractVector{<:AbstractProgress},
                     elseif f == PP_UPDATE
                         if !isempty(args)
                             value = args[1]
-                            !count_overshoot && progresses[p] isa Progress && (value = min(value, progresses[p].n))
+                            if !count_overshoot && progresses[p] isa Progress
+                                value = min(value, progresses[p].n) # avoid overshoot
+                            end
                             update!(progresses[p], value, args[2:end]...; kwt..., keep=false)
                         else
                             update!(progresses[p]; kwt..., keep=false)
                         end
                     end
 
-                    !count_finishes && update!(mainprogress, 
-                        mainprogress.counter - prev_p_counter + progresses[p].counter; keep=false)
+                    if !count_finishes
+                        update!(mainprogress, mainprogress.counter-prev_p_counter+progresses[p].counter; keep=false)
+                    end
                 end
 
                 if !already_finished && has_finished(progresses[p])
                     delete!(taken_offsets, progresses[p].offset)
                     count_finishes && next!(mainprogress; keep=false)
+
+                    if auto_close && all(has_finished, values(progresses))
+                        break
+                    end
                 end
             end
         end
@@ -308,8 +336,8 @@ function runMultipleProgress(progresses::AbstractVector{<:AbstractProgress},
             println()
         end
     finally
-        print("\n" ^ (max_offsets+1))
         close(mp)
+        println("\n"^max_offsets)
     end
 end
 

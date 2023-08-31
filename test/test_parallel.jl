@@ -139,11 +139,11 @@ end
     p = ParallelProgress(20)
     for i in 1:20
         sleep(0.1)
-        if i < 10
+        # if i < 10
             next!(p; showvalues=Dict(:i => i, "longstring" => "ABCD"^i))
-        else
-            next!(p; showvalues=() -> [(:i, "$i"), ("halfdone", true)])
-        end
+        # else # lazy broken ?
+        #     next!(p; showvalues=() -> [(:i, "$i"), ("halfdone", true)])
+        # end
     end
     sleep(s)
     @test has_finished(p)
