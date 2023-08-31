@@ -72,7 +72,20 @@ end
     sleep(s)
     @test has_finished(p)
 
-
+    println("Testing forbidden main keys")
+    @test_throws ErrorException MultipleProgress(
+        Dict(:main => Progress(10, desc="task :a "),
+             :b => Progress(10, desc="task :b ")),
+    )
+    @test_throws ErrorException MultipleProgress(
+        Dict(0 => Progress(10, desc="task :a "),
+             1 => Progress(10, desc="task :b ")),
+    )
+    @test_throws ErrorException MultipleProgress(
+        Dict(:a => Progress(10, desc="task :a "),
+             :b => Progress(10, desc="task :b "));
+        main=:a
+    )
 
 
     println("Testing over-shooting and under-shooting")
