@@ -120,14 +120,11 @@ Base.keys(mp::MultipleProgress) = mp.keys
 
 allows to call the `progresses` and `mainprogress` from different workers
  - `progresses`: contains the different progressbars, can also be an `AbstractVector`
- - `mainprogress`: main progressbar, defaults to `Progress` or `ProgressUnknown`, \
- according to `count_finishes` and whether all progresses have known length or not
+ - `mainprogress`: main progressbar, defaults to `Progress` or `ProgressUnknown`, according to `count_finishes` and whether all progresses have known length or not
  - `main`: how `mainprogress` should be called. Defaults to `0` or `:main`
  - `enabled`: `enabled == false` doesn't show anything and doesn't open a channel
- - `auto_close`: if true, the channel will close when all progresses are finished, otherwise, \
- when mainprogress finishes or with `close(p)`
- - `count_finishes`: if false, main_progress will be the sum of the individual progressbars, \
- if true, it will be equal to the number of finished progressbars
+ - `auto_close`: if true, the channel will close when all progresses are finished, otherwise, when mainprogress finishes or with `close(p)`
+ - `count_finishes`: if false, main_progress will be the sum of the individual progressbars, if true, it will be equal to the number of finished progressbars
  - `count_overshoot`: overshooting progressmeters will be counted in the main progressmeter
  - `auto_reset_timer`: tinit in progresses will be reset at first call
 
