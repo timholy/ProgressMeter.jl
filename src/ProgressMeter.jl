@@ -201,13 +201,13 @@ mutable struct ProgressUnknown <: AbstractProgress
 end
 
 function ProgressUnknown(;
-                         dt::Real=0.1, 
-                         desc::AbstractString="Progress: ", 
-                         color::Symbol=:green, 
-                         spinner::Bool=false, 
-                         output::IO=stderr, 
+                         dt::Real=0.1,
+                         desc::AbstractString="Progress: ",
+                         color::Symbol=:green,
+                         spinner::Bool=false,
+                         output::IO=stderr,
                          offset::Integer=0,
-                         enabled::Bool = true, 
+                         enabled::Bool = true,
                          showspeed::Bool = false)
     CLEAR_IJULIA[] = clear_ijulia()
     reentrantlocker = Threads.ReentrantLock()
@@ -409,8 +409,8 @@ spinner_char(p::ProgressUnknown, spinner::AbstractVector{<:AbstractChar}) =
 spinner_char(p::ProgressUnknown, spinner::AbstractString) =
     p.done ? spinner_done : spinner[nextind(spinner, 1, p.spincounter % length(spinner))]
 
-function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = false, 
-                        valuecolor = :blue, desc = p.desc, ignore_predictor = false, 
+function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = false,
+                        valuecolor = :blue, desc = p.desc, ignore_predictor = false,
                         spinner::Union{AbstractChar,AbstractString,AbstractVector{<:AbstractChar}} = spinner_chars,
                         offset::Integer = p.offset, keep = (offset == 0))
     !p.enabled && return
@@ -867,8 +867,8 @@ end
 @showprogress dt "Computing..." pmap(x->x^2, 1:50)
 ```
 displays progress in performing a computation. `dt` is the minimum
-interval in seconds between updates to the user. You may optionally 
-supply a custom message to be printed that specifies the computation 
+interval in seconds between updates to the user. You may optionally
+supply a custom message to be printed that specifies the computation
 being performed.
 
 `@showprogress` works for loops, comprehensions, map, reduce, and pmap.
