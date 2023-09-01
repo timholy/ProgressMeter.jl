@@ -243,7 +243,7 @@ function updateProgress!(p::Progress; showvalues = (),
                          truncate_lines = false, valuecolor = :blue,
                          offset::Integer = p.offset, keep = (offset == 0), 
                          desc::Union{Nothing,AbstractString} = nothing,
-                         ignore_predictor = false, color = p.color)
+                         ignore_predictor = false, color = p.color, max_steps = p.n)
     !p.enabled && return
     if p.counter == 2 # ignore the first loop given usually uncharacteristically slow
         p.tsecond = time()
@@ -256,6 +256,7 @@ function updateProgress!(p::Progress; showvalues = (),
     end
     p.offset = offset
     p.color = color
+    p.n = max_steps
     if p.counter >= p.n
         if p.counter == p.n && p.printed
             t = time()
@@ -327,9 +328,10 @@ function updateProgress!(p::ProgressThresh; showvalues = (),
                          truncate_lines = false, valuecolor = :blue,
                          offset::Integer = p.offset, keep = (offset == 0), 
                          desc = p.desc, ignore_predictor = false,
-                         color = p.color)
+                         color = p.color, thresh = p.thresh)
     !p.enabled && return
     p.offset = offset
+    p.thresh = thresh
     p.color = color
     p.desc = desc
     if p.val <= p.thresh && !p.triggered

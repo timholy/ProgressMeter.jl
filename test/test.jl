@@ -454,3 +454,39 @@ println("Testing early cancel with offset 1 and keep")
 testfunc20(1:50, Progress(100, offset=1))
 testfunc20(1:50, ProgressUnknown(offset=1))
 testfunc20(50:-1:1, ProgressThresh(0, offset=1))
+
+function testfunc21()
+    p = Progress(10; desc="length 10:")
+    for i in 1:5
+        next!(p)
+        sleep(0.2)
+    end
+    update!(p; max_steps = 100, desc="now 100:")
+    sleep(0.5)
+    @test p.n == 100
+    for i in 6:100
+        next!(p)
+        sleep(0.05)
+    end
+end
+
+println("Testing updating max_steps")
+testfunc21()
+
+function testfunc22()
+    p = ProgressThresh(0.1; desc="thresh 0.1:")
+    for i in 1:5
+        update!(p, 1/i)
+        sleep(0.2)
+    end
+    update!(p; thresh=0.01, desc="now 0.01:")
+    sleep(0.5)
+    @test p.thresh == 0.01
+    for i in 6:101
+        update!(p, 1/i)
+        sleep(0.05)
+    end
+end
+
+println("Testing updating thresh")
+testfunc22()
