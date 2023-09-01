@@ -100,14 +100,6 @@ mutable struct Progress <: AbstractProgress
     end
 end
 
-Progress(n::Integer, dt::Real, desc::AbstractString="Progress: ",
-         barlen=nothing, color::Symbol=:green, output::IO=stderr;
-         offset::Integer=0) =
-    Progress(n, dt=dt, desc=desc, barlen=barlen, color=color, output=output, offset=offset)
-
-Progress(n::Integer, desc::AbstractString, offset::Integer=0; kwargs...) = Progress(n; desc=desc, offset=offset, kwargs...)
-
-
 """
 `prog = ProgressThresh(thresh; dt=0.1, desc="Progress: ",
 color=:green, output=stderr)` creates a progress meter for a task
@@ -157,13 +149,6 @@ mutable struct ProgressThresh{T<:Real} <: AbstractProgress
 end
 ProgressThresh(thresh::Real; kwargs...) = ProgressThresh{typeof(thresh)}(thresh; kwargs...)
 
-# Legacy constructor calls
-ProgressThresh(thresh::Real, dt::Real, desc::AbstractString="Progress: ",
-         color::Symbol=:green, output::IO=stderr;
-         offset::Integer=0) =
-    ProgressThresh(thresh; dt=dt, desc=desc, color=color, output=output, offset=offset)
-
-ProgressThresh(thresh::Real, desc::AbstractString, offset::Integer=0) = ProgressThresh(thresh; desc=desc, offset=offset)
 
 """
 `prog = ProgressUnknown(; dt=0.1, desc="Progress: ",
@@ -216,12 +201,6 @@ function ProgressUnknown(;
     ProgressUnknown(false, reentrantlocker, dt, 0, 0, false, tinit, tlast, printed, desc, color, spinner, output, 0, offset, enabled, showspeed, 1, 1, Int[])
 end
 
-ProgressUnknown(dt::Real, desc::AbstractString="Progress: ",
-         color::Symbol=:green, output::IO=stderr; kwargs...) =
-    ProgressUnknown(dt=dt, desc=desc, color=color, output=output; kwargs...)
-
-ProgressUnknown(desc::AbstractString; kwargs...) = ProgressUnknown(desc=desc; kwargs...)
-
 #...length of percentage and ETA string with days is 29 characters, speed string is always 14 extra characters
 function tty_width(desc, output, showspeed::Bool)
     full_width = displaysize(output)[2]
@@ -260,9 +239,11 @@ function calc_check_iterations(p, t)
 end
 
 # update progress display
-function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, valuecolor = :blue,
-                        offset::Integer = p.offset, keep = (offset == 0), desc::Union{Nothing,AbstractString} = nothing,
-                        ignore_predictor = false)
+function updateProgress!(p::Progress; showvalues = (), 
+                         truncate_lines = false, valuecolor = :blue,
+                         offset::Integer = p.offset, keep = (offset == 0), 
+                         desc::Union{Nothing,AbstractString} = nothing,
+                         ignore_predictor = false, color = p.color)
     !p.enabled && return
     if p.counter == 2 # ignore the first loop given usually uncharacteristically slow
         p.tsecond = time()
@@ -274,6 +255,7 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
         p.desc = desc
     end
     p.offset = offset
+    p.color = color
     if p.counter >= p.n
         if p.counter == p.n && p.printed
             t = time()
@@ -341,10 +323,14 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
     return nothing
 end
 
-function updateProgress!(p::ProgressThresh; showvalues = (), truncate_lines = false, valuecolor = :blue,
-                        offset::Integer = p.offset, keep = (offset == 0), desc = p.desc, ignore_predictor = false)
+function updateProgress!(p::ProgressThresh; showvalues = (), 
+                         truncate_lines = false, valuecolor = :blue,
+                         offset::Integer = p.offset, keep = (offset == 0), 
+                         desc = p.desc, ignore_predictor = false,
+                         color = p.color)
     !p.enabled && return
     p.offset = offset
+    p.color = color
     p.desc = desc
     if p.val <= p.thresh && !p.triggered
         p.triggered = true
@@ -412,9 +398,11 @@ spinner_char(p::ProgressUnknown, spinner::AbstractString) =
 function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = false, 
                         valuecolor = :blue, desc = p.desc, ignore_predictor = false, 
                         spinner::Union{AbstractChar,AbstractString,AbstractVector{<:AbstractChar}} = spinner_chars,
-                        offset::Integer = p.offset, keep = (offset == 0))
+                        offset::Integer = p.offset, keep = (offset == 0),
+                        color = p.color)
     !p.enabled && return
     p.offset = offset
+    p.color = color
     p.desc = desc
     if p.done
         if p.printed
@@ -502,7 +490,7 @@ end
 
 # update progress display
 """
-    next!(p::Union{Progress, ProgressUnknown}, [color]; step::Int = 1, options...)
+    next!(p::Union{Progress, ProgressUnknown}; step::Int = 1, options...)
 
 Report that `step` units of progress have been made. Depending on the time interval since
 the last update, this may or may not result in a change to the display.
@@ -516,16 +504,8 @@ function next!(p::Union{Progress, ProgressUnknown}; step::Int = 1, options...)
     end
 end
 
-function next!(p::Union{Progress, ProgressUnknown}, color::Symbol; step::Int = 1, options...)
-    lock_if_threading(p) do
-        p.color = color
-        p.counter += step
-        updateProgress!(p; ignore_predictor = step == 0, options...)
-    end
-end
-
 """
-    update!(p::Union{Progress, ProgressUnknown}, [counter,] [color]; options...)
+    update!(p::Union{Progress, ProgressUnknown}, [counter]; options...)
 
 Set the progress counter to `counter`, relative to the `n` units of progress specified
 when `prog` was initialized.  Depending on the time interval since the last update,
@@ -533,41 +513,41 @@ this may or may not result in a change to the display.
 
 You may optionally change the color of the display. See also `next!`.
 """
-function update!(p::Union{Progress, ProgressUnknown}, counter::Int=p.counter, color::Symbol=p.color; options...)
+function update!(p::Union{Progress, ProgressUnknown}, counter::Int=p.counter; options...)
     lock_if_threading(p) do
         counter_changed = p.counter != counter
         p.counter = counter
-        p.color = color
         updateProgress!(p; ignore_predictor = !counter_changed, options...)
     end
 end
 
 """
-    update!(p::ProgressThresh, [val,] [color]; increment::Bool=true, options...)
+    update!(p::ProgressThresh, [val]; increment::Bool=true, options...)
 
 Set the progress counter to current value `val`.
 """
-function update!(p::ProgressThresh, val=p.val, color::Symbol=p.color; increment::Bool = true, options...)
+function update!(p::ProgressThresh, val=p.val; increment::Bool = true, options...)
     lock_if_threading(p) do
         p.val = val
         if increment
             p.counter += 1
         end
-        p.color = color
         updateProgress!(p; options...)
     end
 end
 
 
 """
-    cancel(p::AbstractProgress, [msg,] [color=:red]; options...)
+    cancel(p::AbstractProgress, [msg]; color=:red, options...)
 
 Cancel the progress display before all tasks were completed. Optionally you can specify
 the message printed and its color.
 
 See also `finish!`.
 """
-function cancel(p::AbstractProgress, msg::AbstractString = "Aborted before all tasks were completed", color = :red; showvalues = (), truncate_lines = false, valuecolor = :blue, offset = p.offset, keep = (offset == 0))
+function cancel(p::AbstractProgress, msg::AbstractString = "Aborted before all tasks were completed"; 
+                color = :red, showvalues = (), truncate_lines = false, 
+                valuecolor = :blue, offset = p.offset, keep = (offset == 0))
     lock_if_threading(p) do
         p.offset = offset
         if p.printed
@@ -671,7 +651,7 @@ end
 
 function barstring(barlen, percentage_complete; barglyphs)
     bar = ""
-    if barlen>0
+    if barlen > 0
         if percentage_complete == 100 # if we're done, don't use the "front" character
             bar = string(barglyphs.leftend, repeat(string(barglyphs.fill), barlen), barglyphs.rightend)
         else
@@ -698,9 +678,9 @@ function durationstring(nsec)
     seconds = floor(r - 60*minutes)
 
     hhmmss = @sprintf "%u:%02u:%02u" hours minutes seconds
-    if days>9
+    if days > 9
         return @sprintf "%.2f days" nsec/(60*60*24)
-    elseif days>0
+    elseif days > 0
         return @sprintf "%u days, %s" days hhmmss
     end
     hhmmss
@@ -816,7 +796,7 @@ function showprogressdistributed(args...)
 
     setup = quote
         n = length($(esc(r)))
-        p = Progress(n, $(showprogress_process_args(progressargs)...))
+        p = Progress(n, $(showprogress_process_args(progressargs)...)) #? kwargs?
         ch = RemoteChannel(() -> Channel{Bool}(n))
     end
 
@@ -964,7 +944,7 @@ function showprogress(args...)
 
         setup = quote
             iterable = $(esc(obj))
-            $(esc(metersym)) = Progress(length(iterable), $(showprogress_process_args(progressargs)...))
+            $(esc(metersym)) = Progress(length(iterable), $(showprogress_process_args(progressargs)...)) #? kwargs?
         end
 
         if expr.head === :for
@@ -1081,5 +1061,30 @@ function ncalls(mapfun::Function, map_args)
         return maximum(length(arg) for arg in relevant)
     end
 end
+
+# Deprecated legacy constructor calls
+
+@deprecate Progress(n::Integer, dt::Real, desc::AbstractString="Progress: ",
+    barlen=nothing, color::Symbol=:green, output::IO=stderr;
+    offset::Integer=0) Progress(n; dt=dt, desc=desc, barlen=barlen, color=color, output=output, offset=offset)
+
+@deprecate Progress(n::Integer, desc::AbstractString, offset::Integer=0; kwargs...) Progress(n; desc=desc, offset=offset, kwargs...)
+
+@deprecate ProgressThresh(thresh::Real, dt::Real, desc::AbstractString="Progress: ",
+         color::Symbol=:green, output::IO=stderr;
+         offset::Integer=0) ProgressThresh(thresh; dt=dt, desc=desc, color=color, output=output, offset=offset)
+
+@deprecate ProgressThresh(thresh::Real, desc::AbstractString, offset::Integer=0) ProgressThresh(thresh; desc=desc, offset=offset)
+
+@deprecate ProgressUnknown(dt::Real, desc::AbstractString="Progress: ",
+         color::Symbol=:green, output::IO=stderr; kwargs...) ProgressUnknown(; dt=dt, desc=desc, color=color, output=output, kwargs...)
+
+@deprecate ProgressUnknown(desc::AbstractString; kwargs...) ProgressUnknown(; desc=desc, kwargs...)
+
+@deprecate next!(p::Union{Progress, ProgressUnknown}, color::Symbol; options...) next!(p; color=color, options...)
+
+@deprecate update!(p::AbstractProgress, val, color; options...) update!(p, val; color=color, options...)
+
+@deprecate cancel(p::AbstractProgress, msg, color; options...) cancel(p, msg; color=color, options...)
 
 end
