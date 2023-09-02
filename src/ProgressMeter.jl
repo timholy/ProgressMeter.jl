@@ -798,7 +798,7 @@ function showprogressdistributed(args...)
 
     setup = quote
         n = length($(esc(r)))
-        p = Progress(n, $(showprogress_process_args(progressargs)...)) #? kwargs?
+        p = Progress(n, $(showprogress_process_args(progressargs)...))
         ch = RemoteChannel(() -> Channel{Bool}(n))
     end
 
@@ -842,16 +842,15 @@ end
 
 """
 ```
-@showprogress dt "Computing..." for i = 1:50
+@showprogress [desc="Computing..."] for i = 1:50
     # computation goes here
 end
 
-@showprogress dt "Computing..." pmap(x->x^2, 1:50)
+@showprogress [desc="Computing..."] pmap(x->x^2, 1:50)
 ```
-displays progress in performing a computation. `dt` is the minimum
-interval in seconds between updates to the user. You may optionally 
+displays progress in performing a computation.  You may optionally 
 supply a custom message to be printed that specifies the computation 
-being performed.
+being performed or other options.
 
 `@showprogress` works for loops, comprehensions, map, reduce, and pmap.
 """
@@ -946,7 +945,7 @@ function showprogress(args...)
 
         setup = quote
             iterable = $(esc(obj))
-            $(esc(metersym)) = Progress(length(iterable), $(showprogress_process_args(progressargs)...)) #? kwargs?
+            $(esc(metersym)) = Progress(length(iterable), $(showprogress_process_args(progressargs)...))
         end
 
         if expr.head === :for
@@ -996,7 +995,7 @@ function showprogress(args...)
 
         # create appropriate Progress expression
         lenex = :(ncalls($(esc(mapfun)), ($([esc(a) for a in mapargs]...),)))
-        progex = :(Progress($lenex, $([esc(a) for a in progressargs]...)))
+        progex = :(Progress($lenex, $(showprogress_process_args(progressargs)...)))
 
         # insert progress and mapfun kwargs
         push!(call.args, Expr(:kw, :progress, progex))
@@ -1064,29 +1063,6 @@ function ncalls(mapfun::Function, map_args)
     end
 end
 
-# Deprecated legacy constructor calls
-
-@deprecate Progress(n::Integer, dt::Real, desc::AbstractString="Progress: ",
-    barlen=nothing, color::Symbol=:green, output::IO=stderr;
-    offset::Integer=0) Progress(n; dt=dt, desc=desc, barlen=barlen, color=color, output=output, offset=offset)
-
-@deprecate Progress(n::Integer, desc::AbstractString, offset::Integer=0; kwargs...) Progress(n; desc=desc, offset=offset, kwargs...)
-
-@deprecate ProgressThresh(thresh::Real, dt::Real, desc::AbstractString="Progress: ",
-         color::Symbol=:green, output::IO=stderr;
-         offset::Integer=0) ProgressThresh(thresh; dt=dt, desc=desc, color=color, output=output, offset=offset)
-
-@deprecate ProgressThresh(thresh::Real, desc::AbstractString, offset::Integer=0) ProgressThresh(thresh; desc=desc, offset=offset)
-
-@deprecate ProgressUnknown(dt::Real, desc::AbstractString="Progress: ",
-         color::Symbol=:green, output::IO=stderr; kwargs...) ProgressUnknown(; dt=dt, desc=desc, color=color, output=output, kwargs...)
-
-@deprecate ProgressUnknown(desc::AbstractString; kwargs...) ProgressUnknown(; desc=desc, kwargs...)
-
-@deprecate next!(p::Union{Progress, ProgressUnknown}, color::Symbol; options...) next!(p; color=color, options...)
-
-@deprecate update!(p::AbstractProgress, val, color; options...) update!(p, val; color=color, options...)
-
-@deprecate cancel(p::AbstractProgress, msg, color; options...) cancel(p, msg; color=color, options...)
+include("deprecated.jl")
 
 end

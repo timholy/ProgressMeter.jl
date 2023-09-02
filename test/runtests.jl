@@ -22,4 +22,6 @@ end
 @testset "Threading" begin
     include("test_threads.jl")
 end
-
+@testset "Deprecated" begin
+    include("deprecated.jl")
+end

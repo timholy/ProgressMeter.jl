@@ -3,7 +3,7 @@ using Random: seed!
 seed!(123)
 
 function testfunc(n, dt, tsleep)
-    p = ProgressMeter.Progress(n, dt)
+    p = ProgressMeter.Progress(n; dt=dt)
     for i = 1:n
         sleep(tsleep)
         ProgressMeter.next!(p)
@@ -14,7 +14,7 @@ testfunc(107, 0.01, 0.01)
 
 
 function testfunc2(n, dt, tsleep, desc, barlen)
-    p = ProgressMeter.Progress(n, dt, desc, barlen)
+    p = ProgressMeter.Progress(n; dt=dt, desc=desc, barlen=barlen)
     for i = 1:n
         sleep(tsleep)
         ProgressMeter.next!(p)
@@ -27,7 +27,7 @@ testfunc2(107, 0.01, 0.01, "", 0)
 
 
 function testfunc3(n, tsleep, desc)
-    p = ProgressMeter.Progress(n, desc)
+    p = ProgressMeter.Progress(n; desc=desc)
     for i = 1:n
         sleep(tsleep)
         ProgressMeter.next!(p)
@@ -42,7 +42,7 @@ testfunc3(107, 0.02, "")
 
 
 function testfunc4()  # test "days" format
-    p = ProgressMeter.Progress(10000000, "Test...")
+    p = ProgressMeter.Progress(10000000, desc="Test...")
     for i = 1:105
         sleep(0.02)
         ProgressMeter.next!(p)
@@ -53,14 +53,14 @@ println("Testing that not even 1% required...")
 testfunc4()
 
 function testfunc5A(n, dt, tsleep, desc, barlen)
-    p = ProgressMeter.Progress(n, dt, desc, barlen)
+    p = ProgressMeter.Progress(n; dt=dt, desc=desc, barlen=barlen)
     for i = 1:round(Int, floor(n/2))
         sleep(tsleep)
         ProgressMeter.next!(p)
     end
     for i = round(Int, ceil(n/2)):n
         sleep(tsleep)
-        ProgressMeter.next!(p, :red)
+        ProgressMeter.next!(p; color=:red)
     end
 end
 
@@ -68,7 +68,7 @@ println("\nTesting changing the bar color")
 testfunc5A(107, 0.01, 0.01, "Computing...", 50)
 
 function testfunc5B(n, dt, tsleep, desc, barlen)
-    p = ProgressMeter.Progress(n, dt, desc, barlen)
+    p = ProgressMeter.Progress(n; dt=dt, desc=desc, barlen=barlen)
     for i = 1:n
         sleep(tsleep)
         ProgressMeter.next!(p)
@@ -80,11 +80,11 @@ function testfunc5B(n, dt, tsleep, desc, barlen)
 end
 
 println("\nTesting changing the description")
-testfunc5B(107, 0.01, 0.05, "Step 1...", 50)
+testfunc5B(107, 0.01, 0.02, "Step 1...", 50)
 
 
 function testfunc6(n, dt, tsleep)
-    ProgressMeter.@showprogress dt for i in 1:n
+    ProgressMeter.@showprogress dt=dt for i in 1:n
         if i == div(n, 2)
             break
         end
@@ -96,7 +96,7 @@ function testfunc6(n, dt, tsleep)
 end
 
 function testfunc6a(n, dt, tsleep)
-    ProgressMeter.@showprogress dt for i in 1:n, j in 1:n
+    ProgressMeter.@showprogress dt=dt for i in 1:n, j in 1:n
         if i == div(n, 2)
             break
         end
@@ -113,12 +113,12 @@ testfunc6a(30, 0.01, 0.002)
 
 
 function testfunc7(n, dt, tsleep)
-    s = ProgressMeter.@showprogress dt "Calculating..." [(sleep(tsleep); z) for z in 1:n]
+    s = ProgressMeter.@showprogress dt=dt desc="Calculating..." [(sleep(tsleep); z) for z in 1:n]
     @test s == [1:n;]
 end
 
 function testfunc7a(n, dt, tsleep)
-    s = ProgressMeter.@showprogress dt "Calculating..." [(sleep(tsleep); z) for z in 1:n, y in 1:n]
+    s = ProgressMeter.@showprogress dt=dt desc="Calculating..." [(sleep(tsleep); z) for z in 1:n, y in 1:n]
     @test s == [z for z in 1:n, y in 1:n]
 end
 
@@ -128,7 +128,7 @@ testfunc7a(5, 0.1, 0.1)
 
 
 function testfunc8(n, dt, tsleep)
-    ProgressMeter.@showprogress dt for i in 1:n
+    ProgressMeter.@showprogress dt=dt for i in 1:n
         if rand() < 0.7
             sleep(tsleep)
             continue
@@ -148,16 +148,16 @@ function testfunc8(n, dt, tsleep)
 end
 
 println("Testing @showprogress macro on a for loop with inner loops containing continue and break statements")
-testfunc8(3000, 0.01, 0.002)
+testfunc8(3000, 0.01, 0.001)
 
 
 function testfunc9(n, dt, tsleep)
-    s = ProgressMeter.@showprogress dt "Calculating..." Float64[(sleep(tsleep); z) for z in 1:n]
+    s = ProgressMeter.@showprogress dt=dt desc="Calculating..." Float64[(sleep(tsleep); z) for z in 1:n]
     @test s == [1:n;]
 end
 
 function testfunc9a(n, dt, tsleep)
-    s = ProgressMeter.@showprogress dt "Calculating..." Float64[(sleep(tsleep); z) for z in 1:n, y in 1:n]
+    s = ProgressMeter.@showprogress dt=dt desc="Calculating..." Float64[(sleep(tsleep); z) for z in 1:n, y in 1:n]
     @test s == [z for z in 1:n, y in 1:n]
 end
 
@@ -167,7 +167,7 @@ testfunc9a(10, 0.1, 0.01)
 
 
 function testfunc10(n, k, dt, tsleep)
-    p = ProgressMeter.Progress(n, dt)
+    p = ProgressMeter.Progress(n; dt=dt)
     for i = 1:k
         sleep(tsleep)
         ProgressMeter.next!(p)
@@ -180,7 +180,7 @@ println("Testing over-shooting progress with finish!...")
 testfunc10(107, 111, 0.01, 0.01)
 
 function testfunc11(n, dt, tsleep)
-    p = ProgressMeter.Progress(n, dt)
+    p = ProgressMeter.Progress(n, dt=dt)
     for i = 1:n÷2
         sleep(tsleep)
         ProgressMeter.next!(p)
@@ -196,7 +196,7 @@ println("Testing update! to 0...")
 testfunc11(6, 0.01, 0.3)
 
 function testfunc13()
-    ProgressMeter.@showprogress 1 for i=1:10
+    ProgressMeter.@showprogress dt=1 for i=1:10
         return
     end
 end
@@ -204,68 +204,54 @@ end
 println("Testing @showprogress macro on loop ending with return statement")
 testfunc13()
 
-function testfunc13()
+function testfunc13a()
     n = 30
     # no keyword arguments
     p = ProgressMeter.Progress(n)
     for i in 1:n
-        sleep(0.1)
+        sleep(0.05)
         ProgressMeter.next!(p)
     end
     # full keyword arguments
     start = 15
-    p = ProgressMeter.Progress(n, dt=0.01, desc="", color=:red, output=stderr, barlen=40, start = start)
+    p = ProgressMeter.Progress(n; dt=0.01, desc="", color=:red, output=stderr, barlen=40, start = start)
     for i in 1:n-start
-        sleep(0.1)
+        sleep(0.05)
         ProgressMeter.next!(p)
     end
 end
 
-function testfunc13a()
-    # positional arguments
-    @showprogress 0.01 "Red:" 40 :red stderr for i=1:15
-        sleep(0.1)
-    end
+function testfunc13b()
     # same with keyword arguments only
     @showprogress dt=0.01 color=:red output=stderr barlen=40 for i=1:15
-        sleep(0.1)
-    end
-    # mixed cases
-    @showprogress "Blue: " color=:blue for i=1:10
-        sleep(0.1)
-    end
-    @showprogress color=:yellow "Yellow: " showspeed=true for i=1:10
-        sleep(0.1)
-    end
-    @showprogress "Invisible: " enabled=false for i=1:10
         sleep(0.1)
     end
 end
 
 println("Testing keyword arguments")
-testfunc13()
 testfunc13a()
+testfunc13b()
 
 function testfunc14(barglyphs)
     n = 30
     # with the string constructor
     p = ProgressMeter.Progress(n, barglyphs=ProgressMeter.BarGlyphs(barglyphs))
     for i in 1:n
-        sleep(0.1)
+        sleep(0.05)
         ProgressMeter.next!(p)
     end
     # with the 5 char constructor
     chars = (barglyphs...,)
     p = ProgressMeter.Progress(n, barglyphs=ProgressMeter.BarGlyphs(chars...))
     for i in 1:n
-        sleep(0.1)
+        sleep(0.05)
         ProgressMeter.next!(p)
     end
     p = ProgressMeter.Progress(n, dt=0.01, desc="",
                                color=:red, output=stderr, barlen=40,
                                barglyphs=ProgressMeter.BarGlyphs(barglyphs))
     for i in 1:n
-        sleep(0.1)
+        sleep(0.05)
         ProgressMeter.next!(p)
     end
 end
@@ -276,7 +262,7 @@ testfunc14("[=> ]")
 
 # Threshold-based progress reports
 println("Testing threshold-based progress")
-prog = ProgressMeter.ProgressThresh(1e-5, "Minimizing:")
+prog = ProgressMeter.ProgressThresh(1e-5; desc="Minimizing:")
 for val in 10 .^ range(2, stop=-6, length=20)
     ProgressMeter.update!(prog, val)
     sleep(0.1)
@@ -286,51 +272,51 @@ end
 
 # Threshold-based progress reports with increment=false
 println("Testing threshold-based progress with increment=false")
-prog = ProgressMeter.ProgressThresh(1e-5, "Minimizing:")
+prog = ProgressMeter.ProgressThresh(1e-5, desc="Minimizing:")
 for val in 10 .^ range(2, stop=-6, length=20)
     ProgressMeter.update!(prog, val; increment=false)
     @test prog.counter == 0
     sleep(0.1)
 end
 colors = [:red, :blue, :green]
-prog = ProgressMeter.ProgressThresh(1e-5, "Minimizing:")
+prog = ProgressMeter.ProgressThresh(1e-5, desc="Minimizing:")
 for val in 10 .^ range(2, stop=-6, length=20)
-    ProgressMeter.update!(prog, val, rand(colors); increment=false)
+    ProgressMeter.update!(prog, val; color=rand(colors), increment=false)
     @test prog.counter == 0
     sleep(0.1)
 end
 
 # ProgressUnknown progress reports
 println("Testing progress unknown")
-prog = ProgressMeter.ProgressUnknown("Reading entry:")
+prog = ProgressMeter.ProgressUnknown(desc="Reading entry:")
 for _ in 1:10
     ProgressMeter.next!(prog)
     sleep(0.1)
 end
 ProgressMeter.finish!(prog)
 
-prog = ProgressMeter.ProgressUnknown("Reading entry:")
+prog = ProgressMeter.ProgressUnknown(desc="Reading entry:")
 for k in 1:2:20
     ProgressMeter.update!(prog, k)
     sleep(0.1)
 end
 
 colors = [:red, :blue, :green]
-prog = ProgressMeter.ProgressUnknown("Reading entry:")
+prog = ProgressMeter.ProgressUnknown(desc="Reading entry:")
 for k in 1:2:20
-    ProgressMeter.update!(prog, k, rand(colors))
+    ProgressMeter.update!(prog, k; color=rand(colors))
     sleep(0.1)
 end
 ProgressMeter.finish!(prog)
 
-prog = ProgressMeter.ProgressUnknown("Reading entry:", spinner=true)
+prog = ProgressMeter.ProgressUnknown(desc="Reading entry:", spinner=true)
 for _ in 1:10
     ProgressMeter.next!(prog)
     sleep(0.1)
 end
 ProgressMeter.finish!(prog)
 
-prog = ProgressMeter.ProgressUnknown("Reading entry:", spinner=true)
+prog = ProgressMeter.ProgressUnknown(desc="Reading entry:", spinner=true)
 for _ in 1:10
     ProgressMeter.next!(prog)
     sleep(0.1)
@@ -338,14 +324,14 @@ end
 ProgressMeter.finish!(prog, spinner='✗')
 
 myspinner = ['🌑', '🌒', '🌓', '🌔', '🌕', '🌖', '🌗', '🌘']
-prog = ProgressUnknown("Custom spinner:", spinner=true)
+prog = ProgressUnknown(desc="Custom spinner:", spinner=true)
 for val in 1:10
     ProgressMeter.next!(prog, spinner=myspinner)
     sleep(0.1)
 end
 ProgressMeter.finish!(prog, spinner='🌞')
 
-prog = ProgressUnknown("Custom spinner:", spinner=true)
+prog = ProgressUnknown(desc="Custom spinner:", spinner=true)
 for val in 1:10
     ProgressMeter.next!(prog, spinner="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
     sleep(0.1)
@@ -362,7 +348,7 @@ for front in (['▏','▎','▍','▌','▋','▊', '▉'], ['▁' ,'▂' ,'▃'
 end
 
 function testfunc15(n, dt, tsleep)
-    result = ProgressMeter.@showprogress dt @distributed (+) for i in 1:n
+    result = ProgressMeter.@showprogress dt=dt @distributed (+) for i in 1:n
         if rand() < 0.7
             sleep(tsleep)
         end
@@ -372,10 +358,10 @@ function testfunc15(n, dt, tsleep)
 end
 
 println("Testing @showprogress macro on distributed for loop with reducer")
-testfunc15(3000, 0.01, 0.002)
+testfunc15(3000, 0.01, 0.001)
 
 function testfunc16(n, dt, tsleep)
-    ProgressMeter.@showprogress dt "Description: " @distributed for i in 1:n
+    ProgressMeter.@showprogress dt=dt desc="Description: " @distributed for i in 1:n
         if rand() < 0.7
             sleep(tsleep)
         end
@@ -384,7 +370,7 @@ function testfunc16(n, dt, tsleep)
 end
 
 println("Testing @showprogress macro on distributed for loop without reducer")
-testfunc16(3000, 0.01, 0.002)
+testfunc16(3000, 0.01, 0.001)
 
 function testfunc17()
     n = 30
@@ -408,7 +394,7 @@ function testfunc18A(n, dt, tsleep; start=15)
 end
 
 function testfunc18B(n, dt, tsleep)
-    p = ProgressMeter.ProgressUnknown(n; dt=dt, showspeed=true)
+    p = ProgressMeter.ProgressUnknown(; dt=dt, showspeed=true)
     for _ in 1:n
         sleep(tsleep)
         ProgressMeter.next!(p)
