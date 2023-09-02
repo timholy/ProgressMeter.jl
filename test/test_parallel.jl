@@ -93,6 +93,18 @@ end
     sleep(s)
     @test has_finished(p)
 
+    println("Testing across $np workers with @distributed and reduce")
+    n = 10 #per core
+    p = ParallelProgress(n*np)
+    res = @distributed (+) for i in 1:n*np
+        sleep(0.2)
+        next!(p)
+        i^2
+    end
+    @test res == sum(i->i^2, 1:n*np)
+    sleep(s)
+    @test has_finished(p)
+
     println("Testing across $np workers with pmap")
     n = 10
     p = ParallelProgress(n*np)
@@ -141,7 +153,7 @@ end
         sleep(0.1)
         # if i < 10
             next!(p; showvalues=Dict(:i => i, "longstring" => "ABCD"^i))
-        # else # lazy broken ?
+        # else #? lazy broken?
         #     next!(p; showvalues=() -> [(:i, "$i"), ("halfdone", true)])
         # end
     end
