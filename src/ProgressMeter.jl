@@ -872,7 +872,7 @@ supply a custom message to be printed that specifies the computation
 being performed.
 
 `@showprogress` works for loops, comprehensions, map, asyncmap,
-reduce, pmap, mapreduce and foreach.
+reduce, pmap, mapreduce, foreach and broadcast(!).
 """
 macro showprogress(args...)
     showprogress(args...)
@@ -893,7 +893,7 @@ function showprogress(args...)
         return expr
     end
     metersym = gensym("meter")
-    mapfuns = (:map, :asyncmap, :reduce, :pmap, :mapreduce, :foreach)
+    mapfuns = (:map, :asyncmap, :reduce, :pmap, :mapreduce, :foreach, :broadcast, :broadcast!)
     kind = :invalid # :invalid, :loop, or :map
 
     if isa(expr, Expr)
@@ -995,7 +995,7 @@ function showprogress(args...)
 
         # get args to map to determine progress length
         mapargs = collect(Any, filter(call.args[2:end]) do a
-            return isa(a, Symbol) || !(a.head in (:kw, :parameters))
+            return isa(a, Symbol) || isa(a, Number) || !(a.head in (:kw, :parameters))
         end)
         if expr.head == :do
             insert!(mapargs, 1, :nothing) # to make args for ncalls line up
@@ -1071,7 +1071,12 @@ progress_pmap(args...; kwargs...) = progress_map(args...; mapfun=pmap, kwargs...
 Infer the number of calls to the mapped function (i.e. the length of the returned array) given the input arguments to map, reduce or pmap.
 """
 function ncalls(mapfun::Function, map_args)
-    if length(map_args) >= 2 && (mapfun==mapreduce || mapfun == pmap && isa(map_args[2], AbstractWorkerPool))
+    if mapfun == broadcast
+        return prod(length, Broadcast.combine_axes(map_args[2:end]...))
+    elseif mapfun == broadcast!
+        return length(map_args[2])
+    end
+    if length(map_args) >= 2 && (mapfun == mapreduce || mapfun == pmap && isa(map_args[2], AbstractWorkerPool))
         relevant = map_args[3:end]
     else
         relevant = map_args[2:end]
@@ -1079,7 +1084,7 @@ function ncalls(mapfun::Function, map_args)
     if isempty(relevant)
         error("Unable to determine number of calls in $mapfun. Too few arguments?")
     else
-        return maximum(length(arg) for arg in relevant)
+        return minimum(length, relevant)
     end
 end
 
