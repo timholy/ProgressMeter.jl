@@ -19,7 +19,7 @@ end
 
     println("Testing MultipleProgress")
 
-    c = Channel()
+    c = Channel(10)
     @test !ProgressMeter.isfakechannel(c)
     close(c)
 
