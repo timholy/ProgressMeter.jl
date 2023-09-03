@@ -871,7 +871,8 @@ interval in seconds between updates to the user. You may optionally
 supply a custom message to be printed that specifies the computation 
 being performed.
 
-`@showprogress` works for loops, comprehensions, map, reduce, and pmap.
+`@showprogress` works for loops, comprehensions, map, asyncmap,
+reduce, pmap, mapreduce and foreach.
 """
 macro showprogress(args...)
     showprogress(args...)
@@ -892,7 +893,7 @@ function showprogress(args...)
         return expr
     end
     metersym = gensym("meter")
-    mapfuns = (:map, :asyncmap, :reduce, :pmap)
+    mapfuns = (:map, :asyncmap, :reduce, :pmap, :mapreduce, :foreach)
     kind = :invalid # :invalid, :loop, or :map
 
     if isa(expr, Expr)
@@ -1070,7 +1071,7 @@ progress_pmap(args...; kwargs...) = progress_map(args...; mapfun=pmap, kwargs...
 Infer the number of calls to the mapped function (i.e. the length of the returned array) given the input arguments to map, reduce or pmap.
 """
 function ncalls(mapfun::Function, map_args)
-    if mapfun == pmap && length(map_args) >= 2 && isa(map_args[2], AbstractWorkerPool)
+    if length(map_args) >= 2 && (mapfun==mapreduce || mapfun == pmap && isa(map_args[2], AbstractWorkerPool))
         relevant = map_args[3:end]
     else
         relevant = map_args[2:end]

@@ -70,7 +70,16 @@ procs = addprocs(2)
         return x + y
     end
     @test val == reduce((x, y)->x+y, 1:10)
+
+    val = @showprogress mapreduce(+, 1:10) do x
+        return x^2
+    end
+    @test val == mapreduce(x->x^2, +, 1:10)
     
+    @showprogress foreach(1:10) do x
+        print(x)
+    end
+
     # function passed by name
     function testfun(x)
         return x^2
@@ -81,6 +90,10 @@ procs = addprocs(2)
     @test vals == map(testfun, 1:10)
     val = @showprogress reduce(+, 1:10)
     @test val == reduce(+, 1:10)
+    val = @showprogress mapreduce(testfun, +, 1:10)
+    @test val == mapreduce(testfun, +, 1:10)
+    @showprogress foreach(print, 1:10)
+    println()
 
     # #136: make sure mid progress shows up even without sleep
     println("Verify that intermediate progress is displayed:")
