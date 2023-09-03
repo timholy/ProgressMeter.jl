@@ -61,7 +61,7 @@ procs = addprocs(2)
     @test ncalls(broadcast, (+, 1:10, 1:10)) == 10
     @test_throws DimensionMismatch ncalls(broadcast, (+, 1:10, 1:100))
     @test ncalls(broadcast, (+, 1:8, (1:7)', 1)) == 8*7
-    @test ncalls(broadcast, (+, 1:3, (1:5)', [1;;;2])) == 3*5*2
+    @test ncalls(broadcast, (+, 1:3, (1:5)', ones(1,1,2))) == 3*5*2
     @test ncalls(broadcast!, (+, zeros(10,8))) == 80
     @test ncalls(broadcast!, (+, zeros(10,8,7), 1:10)) == 10*8*7
 
