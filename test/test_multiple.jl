@@ -18,6 +18,11 @@ end
     @test all([@fetchfrom w @isdefined(ProgressMeter) for w in workers()])
 
     println("Testing MultipleProgress")
+
+    c = Channel()
+    @test !ProgressMeter.isfakechannel(c)
+    close(c)
+
     println("Testing update!")
     p = MultipleProgress([Progress(100)])
     for _ in 1:5
