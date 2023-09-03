@@ -30,11 +30,13 @@ end
         next!(p[1])
     end
     sleep(s)
-    @test !ProgressMeter.isfakechannel(p[1])
+    @test !ProgressMeter.isfakechannel(p.channel)
+    @test !ProgressMeter.isfakechannel(p[1].channel)
     @test !has_finished(p)
     next!(p[1])
     sleep(s)
-    @test ProgressMeter.isfakechannel(p[1])
+    @test ProgressMeter.isfakechannel(p.channel)
+    @test ProgressMeter.isfakechannel(p[1].channel)
     @test has_finished(p)
 
     println("Testing MultipleProgress with custom titles and color")

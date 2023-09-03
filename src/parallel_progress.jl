@@ -358,8 +358,10 @@ has_finished(p::ProgressThresh) = p.triggered
 has_finished(p::ProgressUnknown) = p.done
 has_finished(p::ParallelProgress) = isfakechannel(p.channel)
 has_finished(p::MultipleProgress) = isfakechannel(p.channel)
+has_finished(mc::MultipleChannel) = isfakechannel(mc)
 
-isfakechannel(_) = false
+isfakechannel(::AbstractChannel) = false
+isfakechannel(::RemoteChannel) = false
 isfakechannel(::FakeChannel) = true
 isfakechannel(mc::MultipleChannel) = isfakechannel(mc.channel)
 
