@@ -30,9 +30,11 @@ end
         next!(p[1])
     end
     sleep(s)
+    @test !ProgressMeter.isfakechannel(p[1])
     @test !has_finished(p)
     next!(p[1])
     sleep(s)
+    @test ProgressMeter.isfakechannel(p[1])
     @test has_finished(p)
 
     println("Testing MultipleProgress with custom titles and color")
@@ -57,7 +59,7 @@ end
              :b => Progress(10, desc="task :b ")),
         kwmain=(desc=":main ",)
     )
-    @test isempty(setdiff(p.keys, [:a, :b]))
+    @test issetequal(keys(p), [:a, :b])
     @test p.main == :main
     for _ in 1:9
         sleep(0.1)
