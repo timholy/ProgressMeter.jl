@@ -193,7 +193,7 @@ wp = WorkerPool(procs)
 
 
     # Progress args
-    vals = @showprogress 0.1 "Computing" pmap(testfun, 1:10)
+    vals = @showprogress dt=0.1 desc="Computing" pmap(testfun, 1:10)
     @test vals == map(testfun, 1:10)
 
 
