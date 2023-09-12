@@ -852,7 +852,9 @@ displays progress in performing a computation.  You may optionally
 supply a custom message to be printed that specifies the computation 
 being performed or other options.
 
-`@showprogress` works for loops, comprehensions, map, reduce, and pmap.
+`@showprogress` works for loops, comprehensions, `asyncmap`, 
+`broadcast`, `broadcast!`, `foreach`, `map`, `mapfoldl`, 
+`mapfoldr`, `mapreduce`, `pmap` and `reduce`.
 """
 macro showprogress(args...)
     showprogress(args...)
@@ -873,7 +875,8 @@ function showprogress(args...)
         return expr
     end
     metersym = gensym("meter")
-    mapfuns = (:map, :asyncmap, :reduce, :pmap)
+    mapfuns = (:asyncmap, :broadcast, :broadcast!, :foreach, :map, 
+               :mapfoldl, :mapfoldr, :mapreduce, :pmap, :reduce)
     kind = :invalid # :invalid, :loop, or :map
 
     if isa(expr, Expr)
@@ -975,7 +978,7 @@ function showprogress(args...)
 
         # get args to map to determine progress length
         mapargs = collect(Any, filter(call.args[2:end]) do a
-            return isa(a, Symbol) || !(a.head in (:kw, :parameters))
+            return isa(a, Symbol) || isa(a, Number) || !(a.head in (:kw, :parameters))
         end)
         if expr.head == :do
             insert!(mapargs, 1, :nothing) # to make args for ncalls line up
@@ -1016,6 +1019,7 @@ function progress_map(args...; mapfun=map,
                                progress=Progress(ncalls(mapfun, args)),
                                channel_bufflen=min(1000, ncalls(mapfun, args)),
                                kwargs...)
+    isempty(args) && return mapfun(; kwargs...)
     f = first(args)
     other_args = args[2:end]
     channel = RemoteChannel(()->Channel{Bool}(channel_bufflen), 1)
@@ -1050,19 +1054,36 @@ progress_pmap(args...; kwargs...) = progress_map(args...; mapfun=pmap, kwargs...
 """
 Infer the number of calls to the mapped function (i.e. the length of the returned array) given the input arguments to map, reduce or pmap.
 """
+function ncalls(::typeof(broadcast), map_args)
+    length(map_args) < 2 && return 1
+    return prod(length, Broadcast.combine_axes(map_args[2:end]...))
+end
+
+function ncalls(::typeof(broadcast!), map_args)
+    length(map_args) < 2 && return 1
+    return length(map_args[2])
+end
+
+function ncalls(::Union{typeof(mapreduce),typeof(mapfoldl),typeof(mapfoldr)}, map_args)
+    length(map_args) < 3 && return 1
+    return minimum(length, map_args[3:end])
+end
+
+function ncalls(::typeof(pmap), map_args)
+    if length(map_args) ≥ 2 && map_args[2] isa AbstractWorkerPool
+        length(map_args) < 3 && return 1
+        return minimum(length, map_args[3:end])
+    else
+        length(map_args) < 2 && return 1
+        return minimum(length, map_args[2:end])
+    end
+end
+
 function ncalls(mapfun::Function, map_args)
-    if mapfun == pmap && length(map_args) >= 2 && isa(map_args[2], AbstractWorkerPool)
-        relevant = map_args[3:end]
-    else
-        relevant = map_args[2:end]
-    end
-    if isempty(relevant)
-        error("Unable to determine number of calls in $mapfun. Too few arguments?")
-    else
-        return maximum(length(arg) for arg in relevant)
-    end
+    length(map_args) < 2 && return 1
+    return minimum(length, map_args[2:end])
 end
 
 include("deprecated.jl")
 
-end
+end # module

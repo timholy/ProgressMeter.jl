@@ -1,6 +1,9 @@
 using Test
 using Distributed
+import ProgressMeter.ncalls
+
 procs = addprocs(2)
+wp = WorkerPool(procs)
 @everywhere using ProgressMeter
 
 @testset "map tests" begin
@@ -50,6 +53,30 @@ procs = addprocs(2)
     end
     println()
 
+    # test ncalls
+    @test ncalls(map, (+, 1:10)) == 10
+    @test ncalls(pmap, (+, 1:10, 1:100)) == 10
+    @test ncalls(pmap, (+, wp, 1:10)) == 10
+    @test ncalls(reduce, (+, 1:10)) == 10
+    @test ncalls(mapreduce, (+, +, 1:10, (1:10)')) == 10
+    @test ncalls(mapfoldl, (+, +, 1:10, (1:10)')) == 10
+    @test ncalls(mapfoldr, (+, +, 1:10, (1:10)')) == 10
+    @test ncalls(foreach, (+, 1:10)) == 10
+    @test ncalls(broadcast, (+, 1:10, 1:10)) == 10
+    @test ncalls(broadcast, (+, 1:8, (1:7)', 1)) == 8*7
+    @test ncalls(broadcast, (+, 1:3, (1:5)', ones(1,1,2))) == 3*5*2
+    @test ncalls(broadcast!, (+, zeros(10,8))) == 80
+    @test ncalls(broadcast!, (+, zeros(10,8,7), 1:10)) == 10*8*7
+
+    @test ncalls(map, (time,)) == 1
+    @test ncalls(foreach, (time,)) == 1
+    @test ncalls(broadcast, (time,)) == 1
+    @test ncalls(broadcast!, (time, [1])) == 1
+    @test ncalls(mapreduce, (time, +)) == 1
+
+    @test_throws DimensionMismatch ncalls(broadcast, (+, 1:10, 1:100))
+    @test_throws DimensionMismatch ncalls(broadcast, (+, 1:100, 1:10))
+
     # @showprogress
     vals = @showprogress map(1:10) do x
         return x^2
@@ -66,11 +93,53 @@ procs = addprocs(2)
     end
     @test vals == map(x->x^2, 1:10)
 
+    vals = @showprogress pmap(wp, 1:10) do x
+        x^2
+    end
+    @test vals == map(x->x^2, 1:10)
+
     val = @showprogress reduce(1:10) do x, y
         return x + y
     end
     @test val == reduce((x, y)->x+y, 1:10)
+
+    val = @showprogress mapreduce(+, 1:10) do x
+        return x^2
+    end
+    @test val == mapreduce(x->x^2, +, 1:10)
     
+    val = @showprogress mapfoldl(-, 1:10) do x
+        return x^2
+    end
+    @test val == mapfoldl(x->x^2, -, 1:10)
+
+    val = @showprogress mapfoldr(-, 1:10) do x
+        return x^2
+    end
+    @test val == mapfoldr(x->x^2, -, 1:10)
+
+    @showprogress foreach(1:10) do x
+        print(x)
+    end
+
+    val = @showprogress broadcast(1:10, (1:10)') do x,y
+        return x+y
+    end
+    @test val == broadcast(+, 1:10, (1:10)')
+
+    A = zeros(10,8)
+    @showprogress broadcast!(A, 1:10, (1:8)') do x,y
+        return x+y
+    end
+    @test A == broadcast(+, 1:10, (1:8)')
+
+    @showprogress broadcast!(A, 1:10) do x
+        return x
+    end
+    @test A == repeat(1:10, 1, 8)
+
+
+
     # function passed by name
     function testfun(x)
         return x^2
@@ -79,8 +148,32 @@ procs = addprocs(2)
     @test vals == map(testfun, 1:10)
     vals = @showprogress pmap(testfun, 1:10)
     @test vals == map(testfun, 1:10)
+    vals = @showprogress pmap(testfun, wp, 1:10)
+    @test vals == map(testfun, 1:10)
     val = @showprogress reduce(+, 1:10)
     @test val == reduce(+, 1:10)
+    val = @showprogress mapreduce(testfun, +, 1:10)
+    @test val == mapreduce(testfun, +, 1:10)
+    val = @showprogress mapfoldl(testfun, -, 1:10)
+    @test val == mapfoldl(testfun, -, 1:10)
+    val = @showprogress mapfoldr(testfun, -, 1:10)
+    @test val == mapfoldr(testfun, -, 1:10)
+    @showprogress foreach(print, 1:10)
+    println()
+    val = @showprogress broadcast(+, 1:10, (1:12)')
+    @test val == broadcast(+, 1:10, (1:12)')
+    @showprogress broadcast!(+, A, 1:10, 1:10, (1:8)', 3)
+    @test A == broadcast(+, 1:10, 1:10, (1:8)', 3)
+
+    # test function with no arg
+    function constfun()
+        return 42
+    end
+    @test map(constfun) == @showprogress map(constfun)
+    @test broadcast(constfun) == @showprogress broadcast(constfun)
+    #@test mapreduce(constfun, error) == @showprogress mapreduce(constfun, error) # julia 1.2+
+    @showprogress foreach(println∘constfun)
+
 
     # #136: make sure mid progress shows up even without sleep
     println("Verify that intermediate progress is displayed:")
@@ -95,15 +188,7 @@ procs = addprocs(2)
 
 
 
-    # abstract worker pool arg
-    wp = WorkerPool(procs)
-    vals = @showprogress pmap(testfun, wp, 1:10)
-    @test vals == map(testfun, 1:10)
 
-    vals = @showprogress pmap(wp, 1:10) do x
-        x^2
-    end
-    @test vals == map(testfun, 1:10)
 
 
 
