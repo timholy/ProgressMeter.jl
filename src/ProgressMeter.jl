@@ -262,7 +262,7 @@ end
 # update progress display
 function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, valuecolor = :blue,
                         offset::Integer = p.offset, keep = (offset == 0), desc::Union{Nothing,AbstractString} = nothing,
-                        ignore_predictor = false)
+                        ignore_predictor = false, keepall=false)
     !p.enabled && return
     if p.counter == 2 # ignore the first loop given usually uncharacteristically slow
         p.tsecond = time()
@@ -288,11 +288,13 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
                 sec_per_iter = elapsed_time / (p.counter - p.start)
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
             end
-            !CLEAR_IJULIA[] && print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
-            move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
-            printover(p.output, msg, p.color)
-            printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
-            if keep
+            if !keepall
+                !CLEAR_IJULIA[] && print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
+                move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
+            end
+            printover(p.output, msg, p.color; notover=keepall)
+            printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines, notover=keepall)
+            if keep || keepall
                 println(p.output)
             else
                 print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
@@ -324,11 +326,18 @@ function updateProgress!(p::Progress; showvalues = (), truncate_lines = false, v
                 sec_per_iter = elapsed_time / (p.counter - p.start)
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
             end
-            !CLEAR_IJULIA[] && print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
-            move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
-            printover(p.output, msg, p.color)
-            printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
-            !CLEAR_IJULIA[] && print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+
+            if !keepall
+                !CLEAR_IJULIA[] && print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
+                move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
+            end
+            printover(p.output, msg, p.color; notover=keepall)
+            printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines, notover=keepall)
+            if keepall
+                println(p.output)
+            else
+                print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+            end
             flush(p.output)
             # Compensate for any overhead of printing. This can be
             # especially important if you're running over a slow network
@@ -610,7 +619,7 @@ function finish!(p::ProgressUnknown; options...)
 end
 
 # Internal method to print additional values below progress bar
-function printvalues!(p::AbstractProgress, showvalues; color = :normal, truncate = false)
+function printvalues!(p::AbstractProgress, showvalues; color = :normal, truncate = false, notover = false)
     length(showvalues) == 0 && return
     maxwidth = maximum(Int[length(string(name)) for (name, _) in showvalues])
 
@@ -624,10 +633,10 @@ function printvalues!(p::AbstractProgress, showvalues; color = :normal, truncate
         msg_lines = ceil(Int, (length(msg)-1) / max_len)
         if truncate && msg_lines >= 2
             # For multibyte characters, need to index with nextind.
-            printover(p.output, msg[1:nextind(msg, 1, max_len-1)] * "…", color)
+            printover(p.output, msg[1:nextind(msg, 1, max_len-1)] * "…", color; notover=notover)
             p.numprintedvalues += 1
         else
-            printover(p.output, msg, color)
+            printover(p.output, msg, color; notover=notover)
             p.numprintedvalues += msg_lines
         end
     end
@@ -650,12 +659,12 @@ function move_cursor_up_while_clearing_lines(io, numlinesup)
     end
 end
 
-function printover(io::IO, s::AbstractString, color::Symbol = :color_normal)
-    print(io, "\r")
+function printover(io::IO, s::AbstractString, color::Symbol = :normal; notover = false)
+    !notover && print(io, "\r")
     printstyled(io, s; color=color)
     if isdefined(Main, :IJulia)
         Main.IJulia.stdio_bytes[] = 0 # issue #76: circumvent IJulia I/O throttling
-    elseif isdefined(Main, :ESS) || isdefined(Main, :Atom)
+    elseif isdefined(Main, :ESS) || isdefined(Main, :Atom) || notover
     else
         print(io, "\u1b[K")     # clear the rest of the line
     end
