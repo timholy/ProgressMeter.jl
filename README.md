@@ -21,7 +21,7 @@ This works for functions that process things in loops or with `map`/`pmap`/`redu
 using Distributed
 using ProgressMeter
 
-@showprogress 1 "Computing..." for i in 1:50
+@showprogress dt=1 desc="Computing..." for i in 1:50
     sleep(0.1)
 end
 
@@ -52,7 +52,7 @@ using ProgressMeter
     sleep(0.1)
 end
 
-result = @showprogress 1 "Computing..." @distributed (+) for i in 1:10
+result = @showprogress desc="Computing..." @distributed (+) for i in 1:10
     sleep(0.1)
     i^2
 end
