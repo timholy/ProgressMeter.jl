@@ -21,7 +21,7 @@ This works for functions that process things in loops or with `map`/`pmap`/`redu
 using Distributed
 using ProgressMeter
 
-@showprogress 1 "Computing..." for i in 1:50
+@showprogress dt=1 desc="Computing..." for i in 1:50
     sleep(0.1)
 end
 
@@ -52,7 +52,7 @@ using ProgressMeter
     sleep(0.1)
 end
 
-result = @showprogress 1 "Computing..." @distributed (+) for i in 1:10
+result = @showprogress desc="Computing..." @distributed (+) for i in 1:10
     sleep(0.1)
     i^2
 end
@@ -65,7 +65,7 @@ You can also control progress updates and reports manually:
 ```julia
 function my_long_running_function(filenames::Array)
     n = length(filenames)
-    p = Progress(n, dt=1.0)   # minimum update interval: 1 second
+    p = Progress(n; dt=1.0)   # minimum update interval: 1 second
     for f in filenames
         # Here's where you do all the hard, slow work
         next!(p)
@@ -86,7 +86,7 @@ function readFileLines(fileName::String)
     fileSize = position(file)
 
     seekstart(file)
-    p = Progress(fileSize, dt=1.0)   # minimum update interval: 1 second
+    p = Progress(fileSize; dt=1.0)   # minimum update interval: 1 second
     while !eof(file)
         line = readline(file)
         # Here's where you do all the hard, slow work
@@ -130,7 +130,7 @@ Optionally, a description string can be specified which will be prepended to the
 and a progress meter `M` characters long can be shown.  E.g.
 
 ```julia
-p = Progress(n, "Computing initial pass...", 50)
+p = Progress(n; desc="Computing initial pass...")
 ```
 
 will yield
@@ -146,7 +146,7 @@ specified by passing a `BarGlyphs` object as the keyword argument `barglyphs`. T
 constructor can either take 5 characters as arguments or a single 5 character string. E.g.
 
 ```julia
-p = Progress(n, dt=0.5, barglyphs=BarGlyphs("[=> ]"), barlen=50, color=:yellow)
+p = Progress(n; dt=0.5, barglyphs=BarGlyphs("[=> ]"), barlen=50, color=:yellow)
 ```
 
 will yield
@@ -159,7 +159,7 @@ It is possible to give a vector of characters that acts like a transition betwee
 character and the fully filled character. For example, definining the progress bar as:
 
 ```julia
-p = Progress(n, dt=0.5,
+p = Progress(n; dt=0.5,
              barglyphs=BarGlyphs('|','█', ['▁' ,'▂' ,'▃' ,'▄' ,'▅' ,'▆', '▇'],' ','|',),
              barlen=10)
 ```
@@ -179,9 +179,9 @@ example to achieve convergence within a specified tolerance.  In such
 circumstances, you can use the `ProgressThresh` type:
 
 ```julia
-prog = ProgressThresh(1e-5, "Minimizing:")
+prog = ProgressThresh(1e-5; desc="Minimizing:")
 for val in exp10.(range(2, stop=-6, length=20))
-    ProgressMeter.update!(prog, val)
+    update!(prog, val)
     sleep(0.1)
 end
 ```
@@ -192,11 +192,11 @@ Some tasks only terminate when some non-deterministic criterion is satisfied. In
 circumstances, you can use the `ProgressUnknown` type:
 
 ```julia
-prog = ProgressUnknown("Titles read:")
+prog = ProgressUnknown(desc="Titles read:")
 for val in ["a" , "b", "c", "d"]
-    ProgressMeter.next!(prog)
+    next!(prog)
     if val == "c"
-        ProgressMeter.finish!(prog)
+        finish!(prog)
         break
     end
     sleep(0.1)
@@ -208,13 +208,13 @@ This will display the number of calls to `next!` until `finish!` is called.
 If your counter does not monotonically increases, you can also set the counter by hand.
 
 ```julia
-prog = ProgressUnknown("Total length of characters read:")
+prog = ProgressUnknown(desc="Total length of characters read:")
 total_length_characters = 0
 for val in ["aaa" , "bb", "c", "d"]
     global total_length_characters += length(val)
-    ProgressMeter.update!(prog, total_length_characters)
+    update!(prog, total_length_characters)
     if val == "c"
-        ProgressMeter.finish!(prog)
+        finish!(prog)
         break
     end
     sleep(0.5)
@@ -224,9 +224,9 @@ end
 Alternatively, you can display a "spinning ball" symbol
 by passing `spinner=true` to the `ProgressUnknown` constructor.
 ```julia
-prog = ProgressUnknown("Working hard:", spinner=true)
+prog = ProgressUnknown(desc="Working hard:", spinner=true)
 while true
-    ProgressMeter.next!(prog)
+    next!(prog)
     rand(1:2*10^8) == 1 && break
 end
 ProgressMeter.finish!(prog)
@@ -237,15 +237,15 @@ use a different character by passing a `spinner` keyword
 to `finish!`, e.g. passing `spinner='✗'` on a failure condition:
 ```julia
 let found=false
-    prog = ProgressUnknown("Searching for the Answer:", spinner=true)
-    for tries = 1:10^8
-        ProgressMeter.next!(prog)
+    prog = ProgressUnknown(desc="Searching for the Answer:", spinner=true)
+    for tries in 1:10^8
+        next!(prog)
         if rand(1:2*10^8) == 42
             found=true
             break
         end
     end
-    ProgressMeter.finish!(prog, spinner = found ? '✓' : '✗')
+    finish!(prog, spinner = found ? '✓' : '✗')
 end
 ```
 
@@ -253,12 +253,12 @@ In fact, you can completely customize the spinner character
 by passing a string (or array of characters) to animate as a `spinner`
 argument to `next!`:
 ```julia
-prog = ProgressUnknown("Burning the midnight oil:", spinner=true)
+prog = ProgressUnknown(desc="Burning the midnight oil:", spinner=true)
 while true
-    ProgressMeter.next!(prog, spinner="🌑🌒🌓🌔🌕🌖🌗🌘")
+    next!(prog, spinner="🌑🌒🌓🌔🌕🌖🌗🌘")
     rand(1:10^8) == 0xB00 && break
 end
-ProgressMeter.finish!(prog)
+finish!(prog)
 ```
 (Other interesting-looking spinners include `"⌜⌝⌟⌞"`, `"⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"`, `"🕐🕑🕒🕓🕔🕕🕖🕗🕘🕙🕚🕛"`, `"▖▘▝▗'"`, and `"▁▂▃▄▅▆▇█"`.)
 
@@ -271,10 +271,10 @@ and the value of a dummy variable `x` below the progress meter:
 ```julia
 x,n = 1,10
 p = Progress(n)
-for iter = 1:10
+for iter in 1:10
     x *= 2
     sleep(0.5)
-    ProgressMeter.next!(p; showvalues = [(:iter,iter), (:x,x)])
+    next!(p; showvalues = [(:iter,iter), (:x,x)])
 end
 ```
 
@@ -286,11 +286,11 @@ you can alternatively pass a zero-argument function as a callback to the `showva
 x,n = 1,10
 p = Progress(n)
 generate_showvalues(iter, x) = () -> [(:iter,iter), (:x,x)]
-for iter = 1:10
+for iter in 1:10
     x *= 2
     sleep(0.5)
 # unlike `showvalues=generate_showvalues(iter, x)()`, this version only evaluate the function when necessary
-ProgressMeter.next!(p; showvalues = generate_showvalues(iter, x))
+next!(p; showvalues = generate_showvalues(iter, x))
 end
 ```
 
@@ -303,10 +303,10 @@ when constructing a `Progress`, `ProgressUnknown`, or `ProgressThresh`.
 ```julia
 x,n = 1,10
 p = Progress(n; showspeed=true)
-for iter = 1:10
+for iter in 1:10
     x *= 2
     sleep(0.5)
-    ProgressMeter.next!(p; showvalues = [(:iter,iter), (:x,x)])
+    next!(p; showvalues = [(:iter,iter), (:x,x)])
 end
 ```
 
@@ -465,7 +465,7 @@ It possible to disable the progress meter when the use is optional.
 ```julia
 x,n = 1,10
 p = Progress(n; enabled = false)
-for iter = 1:10
+for iter in 1:10
     x *= 2
     sleep(0.5)
     ProgressMeter.next!(p)

@@ -7,7 +7,7 @@ lazy_no_lazy(values) = (rand() < 0.5) ? values : () -> values
 
 println("Testing showvalues with a Dict (2 values)")
 function testfunc1(n, dt, tsleep, desc, barlen)
-    p = ProgressMeter.Progress(n, dt, desc, barlen)
+    p = ProgressMeter.Progress(n; dt=dt, desc=desc, barlen=barlen)
     for i = 1:n
         sleep(tsleep)
         values = Dict(:i => i, :halfdone => (i >= n/2))
@@ -18,7 +18,7 @@ testfunc1(50, 1, 0.2, "progress  ", 70)
 
 println("Testing showvalues with an Array of tuples (4 values)")
 function testfunc2(n, dt, tsleep, desc, barlen)
-    p = ProgressMeter.Progress(n, dt, desc, barlen)
+    p = ProgressMeter.Progress(n; dt=dt, desc=desc, barlen=barlen)
     for i = 1:n
         sleep(tsleep)
         values = [(:i, i), (:constant, "foo"), (:isq, i^2), (:large, 2^i)]
@@ -29,7 +29,7 @@ testfunc2(30, 1, 0.2, "progress  ", 60)
 
 println("Testing showvalues when types of names differ (3 values)")
 function testfunc3(n, dt, tsleep, desc, barlen)
-    p = ProgressMeter.Progress(n, dt, desc, barlen)
+    p = ProgressMeter.Progress(n; dt=dt, desc=desc, barlen=barlen)
     for i = 1:n
         sleep(tsleep)
         values = [(:i, i*10), ("constant", "foo"), 
@@ -41,7 +41,7 @@ testfunc3(30, 1, 0.2, "progress  ", 70)
 
 println("Testing progress with showing values when num values to print changes between iterations")
 function testfunc4(n, dt, tsleep, desc, barlen)
-    p = ProgressMeter.Progress(n, dt, desc, barlen)
+    p = ProgressMeter.Progress(n; dt=dt, desc=desc, barlen=barlen)
     for i = 1:n
         sleep(tsleep)
         values_pool = [(:i, i*10), ("constant", "foo"), 
@@ -64,7 +64,7 @@ end
 
 println("Testing showvalues with a different color (1 value)")
 function testfunc5(n, dt, tsleep, desc, barlen)
-    p = ProgressMeter.Progress(n, dt, desc, barlen)
+    p = ProgressMeter.Progress(n; dt=dt, desc=desc, barlen=barlen)
     for i = 1:n
         sleep(tsleep)
         values = [(:large, 2^i)]
@@ -75,7 +75,7 @@ end
 testfunc5(10, 1, 0.2, "progress  ", 40)
 
 println("Testing showvalues with threshold-based progress")
-prog = ProgressMeter.ProgressThresh(1e-5, "Minimizing:")
+prog = ProgressMeter.ProgressThresh(1e-5; desc="Minimizing:")
 for val in 10 .^ range(2, stop=-6, length=20)
     values = Dict(:margin => abs(val - 1e-5))
     ProgressMeter.update!(prog, val; showvalues = lazy_no_lazy(values))
@@ -83,7 +83,7 @@ for val in 10 .^ range(2, stop=-6, length=20)
 end
 
 println("Testing showvalues with online progress")
-prog = ProgressMeter.ProgressUnknown("Entries read:")
+prog = ProgressMeter.ProgressUnknown(desc="Entries read:")
 for title in ["a", "b", "c", "d", "e"]
     values = Dict(:title => title)
     ProgressMeter.next!(prog; showvalues = lazy_no_lazy(values))
@@ -93,7 +93,7 @@ ProgressMeter.finish!(prog)
 
 
 println("Testing showvalues with early cancel")
-prog = ProgressMeter.Progress(100, 1, "progress: ", 70)
+prog = ProgressMeter.Progress(100; dt=1, desc="progress: ", barlen=70)
 for i in 1:50
     values = Dict(:left => 100 - i)
     ProgressMeter.update!(prog, i; showvalues = lazy_no_lazy(values))
@@ -103,7 +103,7 @@ ProgressMeter.cancel(prog)
 
 
 println("Testing showvalues with truncate")
-prog = ProgressMeter.Progress(50, 1, "progress: ")
+prog = ProgressMeter.Progress(50; dt=1, desc="progress: ")
 for i in 1:50
     values = Dict(:left => 100 - i, :message => repeat("0123456789", i))
     ProgressMeter.update!(prog, i; 

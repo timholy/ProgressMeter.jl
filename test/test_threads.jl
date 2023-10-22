@@ -19,7 +19,7 @@
 
     println("Testing ProgressUnknown() with Threads.@threads across $threads threads")
     trigger = 100.0
-    prog = ProgressMeter.ProgressUnknown("Attepts at exceeding trigger:")
+    prog = ProgressMeter.ProgressUnknown(desc="Attempts at exceeding trigger:")
     vals = Float64[]
     threadsUsed = Int[]
     Threads.@threads for _ in 1:1000
@@ -42,7 +42,7 @@
 
     println("Testing ProgressThresh() with Threads.@threads across $threads threads")
     thresh = 1.0
-    prog = ProgressMeter.ProgressThresh(thresh, "Minimizing:")
+    prog = ProgressMeter.ProgressThresh(thresh; desc="Minimizing:")
     vals = fill(300.0, 1)
     threadsUsed = Int[]
     Threads.@threads for _ in 1:100000

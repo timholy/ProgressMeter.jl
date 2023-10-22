@@ -10,8 +10,8 @@
 @test ProgressMeter.durationstring(60*60*24*10 - 0.1) == "9 days, 23:59:59"
 @test ProgressMeter.durationstring(60*60*24*10) == "10.00 days"
 
-@test ProgressMeter.Progress(5, "Progress:", Int16(5)).offset == 5
-@test ProgressMeter.ProgressThresh(0.2, "Progress:", Int16(5)).offset == 5
+@test ProgressMeter.Progress(5, desc="Progress:", offset=Int16(5)).offset == 5
+@test ProgressMeter.ProgressThresh(0.2, desc="Progress:", offset=Int16(5)).offset == 5
 
 # test speed string formatting
 for ns in [1, 9, 10, 99, 100, 999, 1_000, 9_999, 10_000, 99_000, 100_000, 999_999, 1_000_000, 9_000_000, 10_000_000, 99_999_000, 1_234_567_890, 1_234_567_890 * 10, 1_234_567_890 * 100, 1_234_567_890 * 1_000, 1_234_567_890 * 10_000, 1_234_567_890 * 100_000, 1_234_567_890 * 1_000_000, 1_234_567_890 * 10_000_000]

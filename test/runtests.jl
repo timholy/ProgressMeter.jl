@@ -26,3 +26,6 @@ end
     include("test_parallel.jl")
     include("test_multiple.jl")
 end
+@testset "Deprecated" begin
+    include("deprecated.jl")
+end
