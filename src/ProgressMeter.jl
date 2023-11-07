@@ -388,18 +388,20 @@ function updateProgress!(p::ProgressThresh; showvalues = (),
     end
 end
 
-const spinner_chars = ['◐','◓','◑','◒']
-const spinner_done = '✓'
+include("spinners.jl")
+
+const default_spinner_chars = spinner_collection[8]
+const default_spinner_done = '✓'
 
 spinner_char(p::ProgressUnknown, spinner::AbstractChar) = spinner
-spinner_char(p::ProgressUnknown, spinner::AbstractVector{<:AbstractChar}) =
-    p.done ? spinner_done : spinner[p.spincounter % length(spinner) + firstindex(spinner)]
+spinner_char(p::ProgressUnknown, spinner::Union{AbstractVector{<:AbstractChar}, AbstractVector{<:AbstractString}}) =
+    p.done ? default_spinner_done : spinner[p.spincounter % length(spinner) + firstindex(spinner)]
 spinner_char(p::ProgressUnknown, spinner::AbstractString) =
-    p.done ? spinner_done : spinner[nextind(spinner, 1, p.spincounter % length(spinner))]
+    p.done ? default_spinner_done : spinner[nextind(spinner, 1, p.spincounter % length(spinner))]
 
 function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = false,
                         valuecolor = :blue, desc = p.desc, ignore_predictor = false,
-                        spinner::Union{AbstractChar,AbstractString,AbstractVector{<:AbstractChar}} = spinner_chars,
+                        spinner::Union{AbstractChar,AbstractString,AbstractVector{<:AbstractChar},AbstractVector{<:AbstractString}} = default_spinner_chars,
                         offset::Integer = p.offset, keep = (offset == 0),
                         color = p.color)
     !p.enabled && return
@@ -442,7 +444,7 @@ function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = f
         if t > p.tlast+p.dt
             dur = durationstring(t-p.tinit)
             if p.spinner
-                msg = @sprintf "%c %s    Time: %s" spinner_char(p, spinner) p.desc dur
+                msg = @sprintf " %s %s    Time: %s" string(spinner_char(p, spinner)) p.desc dur
                 p.spincounter += 1
             else
                 msg = @sprintf "%s %d    Time: %s" p.desc p.counter dur
