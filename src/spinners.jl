@@ -19,24 +19,29 @@ limitations under the License.
 using IterTools: zip_longest
 using Base.Iterators: partition
 
-function demospinners(spinnerset::AbstractVector{<:AbstractString}; delay=0.11)
+function demospinners(spinnerset::AbstractVector{<:AbstractString}; delay=0.12)
     demospinners([spinnerset], delay=delay)
 end
 
-function demospinners(spinnerset::Union{AbstractString, AbstractVector{<:AbstractChar}}; delay=0.11)
+function demospinners(spinnerset::Union{AbstractString, AbstractVector{<:AbstractChar}}; delay=0.12)
     demospinners([collect(spinnerset)], delay=delay)
 end
 
-function demospinners(spinneridx::Int; delay=0.11)
+function demospinners(spinneridx::Int; delay=0.12)
     demospinners([spinnercollection[spinneridx]], delay=delay)
 end
 
-function demospinners(spinnerset=spinnercollection; delay=0.11)
+function demospinners(spinnerset=spinnercollection; delay=0.12)
+    
+    
+    # Let's find the widest aligned grid that accommodates
+    # all spinners given the dimensions of stdout
+    # (surely there's a better way to do it)
     th, tw = displaysize(stdout)
+    lenmaxidx = textwidth("$(lastindex(spinnerset))")
 
-    lenmaxidx = length("$(lastindex(spinnerset))")
-    # length("[idx] spinnerstring ")
-    #         ^   ^^             ^   = +4
+            # textwidth("[idx] spinnerstring ")
+            #            ^   ^^             ^   = +4
     fixedlengths = textwidth.(first.(spinnerset)) .+ 4 .+ lenmaxidx
     w = 1
     for _ in 1:length(fixedlengths)
