@@ -19,21 +19,7 @@ limitations under the License.
 using IterTools: zip_longest
 using Base.Iterators: partition
 
-function demospinners(spinnerset::AbstractVector{<:AbstractString}; delay=0.12)
-    demospinners([spinnerset], delay=delay)
-end
-
-function demospinners(spinnerset::Union{AbstractString, AbstractVector{<:AbstractChar}}; delay=0.12)
-    demospinners([collect(spinnerset)], delay=delay)
-end
-
-function demospinners(spinneridx::Int; delay=0.12)
-    demospinners([spinnercollection[spinneridx]], delay=delay)
-end
-
 function demospinners(spinnerset=spinnercollection; delay=0.12)
-    
-    
     # Let's find the widest aligned grid that accommodates
     # all spinners given the dimensions of stdout
     # (surely there's a better way to do it)
@@ -45,16 +31,16 @@ function demospinners(spinnerset=spinnercollection; delay=0.12)
     fixedlengths = textwidth.(first.(spinnerset)) .+ 4 .+ lenmaxidx
     w = 1
     for _ in 1:length(fixedlengths)
-        irreg_grid = collect.(partition(fixedlengths, w))
-        colwidths = maximum.(zip_longest(irreg_grid...; default=0))
+        irreggrid = collect.(partition(fixedlengths, w))
+        colwidths = maximum.(zip_longest(irreggrid...; default=0))
         if sum(colwidths) > tw
             w -= 1
             break       
         end
         w += 1
     end
-    irreg_grid = collect.(partition(fixedlengths, w))
-    colwidths = maximum.(zip_longest(irreg_grid...; default=0))
+    irreggrid = collect.(partition(fixedlengths, w))
+    colwidths = maximum.(zip_longest(irreggrid...; default=0))
     spinnergrid = partition(spinnerset, w)
     idxgrid = partition(1:length(spinnerset), w)
     spincountergrid = collect.(partition(fill(0, length(spinnerset)), w))
@@ -76,6 +62,11 @@ function demospinners(spinnerset=spinnercollection; delay=0.12)
         sleep(delay)
     end
 end
+
+demospinners(spinneridx::Int; delay=0.12) = demospinners([spinnercollection[spinneridx]], delay=delay)
+demospinners(spinnerstring::AbstractString; delay=0.12) = demospinners([collect(spinnerstring)], delay=delay)
+demospinners(spinnerset::Union{AbstractVector{<:AbstractString}, AbstractVector{<:AbstractChar}}; delay=0.12) = demospinners([spinnerset], delay=delay)
+
 
 const spinnercollection::Vector{Vector{String}} = [
     # 1
