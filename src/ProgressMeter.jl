@@ -388,20 +388,23 @@ function updateProgress!(p::ProgressThresh; showvalues = (),
     end
 end
 
+export spinnercollection, demospinners
 include("spinners.jl")
 
-const default_spinner_chars = spinner_collection[8]
+const default_spinner_chars = spinnercollection[8]
 const default_spinner_done = '✓'
 
 spinner_char(p::ProgressUnknown, spinner::AbstractChar) = spinner
 spinner_char(p::ProgressUnknown, spinner::Union{AbstractVector{<:AbstractChar}, AbstractVector{<:AbstractString}}) =
     p.done ? default_spinner_done : spinner[p.spincounter % length(spinner) + firstindex(spinner)]
+spinner_char(p::ProgressUnknown, spinner::Int) =
+    p.done ? default_spinner_done : spinnercollection[spinner][p.spincounter % length(spinnercollection[spinner]) + firstindex(spinnercollection[spinner])]
 spinner_char(p::ProgressUnknown, spinner::AbstractString) =
     p.done ? default_spinner_done : spinner[nextind(spinner, 1, p.spincounter % length(spinner))]
 
 function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = false,
                         valuecolor = :blue, desc = p.desc, ignore_predictor = false,
-                        spinner::Union{AbstractChar,AbstractString,AbstractVector{<:AbstractChar},AbstractVector{<:AbstractString}} = default_spinner_chars,
+                        spinner::Union{AbstractChar,AbstractString,AbstractVector{<:AbstractChar},AbstractVector{<:AbstractString}, Int} = default_spinner_chars,
                         offset::Integer = p.offset, keep = (offset == 0),
                         color = p.color)
     !p.enabled && return
@@ -414,7 +417,7 @@ function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = f
             elapsed_time = t - p.tinit
             dur = durationstring(elapsed_time)
             if p.spinner
-                msg = @sprintf "%c %s    Time: %s" spinner_char(p, spinner) p.desc dur
+                msg = @sprintf "%s %s    Time: %s" spinner_char(p, spinner) p.desc dur
                 p.spincounter += 1
             else
                 msg = @sprintf "%s %d    Time: %s" p.desc p.counter dur
