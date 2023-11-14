@@ -476,3 +476,17 @@ end
 
 println("Testing updating thresh")
 testfunc22()
+
+function testfunc23(n, dt, tsleep)
+    result = zeros(n)
+    ProgressMeter.@showprogress dt=dt Threads.@threads for i in 1:n
+        if rand() < 0.7
+            sleep(tsleep)
+        end
+        result[i] = i ^ 2
+    end
+    @test sum(result) == sum(abs2.(1:n))
+end
+
+println("Testing @showprogress macro on Threads.@threads for loop")
+testfunc23(3000, 0.01, 0.001)

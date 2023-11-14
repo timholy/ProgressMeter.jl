@@ -840,6 +840,38 @@ function showprogressdistributed(args...)
     end
 end
 
+function showprogressthreads(args...)
+    if length(args) < 1
+        throw(ArgumentError("@showprogress Threads.@threads requires at least 1 argument"))
+    end
+
+    progressargs = args[1:end-1]
+    expr = args[end]
+    loop = expr
+    if loop.head == :macrocall && loop.args[1] == :(Threads.var"@threads")
+        loop = loop.args[end]
+    end
+
+    p = gensym()
+    n = gensym()
+    r = loop.args[1].args[end]
+    ex = quote
+        $n = Int(round(length($(esc(r))) / Threads.nthreads()))
+        global $p
+        $p = ProgressMeter.Progress($n; $(showprogress_process_args(progressargs)...))
+        $(esc(expr))
+        ProgressMeter.finish!($p)
+    end
+
+    update = quote
+        if Threads.threadid() == 1
+            ProgressMeter.next!(ProgressMeter.$p)
+        end
+    end
+    push!(loop.args[end].args, update)
+    ex
+end
+
 """
 ```
 @showprogress [desc="Computing..."] for i = 1:50
@@ -868,6 +900,9 @@ function showprogress(args...)
     expr = args[end]
     if expr.head == :macrocall && expr.args[1] == Symbol("@distributed")
         return showprogressdistributed(args...)
+    end
+    if expr.head == :macrocall && expr.args[1] == :(Threads.var"@threads")
+        return showprogressthreads(args...)
     end
     orig = expr = copy(expr)
     if expr.args[1] == :|> # e.g. map(x->x^2) |> sum
