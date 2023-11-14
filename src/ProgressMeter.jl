@@ -841,20 +841,13 @@ function showprogressdistributed(args...)
 end
 
 function showprogressthreads(args...)
-    if length(args) < 1
-        throw(ArgumentError("@showprogress Threads.@threads requires at least 1 argument"))
-    end
-
     progressargs = args[1:end-1]
     expr = args[end]
-    loop = expr
-    if loop.head == :macrocall && loop.args[1] == :(Threads.var"@threads")
-        loop = loop.args[end]
-    end
-
+    loop = expr.args[end]
+    r = loop.args[1].args[end]
     p = gensym()
     n = gensym()
-    r = loop.args[1].args[end]
+
     ex = quote
         $n = Int(round(length($(esc(r))) / Threads.nthreads()))
         global $p
@@ -869,6 +862,7 @@ function showprogressthreads(args...)
         end
     end
     push!(loop.args[end].args, update)
+
     ex
 end
 
