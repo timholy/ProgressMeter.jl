@@ -67,6 +67,7 @@ mutable struct Progress <: AbstractProgress
     printed::Bool              # true if we have issued at least one status update
     desc::String               # prefix to the percentage, e.g.  "Computing..."
     barlen::Union{Int,Nothing} # progress bar size (default is available terminal width)
+    barlen_fraction::Float64   # fraction of progress bar size
     barglyphs::BarGlyphs       # the characters to be used in the bar
     color::Symbol              # default to green
     output::IO                 # output stream into which the progress is written
@@ -85,6 +86,7 @@ mutable struct Progress <: AbstractProgress
                       color::Symbol=:green,
                       output::IO=stderr,
                       barlen=nothing,
+                      barlen_fraction=1.0,
                       barglyphs::BarGlyphs=BarGlyphs('|','█', Sys.iswindows() ? '█' : ['▏','▎','▍','▌','▋','▊','▉'],' ','|',),
                       offset::Integer=0,
                       start::Integer=0,
@@ -96,7 +98,8 @@ mutable struct Progress <: AbstractProgress
         counter = start
         tinit = tsecond = tlast = time()
         printed = false
-        new(n, reentrantlocker, dt, counter, tinit, tsecond, tlast, printed, desc, barlen, barglyphs, color, output, offset, 0, start, enabled, showspeed, 1, 1, Int[])
+        barlen = barlen isa Nothing ? barlen : Int(round(barlen*barlen_fraction))
+        new(n, reentrantlocker, dt, counter, tinit, tsecond, tlast, printed, desc, barlen, barlen_fraction, barglyphs, color, output, offset, 0, start, enabled, showspeed, 1, 1, Int[])
     end
 end
 
@@ -202,8 +205,8 @@ function ProgressUnknown(;
 end
 
 #...length of percentage and ETA string with days is 29 characters, speed string is always 14 extra characters
-function tty_width(desc, output, showspeed::Bool)
-    full_width = displaysize(output)[2]
+function tty_width(desc, output, showspeed::Bool, width_fraction::Float64 = 1.0)
+    full_width = Int(round(displaysize(output)[2]*width_fraction))
     desc_width = length(desc)
     eta_width = 29
     speed_width = showspeed ? 14 : 0
@@ -260,7 +263,7 @@ function updateProgress!(p::Progress; showvalues = (),
     if p.counter >= p.n
         if p.counter == p.n && p.printed
             t = time()
-            barlen = p.barlen isa Nothing ? tty_width(p.desc, p.output, p.showspeed) : p.barlen
+            barlen = p.barlen isa Nothing ? tty_width(p.desc, p.output, p.showspeed, p.barlen_fraction) : p.barlen
             percentage_complete = 100.0 * p.counter / p.n
             bar = barstring(barlen, percentage_complete, barglyphs=p.barglyphs)
             elapsed_time = t - p.tinit
@@ -290,7 +293,7 @@ function updateProgress!(p::Progress; showvalues = (),
             p.check_iterations = calc_check_iterations(p, t)
         end
         if t > p.tlast+p.dt
-            barlen = p.barlen isa Nothing ? tty_width(p.desc, p.output, p.showspeed) : p.barlen
+            barlen = p.barlen isa Nothing ? tty_width(p.desc, p.output, p.showspeed, p.barlen_fraction) : p.barlen
             percentage_complete = 100.0 * p.counter / p.n
             bar = barstring(barlen, percentage_complete, barglyphs=p.barglyphs)
             elapsed_time = t - p.tinit
