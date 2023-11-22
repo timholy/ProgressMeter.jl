@@ -13,7 +13,7 @@ println("Testing original interface...")
 testfunc(107, 0.01, 0.01)
 
 
-function testfunc2(n, dt, tsleep, desc, barlen)
+function testfunc2A(n, dt, tsleep, desc, barlen)
     p = ProgressMeter.Progress(n; dt=dt, desc=desc, barlen=barlen)
     for i = 1:n
         sleep(tsleep)
@@ -21,9 +21,27 @@ function testfunc2(n, dt, tsleep, desc, barlen)
     end
 end
 println("Testing desc and progress bar")
-testfunc2(107, 0.01, 0.01, "Computing...", 50)
+testfunc2A(107, 0.01, 0.01, "Computing...", 50)
 println("Testing no desc and no progress bar")
-testfunc2(107, 0.01, 0.01, "", 0)
+testfunc2A(107, 0.01, 0.01, "", 0)
+
+
+function testfunc2B(n, dt, tsleep, desc, barlen, barlen_fraction)
+    p = ProgressMeter.Progress(n; dt=dt, desc=desc, barlen=barlen, barlen_fraction=barlen_fraction)
+    for i = 1:n
+        sleep(tsleep)
+        ProgressMeter.next!(p)
+    end
+end
+println("Testing desc and progress bar with fractional size")
+testfunc2B(107, 0.01, 0.01, "Computing...", nothing, 1.0)
+println("this one should be half the size")
+testfunc2B(107, 0.01, 0.01, "Computing...", nothing, 0.5)
+
+println("Combining barlen and fraction")
+testfunc2B(107, 0.01, 0.01, "Computing...", 50, 0.5)
+println("Testing no desc and no progress bar by scaling to zero")
+testfunc2B(107, 0.01, 0.01, "", nothing, 0.0)
 
 
 function testfunc3(n, tsleep, desc)

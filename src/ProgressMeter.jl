@@ -98,7 +98,7 @@ mutable struct Progress <: AbstractProgress
         counter = start
         tinit = tsecond = tlast = time()
         printed = false
-        barlen = barlen isa Nothing ? barlen : Int(round(barlen*barlen_fraction))
+        barlen = barlen isa Nothing ? barlen : trunc(Int, (barlen*barlen_fraction))
         new(n, reentrantlocker, dt, counter, tinit, tsecond, tlast, printed, desc, barlen, barlen_fraction, barglyphs, color, output, offset, 0, start, enabled, showspeed, 1, 1, Int[])
     end
 end
@@ -206,7 +206,7 @@ end
 
 #...length of percentage and ETA string with days is 29 characters, speed string is always 14 extra characters
 function tty_width(desc, output, showspeed::Bool, width_fraction::Float64 = 1.0)
-    full_width = Int(round(displaysize(output)[2]*width_fraction))
+    full_width = trunc(Int, (displaysize(output)[2]*width_fraction))
     desc_width = length(desc)
     eta_width = 29
     speed_width = showspeed ? 14 : 0
