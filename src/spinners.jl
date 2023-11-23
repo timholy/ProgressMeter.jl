@@ -20,47 +20,65 @@ using IterTools: zip_longest
 using Base.Iterators: partition
 
 function demospinners(spinnerset=spinnercollection; delay=0.12)
-    # Let's find the widest aligned grid that accommodates
-    # all spinners given the dimensions of stdout
-    # (surely there's a better way to do it)
-    th, tw = displaysize(stdout)
+    # We'll display an index [k] next to each spinner.
+    # If there are 9 or less spinners, then those will
+    # be 3 char wide ([1]...[9]). If there are between 10
+    # and 99, then they'll be 4 char wide ([10]..[99]), etc.
     lenmaxidx = textwidth("$(lastindex(spinnerset))")
 
-            # textwidth("[idx] spinnerstring ")
-            #            ^   ^^             ^   = +4
-    fixedlengths = textwidth.(first.(spinnerset)) .+ 4 .+ lenmaxidx
-    w = 1
-    for _ in 1:length(fixedlengths)
-        irreggrid = collect.(partition(fixedlengths, w))
-        colwidths = maximum.(zip_longest(irreggrid...; default=0))
-        if sum(colwidths) > tw
-            w -= 1
-            break       
-        end
-        w += 1
-    end
-    irreggrid = collect.(partition(fixedlengths, w))
-    colwidths = maximum.(zip_longest(irreggrid...; default=0))
-    spinnergrid = partition(spinnerset, w)
-    idxgrid = partition(1:length(spinnerset), w)
-    spincountergrid = collect.(partition(fill(0, length(spinnerset)), w))
+    # We assume each spinner string for a given spinner is the same length
+    # [ N] spinnerN [N+1] spinnerN+1
+    # ^  ^^        ^ = +4
+    fixedlens = textwidth.(first.(spinnerset)) .+ 4 .+ lenmaxidx
 
+    function find_colwidths(lens, total_width)
+        N = length(lens)
+        colwidths = Int[]
+        for nbcols in length(spinnerset):-1:1
+            nbrows = div(N + nbcols - 1, nbcols)
+            padlen = nbrows * nbcols - N
+            paddedlens = vcat(lens, zeros(Int, padlen))
+            griddedlens = transpose(reshape(paddedlens, nbcols, :))
+            colwidths = maximum(griddedlens, dims=1)[1, :]
+            if sum(colwidths) < total_width
+                return colwidths, nbcols, nbrows
+            end
+        end
+    end
+
+    termheight, current_tw = displaysize(stdout)
+    colwidths, nbcols, nbrows = find_colwidths(fixedlens, current_tw)
+    spinnercounters = zeros(Int, length(spinnerset))
+    print("\033[2J\033[H")
     while true
-        for (i, (spinner_row, idx_row)) in enumerate(zip(spinnergrid, idxgrid))
-            for (j, (spinner_charset, idx, colwidth)) in enumerate(zip(spinner_row, idx_row, colwidths))
-                
-                msg = @sprintf "\u1b[34m[%s]\u1b[32m %s " lpad("$idx", lenmaxidx) spinner_charset[spincountergrid[i][j]+1]
+        termheight, tw = displaysize(stdout)
+        if tw != current_tw
+            current_tw = tw
+            colwidths, nbcols, nbrows = find_colwidths(fixedlens, current_tw)
+            print("\033[2J\033[H")
+        end
+
+        for k in 1:length(spinnerset)
+            colidx = mod(k - 1, nbcols) + 1
+            rowidx = div(k + nbcols - 1, nbcols)
+            colwidth = colwidths[colidx]
+
+            if (termheight - nbrows + rowidx) > 0
+                msg = @sprintf "\u1b[34m[%s]\u1b[32m %s " lpad("$k", lenmaxidx) spinnerset[k][spinnercounters[k]+1]
                 #                   ^^^^        ^^^^  = +8
                 msg = rpad(msg, colwidth + 8) # +8 accounts for ANSI escape sequences. 
-                                              # textwidth used by lpad/rpad does not count \u1b
+                                                # textwidth used by lpad/rpad does not count \u1b
                 print(msg)
-                spincountergrid[i][j] = (spincountergrid[i][j] + 1) % length(spinner_charset)
+                if colidx == nbcols && rowidx != nbrows
+                    println()
+                end
             end
-            print("\n")
+            spinnercounters[k] = (spinnercounters[k] + 1) % length(spinnerset[k]) 
         end
-        print("\r\u1b[A"^length(spinnergrid))
+        print("\r\u1b[A"^min(nbrows, termheight))
         sleep(delay)
     end
+
 end
 
 demospinners(spinneridx::Int; delay=0.12) = demospinners([spinnercollection[spinneridx]], delay=delay)
