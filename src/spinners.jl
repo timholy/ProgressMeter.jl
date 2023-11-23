@@ -40,7 +40,7 @@ function demospinners(spinnerset=spinnercollection; delay=0.12)
             paddedlens = vcat(lens, zeros(Int, padlen))
             griddedlens = transpose(reshape(paddedlens, nbcols, :))
             colwidths = maximum(griddedlens, dims=1)[1, :]
-            if sum(colwidths) < total_width
+            if sum(colwidths) <= total_width
                 return colwidths, nbcols, nbrows
             end
         end
@@ -63,13 +63,13 @@ function demospinners(spinnerset=spinnercollection; delay=0.12)
             rowidx = div(k + nbcols - 1, nbcols)
             colwidth = colwidths[colidx]
 
-            if (termheight - nbrows + rowidx) > 0
+            if rowidx <= termheight
                 msg = @sprintf "\u1b[34m[%s]\u1b[32m %s " lpad("$k", lenmaxidx) spinnerset[k][spinnercounters[k]+1]
                 #                   ^^^^        ^^^^  = +8
                 msg = rpad(msg, colwidth + 8) # +8 accounts for ANSI escape sequences. 
                                                 # textwidth used by lpad/rpad does not count \u1b
                 print(msg)
-                if colidx == nbcols && rowidx != nbrows
+                if colidx == nbcols && rowidx != termheight
                     println()
                 end
             end
