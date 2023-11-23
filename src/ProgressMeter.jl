@@ -391,7 +391,7 @@ end
 export spinnercollection, demospinners
 include("spinners.jl")
 
-const default_spinner_chars = spinnercollection[8]
+const default_spinner_chars = spinnercollection[1]
 const default_spinner_done = '✓'
 
 spinner_char(p::ProgressUnknown, spinner::AbstractChar) = spinner
