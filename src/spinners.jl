@@ -16,9 +16,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-using IterTools: zip_longest
-using Base.Iterators: partition
-
 function demospinners(spinnerset=spinnercollection; delay=0.12)
     # We'll display an index [k] next to each spinner.
     # If there are 9 or less spinners, then those will
@@ -69,7 +66,7 @@ function demospinners(spinnerset=spinnercollection; delay=0.12)
                 msg = rpad(msg, colwidth + 8) # +8 accounts for ANSI escape sequences. 
                                                 # textwidth used by lpad/rpad does not count \u1b
                 print(msg)
-                if colidx == nbcols && rowidx != termheight
+                if colidx == nbcols && rowidx < termheight
                     println()
                 end
             end
