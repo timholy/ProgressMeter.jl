@@ -5,6 +5,9 @@ using Distributed
 
 export Progress, ProgressThresh, ProgressUnknown, BarGlyphs, next!, update!, cancel, finish!, @showprogress, progress_map, progress_pmap, ijulia_behavior
 
+export spinnercollection, demospinners
+include("spinners.jl")
+
 """
 `ProgressMeter` contains a suite of utilities for displaying progress
 in long-running computations. The major functions/types in this module
@@ -388,19 +391,16 @@ function updateProgress!(p::ProgressThresh; showvalues = (),
     end
 end
 
-export spinnercollection, demospinners
-include("spinners.jl")
-
 const default_spinner_chars = spinnercollection[1]
 const default_spinner_done = '✓'
 
 spinner_char(p::ProgressUnknown, spinner::AbstractChar) = spinner
-spinner_char(p::ProgressUnknown, spinner::Union{AbstractVector{<:AbstractChar}, AbstractVector{<:AbstractString}}) =
+spinner_char(p::ProgressUnknown, spinner::AbstractVector{<:AbstractChar}) =
     p.done ? default_spinner_done : spinner[p.spincounter % length(spinner) + firstindex(spinner)]
-spinner_char(p::ProgressUnknown, spinner::Int) =
-    p.done ? default_spinner_done : spinnercollection[spinner][p.spincounter % length(spinnercollection[spinner]) + firstindex(spinnercollection[spinner])]
+spinner_char(p::ProgressUnknown, spinner::Union{AbstractVector{<:AbstractChar}, AbstractVector{<:AbstractString}}) = rpad(p.done ? default_spinner_done : spinner[p.spincounter % length(spinner) + firstindex(spinner)], maximum(length, spinner))
 spinner_char(p::ProgressUnknown, spinner::AbstractString) =
     p.done ? default_spinner_done : spinner[nextind(spinner, 1, p.spincounter % length(spinner))]
+spinner_char(p::ProgressUnknown, spinner::Int) = spinner_char(p::ProgressUnknown, spinnercollection[spinner])
 
 function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = false,
                         valuecolor = :blue, desc = p.desc, ignore_predictor = false,
