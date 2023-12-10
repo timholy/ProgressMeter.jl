@@ -17,7 +17,7 @@ using Pkg; Pkg.add("ProgressMeter")
 
 This works for functions that process things in loops or with `map`/`pmap`/`reduce`:
 
-```julia
+```julia {cast="true" allow_errors="false"}
 using Distributed
 using ProgressMeter
 
@@ -44,7 +44,7 @@ The `@showprogress` macro wraps a `for` loop, comprehension, `@distributed` for 
 `map`/`pmap`/`reduce` as long as the object being iterated over implements the `length`
 method and will handle `continue` correctly.
 
-```julia
+```julia {cast="true" allow_errors="false" height="15"}
 using Distributed
 using ProgressMeter
 
