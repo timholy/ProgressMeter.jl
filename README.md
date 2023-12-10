@@ -135,7 +135,7 @@ p = Progress(n; desc="Computing initial pass...")
 
 will yield
 
-```
+```plain
 Computing initial pass...53%|███████████████████████████                       |  ETA: 0:09:02
 ```
 
@@ -166,7 +166,7 @@ p = Progress(n; dt=0.5,
 
 might show the progress bar as:
 
-```
+```plain
 Progress:  34%|███▃      |  ETA: 0:00:02
 ```
 
@@ -312,13 +312,13 @@ end
 
 will yield something like:
 
-```
+```plain
 Progress:  XX%|███████████████████████████           |  ETA: XX:YY:ZZ (12.34  s/it)
 ```
 
 instead of
 
-```
+```plain
 Progress:  XX%|███████████████████████████                         |  ETA: XX:YY:ZZ
 ```
 
@@ -448,7 +448,7 @@ and passed as the `output` keyword argument to the
 
 Run `tty` from the other terminal window (the window where we want output to show up):
 
-```
+```sh
 $ tty
 /dev/pts/3
 ```
