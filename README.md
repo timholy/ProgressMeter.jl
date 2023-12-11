@@ -18,7 +18,7 @@ using Pkg; Pkg.add("ProgressMeter")
 
 This works for functions that process things in loops or with `map`/`pmap`/`reduce`:
 
-```julia {cast="true" allow_errors="false"}
+```julia {cast="true"}
 using Distributed, ProgressMeter
 
 @showprogress dt=1 desc="Computing..." for i in 1:50
@@ -46,7 +46,7 @@ The `@showprogress` macro wraps a `for` loop, comprehension, `@distributed` for 
 `map`/`pmap`/`reduce` as long as the object being iterated over implements the `length`
 method and will handle `continue` correctly.
 
-```julia {cast="true" allow_errors="false" height="15"}
+```julia {cast="true" height="15"}
 using Distributed, ProgressMeter
 
 @showprogress @distributed for i in 1:10
@@ -194,7 +194,7 @@ end
 Some tasks only terminate when some non-deterministic criterion is satisfied. In such
 circumstances, you can use the `ProgressUnknown` type:
 
-```julia {cast="true" allow_errors="false" height="15"}
+```julia {cast="true" height="15"}
 using ProgressMeter
 let prog = ProgressUnknown(desc="Titles read:")
     for val in ["a" , "b", "c", "d"]
@@ -231,7 +231,7 @@ end
 Alternatively, you can display a "spinning ball" symbol
 by passing `spinner=true` to the `ProgressUnknown` constructor.
 
-```julia {cast="true" allow_errors="false" height="10" delay="0"}
+```julia {cast="true" height="10" delay="0"}
 using ProgressMeter
 let prog = ProgressUnknown(desc="Working hard:", spinner=true)
     while true
@@ -315,7 +315,7 @@ You can include an average per-iteration duration in your progress meter
 by setting the optional keyword argument `showspeed=true`
 when constructing a `Progress`, `ProgressUnknown`, or `ProgressThresh`.
 
-```julia {cast="true" allow_errors="false" height="15" delay="0"}
+```julia {cast="true" height="15" delay="0"}
 using ProgressMeter
 let x=1, n=10
     p = Progress(n; showspeed=true)
