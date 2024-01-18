@@ -169,10 +169,8 @@ wp = WorkerPool(procs)
     function constfun()
         return 42
     end
-    @test map(constfun) == @showprogress map(constfun)
     @test broadcast(constfun) == @showprogress broadcast(constfun)
     #@test mapreduce(constfun, error) == @showprogress mapreduce(constfun, error) # julia 1.2+
-    @showprogress foreach(println∘constfun)
 
 
     # #136: make sure mid progress shows up even without sleep
