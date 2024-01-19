@@ -22,11 +22,14 @@
     prog = ProgressMeter.ProgressUnknown(desc="Attempts at exceeding trigger:")
     vals = Float64[]
     threadsUsed = Int[]
+    lk = ReentrantLock()
     Threads.@threads for _ in 1:1000
         !in(Threads.threadid(), threadsUsed) && push!(threadsUsed, Threads.threadid())
-        push!(vals, rand())
-        valssum = sum(vals)
-        if sum(vals) <= trigger
+        valssum = lock(lk) do
+            push!(vals, rand())
+            return sum(vals)
+        end
+        if valssum <= trigger
             ProgressMeter.next!(prog)
         elseif !prog.done
             ProgressMeter.finish!(prog)
@@ -47,8 +50,10 @@
     threadsUsed = Int[]
     Threads.@threads for _ in 1:100000
         !in(Threads.threadid(), threadsUsed) && push!(threadsUsed, Threads.threadid())
-        push!(vals, -rand())
-        valssum = sum(vals)
+        valssum = lock(lk) do
+            push!(vals, -rand())
+            return sum(vals)
+        end
         if valssum > thresh
             ProgressMeter.update!(prog, valssum)
         else
