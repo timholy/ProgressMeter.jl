@@ -796,32 +796,21 @@ function showprogressdistributed(args...)
     r = loop.args[1].args[2]
     body = loop.args[2]
 
-    setup = quote
-        n = length($(esc(r)))
-        p = Progress(n, $(showprogress_process_args(progressargs)...))
-        ch = RemoteChannel(() -> Channel{Bool}(n))
-    end
-
     if na == 1
         # would be nice to do this with @sync @distributed but @sync is broken
         # https://github.com/JuliaLang/julia/issues/28979
         compute = quote
-            display = @async let i = 0
-                while i < n
-                    take!(ch)
-                    next!(p)
-                    i += 1
-                end
-            end
-            @distributed for $(esc(var)) = $(esc(r))
+            @async while take!(ch) next!(p) end
+            waiting = @distributed for $(esc(var)) = $(esc(r))
                 $(esc(body))
                 put!(ch, true)
             end
+            wait(waiting)
             nothing
         end
     else
         compute = quote
-            display = @async while take!(ch) next!(p) end
+            @async while take!(ch) next!(p) end
             results = @distributed $(esc(reducer)) for $(esc(var)) = $(esc(r))
                 x = $(esc(body))
                 put!(ch, true)
@@ -833,10 +822,13 @@ function showprogressdistributed(args...)
     end
 
     quote
-        $setup
-        results = $compute
-        wait(display)
-        results
+        let n = length($(esc(r)))
+            p = Progress(n, $(showprogress_process_args(progressargs)...))
+            ch = RemoteChannel(() -> Channel{Bool}(n))
+            results = $compute
+            finish!(p)
+            results
+        end
     end
 end
 
