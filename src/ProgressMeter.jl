@@ -800,7 +800,6 @@ function showprogressdistributed(args...)
         # would be nice to do this with @sync @distributed but @sync is broken
         # https://github.com/JuliaLang/julia/issues/28979
         compute = quote
-            @async while take!(ch) next!(p) end
             waiting = @distributed for $(esc(var)) = $(esc(r))
                 $(esc(body))
                 put!(ch, true)
@@ -810,14 +809,11 @@ function showprogressdistributed(args...)
         end
     else
         compute = quote
-            @async while take!(ch) next!(p) end
-            results = @distributed $(esc(reducer)) for $(esc(var)) = $(esc(r))
+            @distributed $(esc(reducer)) for $(esc(var)) = $(esc(r))
                 x = $(esc(body))
                 put!(ch, true)
                 x
             end
-            put!(ch, false)
-            results
         end
     end
 
@@ -825,7 +821,10 @@ function showprogressdistributed(args...)
         let n = length($(esc(r)))
             p = Progress(n, $(showprogress_process_args(progressargs)...))
             ch = RemoteChannel(() -> Channel{Bool}(n))
+
+            @async while take!(ch) next!(p) end
             results = $compute
+            put!(ch, false)
             finish!(p)
             results
         end
