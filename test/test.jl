@@ -372,6 +372,41 @@ end
 println("Testing @showprogress macro on distributed for loop without reducer")
 testfunc16(3000, 0.01, 0.001)
 
+function testfunc16cb(N, dt, tsleep)
+    ProgressMeter.@showprogress dt=dt @distributed for i in N
+        if rand() < 0.7
+            sleep(tsleep)
+        end
+        200 < i < 400 && continue
+        i > 1500 && break
+        i ^ 2
+    end
+end
+
+println("Testing @showprogress macro on distributed for loop with continue")
+testfunc16cb(1:1000, 0.01, 0.002)
+
+println("Testing @showprogress macro on distributed for loop with break")
+testfunc16cb(1000:2000, 0.01, 0.003)
+
+
+println("testing `@showprogress @distributed` in global scope")
+@showprogress @distributed for i in 1:10
+    sleep(0.1)
+    i^2
+end
+
+println("testing `@showprogress @distributed (+)` in global scope")
+# https://github.com/timholy/ProgressMeter.jl/issues/243
+result = @showprogress @distributed (+) for i in 1:10
+    sleep(0.1)
+    i^2
+end
+@test result == sum(abs2, 1:10)
+
+
+
+
 function testfunc17()
     n = 30
     p = ProgressMeter.Progress(n, start=15)
