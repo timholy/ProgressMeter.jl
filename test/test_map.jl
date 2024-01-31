@@ -79,12 +79,14 @@ wp = WorkerPool(procs)
     @test_throws DimensionMismatch ncalls(broadcast, +, 1:10, 1:100)
     @test_throws DimensionMismatch ncalls(broadcast, +, 1:100, 1:10)
 
-    @test_throws ArgumentError ncalls(map, 1:10, 1:10)
-    @test_throws ArgumentError ncalls(sum, 1:10)
+    @test_throws MethodError ncalls(map, 1:10, 1:10)
+    @test_throws MethodError @showprogress map(1:10, 1:10)
 
     # test custom mapfun
     mymap(f, x) = map(f, [x ; x])
-    @test_throws ArgumentError ncalls(mymap, +, 1:10)
+    @test_throws MethodError ncalls(mymap, +, 1:10)
+    @test_throws MethodError @showprogress mymap(+, 1:10)
+
     ProgressMeter.ncalls(::typeof(mymap), ::Function, args...) = 2*ProgressMeter.ncalls_map(args...)
     @test ncalls(mymap, +, 1:10) == 20
 
@@ -159,7 +161,7 @@ wp = WorkerPool(procs)
         return x
     end
     @test A == repeat(1:10, 1, 8)
-
+ 
     # function passed by name
     function testfun(x)
         return x^2
@@ -225,6 +227,12 @@ wp = WorkerPool(procs)
     # with semicolon
     vals = @showprogress pmap(x->x^2, 1:100; batch_size=10)
     @test vals == map(x->x^2, 1:100)
+
+    A = rand(0:999, 7, 11, 13)
+    vals = @showprogress mapreduce(abs2, +, A; dims=1, init=0)
+    @test vals == mapreduce(abs2, +, A; dims=1, init=0)
+    vals = @showprogress mapfoldl(abs2, -, A; init=1)
+    @test vals == mapfoldl(abs2, -, A; init=1)
     
     # pipes after map
     @showprogress map(testfun, 1:10) |> sum |> length

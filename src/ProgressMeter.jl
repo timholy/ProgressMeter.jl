@@ -761,7 +761,7 @@ end
 """
 Equivalent of @showprogress for a distributed for loop.
 ```
-result = @showprogress dt "Computing..." @distributed (+) for i = 1:50
+result = @showprogress @distributed (+) for i = 1:50
     sleep(0.1)
     i^2
 end
@@ -852,9 +852,14 @@ displays progress in performing a computation.  You may optionally
 supply a custom message to be printed that specifies the computation 
 being performed or other options.
 
-`@showprogress` works for loops, comprehensions, `asyncmap`, 
-`broadcast`, `broadcast!`, `foreach`, `map`, `mapfoldl`, 
-`mapfoldr`, `mapreduce`, `pmap` and `reduce`.
+`@showprogress` works for loops, comprehensions, and `map`-like 
+functions. These `map`-like functions rely on `ncalls` being defined
+and can be checked with `methods(ProgressMeter.ncalls)`. New ones can 
+be added by defining `ProgressMeter.ncalls(::typeof(mapfun), args...) = ...`.
+
+`@showprogress` is thread-safe and will work with `@distributed` loops
+as well as threaded or distributed functions like `pmap` and `asyncmap`.
+
 """
 macro showprogress(args...)
     showprogress(args...)
@@ -901,7 +906,7 @@ function showprogress(args...)
     end
 
     if kind == :invalid
-        throw(ArgumentError("Final argument to @showprogress must be a for loop, comprehension, map, reduce, or pmap; got $expr"))
+        throw(ArgumentError("Final argument to @showprogress must be a for loop, comprehension, or a map-like function; got $expr"))
     elseif kind == :loop
         # As of julia 0.5, a comprehension's "loop" is actually one level deeper in the syntax tree.
         if expr.head !== :for
@@ -1012,6 +1017,8 @@ end
 Run a `map`-like function while displaying progress.
 
 `mapfun` can be any function, but it is only tested with `map`, `reduce` and `pmap`.
+`ProgressMeter.ncalls(::typeof(mapfun), ::Function, args...)` must be defined to
+specify the number of calls to `f`.
 """
 function progress_map(args...; mapfun=map,
                                progress=Progress(ncalls(mapfun, args...)),
@@ -1050,17 +1057,16 @@ Run `pmap` while displaying progress.
 progress_pmap(args...; kwargs...) = progress_map(args...; mapfun=pmap, kwargs...)
 
 """
-Infer the number of calls to the mapped function (i.e. the length of the returned array) given the input arguments to map, reduce or pmap.
+    ProgressMeter.ncalls(::typeof(mapfun), ::Function, args...)
+
+Infer the number of calls to the mapped function (often the length of the returned array)
+to define the length of the `Progress` in `@showprogress` and `progress_map`.
+Internally uses one of `ncalls_map`, `ncalls_broadcast(!)` or `ncalls_reduce` depending
+on the type of `mapfun`.
+
+Support for additional functions can be added by defining 
+`ProgressMeter.ncalls(::typeof(mapfun), ::Function, args...)`.
 """
-function ncalls(f::Function, ::Function, args...)
-    throw(ArgumentError("Unsupported function `$f` for @showprogress. 
-Define ProgressMeter.ncalls(::typeof($f), ::Function, args...) to specify the number of calls."))
-end
-
-function ncalls(f, args...)
-    throw(ArgumentError("Malformed @showprogress expression: $(f)($(join(args,',')))"))
-end
-
 ncalls(::typeof(map), ::Function, args...) = ncalls_map(args...)
 ncalls(::typeof(map!), ::Function, args...) = ncalls_map(args...)
 ncalls(::typeof(foreach), ::Function, args...) = ncalls_map(args...)
