@@ -7,6 +7,7 @@ Progress meter for long-running operations in Julia
 ## Installation
 
 Within julia, execute
+
 ```julia
 using Pkg; Pkg.add("ProgressMeter")
 ```
@@ -17,9 +18,8 @@ using Pkg; Pkg.add("ProgressMeter")
 
 This works for functions that process things in loops or with `map`/`pmap`/`reduce`:
 
-```julia
-using Distributed
-using ProgressMeter
+```julia {cast="true"}
+using Distributed, ProgressMeter
 
 @showprogress dt=1 desc="Computing..." for i in 1:50
     sleep(0.1)
@@ -36,17 +36,18 @@ end
 end
 ```
 
+![](assets/output_1_@cast.gif)
+
 The first incantation will use a minimum update interval of 1 second, and show the ETA and
-final duration.  If your computation runs so quickly that it never needs to show progress,
+final duration. If your computation runs so quickly that it never needs to show progress,
 no extraneous output will be displayed.
 
 The `@showprogress` macro wraps a `for` loop, comprehension, `@distributed` for loop, or
 `map`/`pmap`/`reduce` as long as the object being iterated over implements the `length`
 method and will handle `continue` correctly.
 
-```julia
-using Distributed
-using ProgressMeter
+```julia {cast="true" height="15"}
+using Distributed, ProgressMeter
 
 @showprogress @distributed for i in 1:10
     sleep(0.1)
@@ -57,6 +58,8 @@ result = @showprogress desc="Computing..." @distributed (+) for i in 1:10
     i^2
 end
 ```
+
+![](assets/output_2_@cast.gif)
 
 In the case of a `@distributed` for loop without a reducer, an `@sync` is implied.
 
@@ -127,7 +130,7 @@ finish!(p)
 ### Progress bar style
 
 Optionally, a description string can be specified which will be prepended to the output,
-and a progress meter `M` characters long can be shown.  E.g.
+and a progress meter `M` characters long can be shown. E.g.
 
 ```julia
 p = Progress(n; desc="Computing initial pass...")
@@ -135,7 +138,7 @@ p = Progress(n; desc="Computing initial pass...")
 
 will yield
 
-```
+``` plain
 Computing initial pass...53%|███████████████████████████                       |  ETA: 0:09:02
 ```
 
@@ -151,7 +154,7 @@ p = Progress(n; dt=0.5, barglyphs=BarGlyphs("[=> ]"), barlen=50, color=:yellow)
 
 will yield
 
-```
+``` plain
 Progress: 53%[==========================>                       ]  ETA: 0:09:02
 ```
 
@@ -166,7 +169,7 @@ p = Progress(n; dt=0.5,
 
 might show the progress bar as:
 
-```
+``` plain
 Progress:  34%|███▃      |  ETA: 0:00:02
 ```
 
@@ -175,7 +178,7 @@ where the last bar is not yet fully filled.
 ### Progress meters for tasks with a target threshold
 
 Some tasks only terminate when some criterion is satisfied, for
-example to achieve convergence within a specified tolerance.  In such
+example to achieve convergence within a specified tolerance. In such
 circumstances, you can use the `ProgressThresh` type:
 
 ```julia
@@ -191,17 +194,21 @@ end
 Some tasks only terminate when some non-deterministic criterion is satisfied. In such
 circumstances, you can use the `ProgressUnknown` type:
 
-```julia
-prog = ProgressUnknown(desc="Titles read:")
-for val in ["a" , "b", "c", "d"]
-    next!(prog)
-    if val == "c"
-        finish!(prog)
-        break
+```julia {cast="true" height="15"}
+using ProgressMeter
+let prog = ProgressUnknown(desc="Titles read:")
+    for val in ["a" , "b", "c", "d"]
+        next!(prog)
+        if val == "c"
+            finish!(prog)
+            break
+        end
+        sleep(0.1)
     end
-    sleep(0.1)
 end
 ```
+
+![](assets/output_3_@cast.gif)
 
 This will display the number of calls to `next!` until `finish!` is called.
 
@@ -223,18 +230,24 @@ end
 
 Alternatively, you can display a "spinning ball" symbol
 by passing `spinner=true` to the `ProgressUnknown` constructor.
-```julia
-prog = ProgressUnknown(desc="Working hard:", spinner=true)
-while true
-    next!(prog)
-    rand(1:2*10^8) == 1 && break
+
+```julia {cast="true" height="10" delay="0"}
+using ProgressMeter
+let prog = ProgressUnknown(desc="Working hard:", spinner=true)
+    while true
+        next!(prog)
+        rand(1:2*10^8) == 1 && break
+    end
+    ProgressMeter.finish!(prog)
 end
-ProgressMeter.finish!(prog)
 ```
+
+![](assets/output_4_@cast.gif)
 
 By default, `finish!` changes the spinner to a `✓`, but you can
 use a different character by passing a `spinner` keyword
 to `finish!`, e.g. passing `spinner='✗'` on a failure condition:
+
 ```julia
 let found=false
     prog = ProgressUnknown(desc="Searching for the Answer:", spinner=true)
@@ -252,6 +265,7 @@ end
 In fact, you can completely customize the spinner character
 by passing a string (or array of characters) to animate as a `spinner`
 argument to `next!`:
+
 ```julia
 prog = ProgressUnknown(desc="Burning the midnight oil:", spinner=true)
 while true
@@ -260,6 +274,7 @@ while true
 end
 finish!(prog)
 ```
+
 (Other interesting-looking spinners include `"⌜⌝⌟⌞"`, `"⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"`, `"🕐🕑🕒🕓🕔🕕🕖🕗🕘🕙🕚🕛"`, `"▖▘▝▗'"`, and `"▁▂▃▄▅▆▇█"`.)
 
 ### Printing additional information
@@ -300,25 +315,29 @@ You can include an average per-iteration duration in your progress meter
 by setting the optional keyword argument `showspeed=true`
 when constructing a `Progress`, `ProgressUnknown`, or `ProgressThresh`.
 
-```julia
-x,n = 1,10
-p = Progress(n; showspeed=true)
-for iter in 1:10
-    x *= 2
-    sleep(0.5)
-    next!(p; showvalues = [(:iter,iter), (:x,x)])
+```julia {cast="true" height="15" delay="0"}
+using ProgressMeter
+let x=1, n=10
+    p = Progress(n; showspeed=true)
+    for iter in 1:10
+        x *= 2
+        sleep(0.5)
+        next!(p; showvalues = [(:iter,iter), (:x,x)])
+    end
 end
 ```
 
+![](assets/output_5_@cast.gif)
+
 will yield something like:
 
-```
+``` plain
 Progress:  XX%|███████████████████████████           |  ETA: XX:YY:ZZ (12.34  s/it)
 ```
 
 instead of
 
-```
+``` plain
 Progress:  XX%|███████████████████████████                         |  ETA: XX:YY:ZZ
 ```
 
@@ -431,7 +450,7 @@ In cases where the output is text output such as CI or in an HPC scheduler, the 
 ```julia
 is_logging(io) = isa(io, Base.TTY) == false || (get(ENV, "CI", nothing) == "true")
 p = Progress(n; output = stderr, enabled = !is_logging(stderr))
-````
+```
 
 ## Development/debugging tips
 
@@ -448,7 +467,7 @@ and passed as the `output` keyword argument to the
 
 Run `tty` from the other terminal window (the window where we want output to show up):
 
-```
+``` sh
 $ tty
 /dev/pts/3
 ```
@@ -465,6 +484,16 @@ prog = Progress(10; output = ioc)
 Output from `prog` will now print in the other terminal window when executing `update!`,
 `next!`, etc.
 
+## Gif maintenance
+
+To update the gifs in this README, commit any changes you have, and run:
+
+```julia
+using Asciicast, ProgressMeter
+Asciicast.cast_readme(ProgressMeter)
+```
+
+This will execute the code in each block, generate new gifs in the `assets` directory, and overwrite the markdown to update the image links.
 
 ## Credits
 
