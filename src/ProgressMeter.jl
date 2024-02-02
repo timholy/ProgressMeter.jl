@@ -844,26 +844,20 @@ function showprogressthreads(args...)
     progressargs = args[1:end-1]
     expr = args[end]
     loop = expr.args[end]
-    r = loop.args[1].args[end]
+    iters = loop.args[1].args[end]
+
     p = gensym()
-    n = gensym()
+    push!(loop.args[end].args, :(ProgressMeter.next!($p)))
 
-    ex = quote
-        $n = Int(round(length($(esc(r))) / Threads.nthreads()))
-        global $p
-        $p = ProgressMeter.Progress($n; $(showprogress_process_args(progressargs)...))
+    quote
+        $(esc(p)) = Progress(
+            length($(esc(iters)));
+            $(showprogress_process_args(progressargs)...),
+        )
+        append!($(esc(p)).threads_used, 1:Threads.nthreads())
         $(esc(expr))
-        ProgressMeter.finish!($p)
+        finish!($(esc(p)))
     end
-
-    update = quote
-        if Threads.threadid() == 1
-            ProgressMeter.next!(ProgressMeter.$p)
-        end
-    end
-    push!(loop.args[end].args, update)
-
-    ex
 end
 
 """

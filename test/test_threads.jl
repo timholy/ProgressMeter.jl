@@ -85,4 +85,20 @@
             @info "Threads.nthreads() == 1, so Threads.@spawn tests cannot be meaningfully tested"
         end
     end
+
+
+    @static if VERSION >= v"1.3.0-rc1" # the Threads.@threads macro is parsed differently before 1.3
+        println("Testing @showprogress on a Threads.@threads for loop")
+        function test_threaded_for_loop(n, dt, tsleep)
+	        result = zeros(n)
+	        ProgressMeter.@showprogress dt=dt Threads.@threads for i in 1:n
+                if rand() < 0.7
+                    sleep(tsleep)
+                end
+                result[i] = i ^ 2
+            end
+            @test sum(result) == sum(abs2.(1:n))
+        end
+        test_threaded_for_loop(3000, 0.01, 0.001)
+    end
 end
