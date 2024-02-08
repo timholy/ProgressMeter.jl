@@ -58,3 +58,16 @@ prog.check_iterations = 999
 t = time()
 prog.tlast = t
 @test ProgressMeter.calc_check_iterations(prog, t) == 999
+
+# Test ProgressWrapper
+A = rand(3,5,7,11)
+prog = Progress(length(A))
+wrap = ProgressMeter.ProgressWrapper(A, prog)
+
+@test Base.IteratorSize(wrap) == Base.IteratorSize(A)
+@test Base.IteratorEltype(wrap) == Base.IteratorEltype(A)
+@test axes(wrap) == axes(A)
+@test size(wrap) == size(A)
+@test length(wrap) == length(A)
+@test eltype(wrap) == eltype(A)
+@test collect(wrap) == collect(A)
