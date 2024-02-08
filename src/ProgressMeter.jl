@@ -831,6 +831,26 @@ function showprogressdistributed(args...)
     end
 end
 
+function showprogressthreads(args...)
+    progressargs = args[1:end-1]
+    expr = args[end]
+    loop = expr.args[end]
+    iters = loop.args[1].args[end]
+
+    p = gensym()
+    push!(loop.args[end].args, :(ProgressMeter.next!($p)))
+
+    quote
+        $(esc(p)) = Progress(
+            length($(esc(iters)));
+            $(showprogress_process_args(progressargs)...),
+        )
+        append!($(esc(p)).threads_used, 1:Threads.nthreads())
+        $(esc(expr))
+        finish!($(esc(p)))
+    end
+end
+
 """
 ```
 @showprogress [desc="Computing..."] for i = 1:50
@@ -859,6 +879,9 @@ function showprogress(args...)
     expr = args[end]
     if expr.head == :macrocall && expr.args[1] == Symbol("@distributed")
         return showprogressdistributed(args...)
+    end
+    if expr.head == :macrocall && expr.args[1] == :(Threads.var"@threads")
+        return showprogressthreads(args...)
     end
     orig = expr = copy(expr)
     if expr.args[1] == :|> # e.g. map(x->x^2) |> sum
