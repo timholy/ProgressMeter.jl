@@ -122,10 +122,15 @@ function testfunc7a(n, dt, tsleep)
     @test s == [z for z in 1:n, y in 1:n]
 end
 
+function testfunc7b(A, dt, tsleep)
+    s = ProgressMeter.@showprogress dt=dt desc="Calculating..." [(sleep(tsleep); z) for z in A]
+    @test s == A
+end
+
 println("Testing @showprogress macro on comprehension")
 testfunc7(25, 0.1, 0.1)
 testfunc7a(5, 0.1, 0.1)
-
+testfunc7b(rand(3,4), 0.1, 0.1) #290
 
 function testfunc8(n, dt, tsleep)
     ProgressMeter.@showprogress dt=dt for i in 1:n
@@ -161,10 +166,15 @@ function testfunc9a(n, dt, tsleep)
     @test s == [z for z in 1:n, y in 1:n]
 end
 
+function testfunc9b(A, dt, tsleep)
+    s = ProgressMeter.@showprogress dt=dt desc="Calculating..." Float64[(sleep(tsleep); z) for z in A]
+    @test s == Float64[A;]
+end
+
 println("Testing @showprogress macro on typed comprehension")
 testfunc9(100, 0.1, 0.01)
 testfunc9a(10, 0.1, 0.01)
-
+testfunc9b(rand(Float32,3,4), 0.1, 0.01) #290
 
 function testfunc10(n, k, dt, tsleep)
     p = ProgressMeter.Progress(n; dt=dt)

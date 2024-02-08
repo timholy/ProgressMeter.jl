@@ -744,7 +744,13 @@ struct ProgressWrapper{T}
     meter::Progress
 end
 
+Base.IteratorSize(wrap::ProgressWrapper) = Base.IteratorSize(wrap.obj)
+Base.axes(wrap::ProgressWrapper, dim...) = Base.axes(wrap.obj, dim...)
+Base.size(wrap::ProgressWrapper, dim...) = Base.size(wrap.obj, dim...)
 Base.length(wrap::ProgressWrapper) = Base.length(wrap.obj)
+
+Base.IteratorEltype(wrap::ProgressWrapper) = Base.IteratorEltype(wrap.obj)
+Base.eltype(wrap::ProgressWrapper) = Base.eltype(wrap.obj)
 
 function Base.iterate(wrap::ProgressWrapper, state...)
     ir = iterate(wrap.obj, state...)
@@ -755,7 +761,7 @@ function Base.iterate(wrap::ProgressWrapper, state...)
         next!(wrap.meter)
     end
 
-    ir
+    return ir
 end
 
 """
