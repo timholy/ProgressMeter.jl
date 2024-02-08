@@ -4,27 +4,29 @@
     println("Testing Progress() with Threads.@threads across $threads threads")
     (Threads.nthreads() == 1) && @info "Threads.nthreads() == 1, so Threads.@threads test is suboptimal"
     n = 20 #per thread
-    threadsUsed = Int[]
+    threadsUsed = fill(false, threads)
     vals = ones(n*threads)
     p = ProgressMeter.Progress(n*threads)
+    p.threads_used = 1:threads # short-circuit the function `is_threading` because it is racy (#232)
     Threads.@threads for i = 1:(n*threads)
-        !in(Threads.threadid(), threadsUsed) && push!(threadsUsed, Threads.threadid())
+        threadsUsed[Threads.threadid()] = true
         vals[i] = 0
         sleep(0.1)
         ProgressMeter.next!(p)
     end
     @test !any(vals .== 1) #Check that all elements have been iterated
-    @test length(threadsUsed) == threads #Ensure that all threads are used
+    @test all(threadsUsed) #Ensure that all threads are used
 
 
     println("Testing ProgressUnknown() with Threads.@threads across $threads threads")
     trigger = 100.0
     prog = ProgressMeter.ProgressUnknown(desc="Attempts at exceeding trigger:")
+    prog.threads_used = 1:threads
     vals = Float64[]
-    threadsUsed = Int[]
+    threadsUsed = fill(false, threads)
     lk = ReentrantLock()
     Threads.@threads for _ in 1:1000
-        !in(Threads.threadid(), threadsUsed) && push!(threadsUsed, Threads.threadid())
+        threadsUsed[Threads.threadid()] = true
         valssum = lock(lk) do
             push!(vals, rand())
             return sum(vals)
@@ -46,10 +48,11 @@
     println("Testing ProgressThresh() with Threads.@threads across $threads threads")
     thresh = 1.0
     prog = ProgressMeter.ProgressThresh(thresh; desc="Minimizing:")
+    prog.threads_used = 1:threads
     vals = fill(300.0, 1)
-    threadsUsed = Int[]
+    threadsUsed = fill(false, threads)
     Threads.@threads for _ in 1:100000
-        !in(Threads.threadid(), threadsUsed) && push!(threadsUsed, Threads.threadid())
+        threadsUsed[Threads.threadid()] = true
         valssum = lock(lk) do
             push!(vals, -rand())
             return sum(vals)
@@ -72,12 +75,14 @@
             println("Testing Progress() with Threads.@spawn across $threads threads")
             n = 20 #per thread
             tasks = Vector{Task}(undef, threads)
-            threadsUsed = Int[]
+            # threadsUsed = fill(false, threads)
             vals = ones(n*threads)
             p = ProgressMeter.Progress(n*threads)
+            p.threads_used = 1:threads
+
             for t in 1:threads
                 tasks[t] = Threads.@spawn for i in 1:n
-                    !in(Threads.threadid(), threadsUsed) && push!(threadsUsed, Threads.threadid())
+                    # threadsUsed[Threads.threadid()] = true
                     vals[(n*(t-1)) + i] = 0
                     sleep(0.05 + (rand()*0.1))
                     ProgressMeter.next!(p)
@@ -85,7 +90,7 @@
             end
             wait.(tasks)
             @test !any(vals .== 1) #Check that all elements have been iterated
-            #@test length(threadsUsed) == threads #Ensure that all threads are used (unreliable for @spawn)
+            # @test all(threadsUsed) #Ensure that all threads are used (unreliable for @spawn)
         else
             @info "Threads.nthreads() == 1, so Threads.@spawn tests cannot be meaningfully tested"
         end
