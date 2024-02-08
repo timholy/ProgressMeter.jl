@@ -416,7 +416,7 @@ end
 It possible to disable the progress meter when the use is optional.
 
 ```julia
-x,n = 1,10
+x, n = 1, 10
 p = Progress(n; enabled = false)
 for iter in 1:10
     x *= 2
@@ -431,7 +431,25 @@ In cases where the output is text output such as CI or in an HPC scheduler, the 
 ```julia
 is_logging(io) = isa(io, Base.TTY) == false || (get(ENV, "CI", nothing) == "true")
 p = Progress(n; output = stderr, enabled = !is_logging(stderr))
-````
+```
+
+### Adding support for more map-like functions
+
+To add support for other functions, `ProgressMeter.ncalls` must be defined,
+where `ncalls_map`, `ncalls_broadcast`, `ncalls_broadcast!` or `ncalls_reduce` can help
+
+For example, with `tmap` from [`ThreadTools.jl`](https://github.com/baggepinnen/ThreadTools.jl):
+
+```julia
+using ThreadTools, ProgressMeter
+
+ProgressMeter.ncalls(::typeof(tmap), ::Function, args...) = ProgressMeter.ncalls_map(args...)
+ProgressMeter.ncalls(::typeof(tmap), ::Function, ::Int, args...) = ProgressMeter.ncalls_map(args...)
+
+@showprogress tmap(abs2, 1:10^5)
+@showprogress tmap(abs2, 4, 1:10^5)
+```
+
 
 ## Development/debugging tips
 

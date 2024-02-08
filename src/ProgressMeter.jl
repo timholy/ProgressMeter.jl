@@ -761,7 +761,7 @@ end
 """
 Equivalent of @showprogress for a distributed for loop.
 ```
-result = @showprogress dt "Computing..." @distributed (+) for i = 1:50
+result = @showprogress @distributed (+) for i = 1:50
     sleep(0.1)
     i^2
 end
@@ -863,9 +863,14 @@ displays progress in performing a computation.  You may optionally
 supply a custom message to be printed that specifies the computation 
 being performed or other options.
 
-`@showprogress` works for loops, comprehensions, `asyncmap`, 
-`broadcast`, `broadcast!`, `foreach`, `map`, `mapfoldl`, 
-`mapfoldr`, `mapreduce`, `pmap` and `reduce`.
+`@showprogress` works for loops, comprehensions, and `map`-like 
+functions. These `map`-like functions rely on `ncalls` being defined
+and can be checked with `methods(ProgressMeter.ncalls)`. New ones can 
+be added by defining `ProgressMeter.ncalls(::typeof(mapfun), args...) = ...`.
+
+`@showprogress` is thread-safe and will work with `@distributed` loops
+as well as threaded or distributed functions like `pmap` and `asyncmap`.
+
 """
 macro showprogress(args...)
     showprogress(args...)
@@ -889,8 +894,6 @@ function showprogress(args...)
         return expr
     end
     metersym = gensym("meter")
-    mapfuns = (:asyncmap, :broadcast, :broadcast!, :foreach, :map, 
-               :mapfoldl, :mapfoldr, :mapreduce, :pmap, :reduce)
     kind = :invalid # :invalid, :loop, or :map
 
     if isa(expr, Expr)
@@ -906,18 +909,18 @@ function showprogress(args...)
             outerassignidx = lastindex(expr.args)
             loopbodyidx = 2
             kind = :loop
-        elseif expr.head == :call && expr.args[1] in mapfuns
+        elseif expr.head == :call
             kind = :map
         elseif expr.head == :do
             call = expr.args[1]
-            if call.head == :call && call.args[1] in mapfuns
+            if call.head == :call
                 kind = :map
             end
         end
     end
 
     if kind == :invalid
-        throw(ArgumentError("Final argument to @showprogress must be a for loop, comprehension, map, reduce, or pmap; got $expr"))
+        throw(ArgumentError("Final argument to @showprogress must be a for loop, comprehension, or a map-like function; got $expr"))
     elseif kind == :loop
         # As of julia 0.5, a comprehension's "loop" is actually one level deeper in the syntax tree.
         if expr.head !== :for
@@ -995,7 +998,7 @@ function showprogress(args...)
             return isa(a, Symbol) || isa(a, Number) || !(a.head in (:kw, :parameters))
         end)
         if expr.head == :do
-            insert!(mapargs, 1, :nothing) # to make args for ncalls line up
+            insert!(mapargs, 1, identity) # to make args for ncalls line up
         end
 
         # change call to progress_map
@@ -1011,7 +1014,7 @@ function showprogress(args...)
         end
 
         # create appropriate Progress expression
-        lenex = :(ncalls($(esc(mapfun)), ($([esc(a) for a in mapargs]...),)))
+        lenex = :(ncalls($(esc(mapfun)), $(esc.(mapargs)...)))
         progex = :(Progress($lenex, $(showprogress_process_args(progressargs)...)))
 
         # insert progress and mapfun kwargs
@@ -1028,10 +1031,12 @@ end
 Run a `map`-like function while displaying progress.
 
 `mapfun` can be any function, but it is only tested with `map`, `reduce` and `pmap`.
+`ProgressMeter.ncalls(::typeof(mapfun), ::Function, args...)` must be defined to
+specify the number of calls to `f`.
 """
 function progress_map(args...; mapfun=map,
-                               progress=Progress(ncalls(mapfun, args)),
-                               channel_bufflen=min(1000, ncalls(mapfun, args)),
+                               progress=Progress(ncalls(mapfun, args...)),
+                               channel_bufflen=min(1000, ncalls(mapfun, args...)),
                                kwargs...)
     isempty(args) && return mapfun(; kwargs...)
     f = first(args)
@@ -1066,36 +1071,50 @@ Run `pmap` while displaying progress.
 progress_pmap(args...; kwargs...) = progress_map(args...; mapfun=pmap, kwargs...)
 
 """
-Infer the number of calls to the mapped function (i.e. the length of the returned array) given the input arguments to map, reduce or pmap.
+    ProgressMeter.ncalls(::typeof(mapfun), ::Function, args...)
+
+Infer the number of calls to the mapped function (often the length of the returned array)
+to define the length of the `Progress` in `@showprogress` and `progress_map`.
+Internally uses one of `ncalls_map`, `ncalls_broadcast(!)` or `ncalls_reduce` depending
+on the type of `mapfun`.
+
+Support for additional functions can be added by defining 
+`ProgressMeter.ncalls(::typeof(mapfun), ::Function, args...)`.
 """
-function ncalls(::typeof(broadcast), map_args)
-    length(map_args) < 2 && return 1
-    return prod(length, Broadcast.combine_axes(map_args[2:end]...))
+ncalls(::typeof(map), ::Function, args...) = ncalls_map(args...)
+ncalls(::typeof(map!), ::Function, args...) = ncalls_map(args...)
+ncalls(::typeof(foreach), ::Function, args...) = ncalls_map(args...)
+ncalls(::typeof(asyncmap), ::Function, args...) = ncalls_map(args...)
+
+ncalls(::typeof(pmap), ::Function, args...) = ncalls_map(args...)
+ncalls(::typeof(pmap), ::Function, ::AbstractWorkerPool, args...) = ncalls_map(args...)
+
+ncalls(::typeof(mapfoldl), ::Function, ::Function, args...) = ncalls_map(args...)
+ncalls(::typeof(mapfoldr), ::Function, ::Function, args...) = ncalls_map(args...)
+ncalls(::typeof(mapreduce), ::Function, ::Function, args...) = ncalls_map(args...)
+
+ncalls(::typeof(broadcast), ::Function, args...) = ncalls_broadcast(args...)
+ncalls(::typeof(broadcast!), ::Function, args...) = ncalls_broadcast!(args...)
+
+ncalls(::typeof(foldl), ::Function, arg) = ncalls_reduce(arg)
+ncalls(::typeof(foldr), ::Function, arg) = ncalls_reduce(arg)
+ncalls(::typeof(reduce), ::Function, arg) = ncalls_reduce(arg)
+
+ncalls_reduce(arg) = length(arg) - 1
+
+function ncalls_broadcast(args...)
+    length(args) < 1 && return 1
+    return prod(length, Broadcast.combine_axes(args...))
 end
 
-function ncalls(::typeof(broadcast!), map_args)
-    length(map_args) < 2 && return 1
-    return length(map_args[2])
+function ncalls_broadcast!(args...)
+    length(args) < 1 && return 1
+    return length(args[1])
 end
 
-function ncalls(::Union{typeof(mapreduce),typeof(mapfoldl),typeof(mapfoldr)}, map_args)
-    length(map_args) < 3 && return 1
-    return minimum(length, map_args[3:end])
-end
-
-function ncalls(::typeof(pmap), map_args)
-    if length(map_args) ≥ 2 && map_args[2] isa AbstractWorkerPool
-        length(map_args) < 3 && return 1
-        return minimum(length, map_args[3:end])
-    else
-        length(map_args) < 2 && return 1
-        return minimum(length, map_args[2:end])
-    end
-end
-
-function ncalls(mapfun::Function, map_args)
-    length(map_args) < 2 && return 1
-    return minimum(length, map_args[2:end])
+function ncalls_map(args...)
+    length(args) < 1 && return 1
+    return minimum(length, args)
 end
 
 include("deprecated.jl")
