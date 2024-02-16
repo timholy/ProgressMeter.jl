@@ -262,11 +262,12 @@ function updateProgress!(p::Progress; showvalues = (),
             t = time()
             barlen = p.barlen isa Nothing ? tty_width(p.desc, p.output, p.showspeed) : p.barlen
             percentage_complete = 100.0 * p.counter / p.n
+            percentage_rounded = 100
             bar = barstring(barlen, percentage_complete, barglyphs=p.barglyphs)
             elapsed_time = t - p.tinit
             dur = durationstring(elapsed_time)
             spacer = endswith(p.desc, " ") ? "" : " "
-            msg = @sprintf "%s%s%3u%%%s Time: %s" p.desc spacer round(Int, percentage_complete) bar dur
+            msg = @sprintf "%s%s%3u%%%s Time: %s" p.desc spacer percentage_rounded bar dur
             if p.showspeed
                 sec_per_iter = elapsed_time / (p.counter - p.start)
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
@@ -292,6 +293,7 @@ function updateProgress!(p::Progress; showvalues = (),
         if t > p.tlast+p.dt
             barlen = p.barlen isa Nothing ? tty_width(p.desc, p.output, p.showspeed) : p.barlen
             percentage_complete = 100.0 * p.counter / p.n
+            percentage_rounded = min(99, round(Int, percentage_complete)) # don't round up to 100% if not finished (#300)
             bar = barstring(barlen, percentage_complete, barglyphs=p.barglyphs)
             elapsed_time = t - p.tinit
             est_total_time = elapsed_time * (p.n - p.start) / (p.counter - p.start)
@@ -302,7 +304,7 @@ function updateProgress!(p::Progress; showvalues = (),
                 eta = "N/A"
             end
             spacer = endswith(p.desc, " ") ? "" : " "
-            msg = @sprintf "%s%s%3u%%%s  ETA: %s" p.desc spacer round(Int, percentage_complete) bar eta
+            msg = @sprintf "%s%s%3u%%%s  ETA: %s" p.desc spacer percentage_rounded bar eta
             if p.showspeed
                 sec_per_iter = elapsed_time / (p.counter - p.start)
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
