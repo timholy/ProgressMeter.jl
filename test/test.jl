@@ -521,3 +521,13 @@ end
 
 println("Testing updating thresh")
 testfunc22()
+
+function testfunc23(N, range, dt, tsleep)
+    p = Progress(N; dt=dt)
+    for i in range
+        update!(p, i; showvalues=[:percentage => 100.0*i/N])
+        sleep(tsleep)
+    end
+end
+println("Testing rounding (#300)")
+testfunc23(1000, [980;982;985;989;995;999;1000], 0.1, 1)
