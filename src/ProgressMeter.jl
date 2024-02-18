@@ -782,7 +782,7 @@ function showprogressdistributed(args...)
     progressargs = args[1:end-1]
     expr = Base.remove_linenums!(args[end])
 
-    if expr.head != :macrocall || expr.args[1] != Symbol("@distributed")
+    if expr.head != :macrocall || expr.args[1] ∉ (Symbol("@distributed"), :(Distributed.var"@distributed"))
         throw(ArgumentError("malformed @showprogress @distributed expression"))
     end
 
@@ -912,10 +912,10 @@ function showprogress(args...)
     elseif expr.head == :macrocall
         macroname = expr.args[1]
 
-        if macroname in (Symbol("@distributed"), :(Distributed.@distributed))
+        if macroname in (Symbol("@distributed"), :(Distributed.var"@distributed"))
             return showprogressdistributed(args...)
 
-        elseif macroname in (Symbol("@threads"), :(Threads.@threads))
+        elseif macroname in (Symbol("@threads"), :(Threads.var"@threads"))
             return showprogressthreads(args...)
         end
     end

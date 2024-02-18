@@ -436,6 +436,18 @@ testfunc16cb(1:1000, 0.01, 0.002)
 println("Testing @showprogress macro on distributed for loop with break")
 testfunc16cb(1000:2000, 0.01, 0.003)
 
+function testfunc16d(n, dt, tsleep)
+    @showprogress Distributed.@distributed for i in 1:n
+        if rand() < 0.7
+            sleep(tsleep)
+        end
+        i ^ 2
+    end
+end
+
+println("Testing @showprogress macro on Distributed.@distributed")
+testfunc16d(3000, 0.01, 0.001)
+
 
 println("testing `@showprogress @distributed` in global scope")
 @showprogress @distributed for i in 1:10
