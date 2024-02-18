@@ -6,13 +6,13 @@
     n = 20 #per thread
     threadsUsed = fill(false, threads)
     vals = ones(n*threads)
-    p = ProgressMeter.Progress(n*threads)
+    p = Progress(n*threads)
     p.threads_used = 1:threads # short-circuit the function `is_threading` because it is racy (#232)
     Threads.@threads for i = 1:(n*threads)
         threadsUsed[Threads.threadid()] = true
         vals[i] = 0
         sleep(0.1)
-        ProgressMeter.next!(p)
+        next!(p)
     end
     @test !any(vals .== 1) #Check that all elements have been iterated
     @test all(threadsUsed) #Ensure that all threads are used
@@ -20,7 +20,7 @@
 
     println("Testing ProgressUnknown() with Threads.@threads across $threads threads")
     trigger = 100.0
-    prog = ProgressMeter.ProgressUnknown(desc="Attempts at exceeding trigger:")
+    prog = ProgressUnknown(desc="Attempts at exceeding trigger:")
     prog.threads_used = 1:threads
     vals = Float64[]
     threadsUsed = fill(false, threads)
@@ -32,9 +32,9 @@
             return sum(vals)
         end
         if valssum <= trigger
-            ProgressMeter.next!(prog)
+            next!(prog)
         elseif !prog.done
-            ProgressMeter.finish!(prog)
+            finish!(prog)
             break
         else
             break
@@ -47,7 +47,7 @@
 
     println("Testing ProgressThresh() with Threads.@threads across $threads threads")
     thresh = 1.0
-    prog = ProgressMeter.ProgressThresh(thresh; desc="Minimizing:")
+    prog = ProgressThresh(thresh; desc="Minimizing:")
     prog.threads_used = 1:threads
     vals = fill(300.0, 1)
     threadsUsed = fill(false, threads)
@@ -58,9 +58,9 @@
             return sum(vals)
         end
         if valssum > thresh
-            ProgressMeter.update!(prog, valssum)
+            update!(prog, valssum)
         else
-            ProgressMeter.finish!(prog)
+            finish!(prog)
             break
         end
         sleep(0.1*rand())
@@ -77,7 +77,7 @@
             tasks = Vector{Task}(undef, threads)
             # threadsUsed = fill(false, threads)
             vals = ones(n*threads)
-            p = ProgressMeter.Progress(n*threads)
+            p = Progress(n*threads)
             p.threads_used = 1:threads
 
             for t in 1:threads
@@ -85,7 +85,7 @@
                     # threadsUsed[Threads.threadid()] = true
                     vals[(n*(t-1)) + i] = 0
                     sleep(0.05 + (rand()*0.1))
-                    ProgressMeter.next!(p)
+                    next!(p)
                 end
             end
             wait.(tasks)
@@ -101,7 +101,7 @@
         println("Testing @showprogress on a Threads.@threads for loop")
         function test_threaded_for_loop(n, dt, tsleep)
 	        result = zeros(n)
-	        ProgressMeter.@showprogress dt=dt Threads.@threads for i in 1:n
+	        @showprogress dt=dt Threads.@threads for i in 1:n
                 if rand() < 0.7
                     sleep(tsleep)
                 end
