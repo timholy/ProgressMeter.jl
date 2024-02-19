@@ -1,7 +1,7 @@
 using Random: seed!
 
 seed!(123)
-#=
+
 function testfunc(n, dt, tsleep)
     p = Progress(n; dt=dt)
     for i = 1:n
@@ -110,7 +110,6 @@ end
 println("Testing @showprogress macro on for loop")
 testfunc6(3000, 0.01, 0.002)
 testfunc6a(30, 0.01, 0.002)
-=#
 
 function testfunc7(n, dt, tsleep)
     s = @showprogress dt=dt desc="Calculating..." [(sleep(tsleep); z) for z in 1:n]

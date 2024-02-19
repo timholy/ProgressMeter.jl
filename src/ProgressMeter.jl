@@ -842,7 +842,7 @@ function showprogressthreads(args...)
     iters = loop.args[1].args[end]
 
     p = gensym()
-    push!(loop.args[end].args, :(ProgressMeter.next!($p)))
+    push!(loop.args[end].args, :(next!($p)))
 
     quote
         $(esc(p)) = Progress(
