@@ -782,10 +782,6 @@ function showprogressdistributed(args...)
     progressargs = args[1:end-1]
     expr = Base.remove_linenums!(args[end])
 
-    if expr.head != :macrocall || expr.args[1] != Symbol("@distributed")
-        throw(ArgumentError("malformed @showprogress @distributed expression"))
-    end
-
     distargs = filter(x -> !(x isa LineNumberNode), expr.args[2:end])
     na = length(distargs)
     if na == 1
@@ -846,7 +842,7 @@ function showprogressthreads(args...)
     iters = loop.args[1].args[end]
 
     p = gensym()
-    push!(loop.args[end].args, :(ProgressMeter.next!($p)))
+    push!(loop.args[end].args, :(next!($p)))
 
     quote
         $(esc(p)) = Progress(
@@ -890,146 +886,173 @@ function showprogress(args...)
     end
     progressargs = args[1:end-1]
     expr = args[end]
-    if expr.head == :macrocall && expr.args[1] == Symbol("@distributed")
-        return showprogressdistributed(args...)
+
+    if !isa(expr, Expr)
+        throw(ArgumentError("Final argument to @showprogress must be a for loop, comprehension, or a map-like function; got $expr"))
     end
-    if expr.head == :macrocall && expr.args[1] == :(Threads.var"@threads")
-        return showprogressthreads(args...)
-    end
-    orig = expr = copy(expr)
-    if expr.args[1] == :|> # e.g. map(x->x^2) |> sum
+
+    if expr.head == :call && expr.args[1] == :|> 
+        # e.g. map(x->x^2) |> sum
         expr.args[2] = showprogress(progressargs..., expr.args[2])
         return expr
+
+    elseif expr.head in (:for, :comprehension, :typed_comprehension)
+        return showprogress_loop(expr, progressargs)
+
+    elseif expr.head == :call
+        return showprogress_map(expr, progressargs)
+
+    elseif expr.head == :do && expr.args[1].head == :call
+        return showprogress_map(expr, progressargs)
+
+    elseif expr.head == :macrocall
+        macroname = expr.args[1]
+
+        if macroname in (Symbol("@distributed"), :(Distributed.@distributed).args[1]) 
+            # can be changed to `:(Distributed.var"@distributed")` if support for pre-1.3 is dropped
+            return showprogressdistributed(args...)
+
+        elseif macroname in (Symbol("@threads"), :(Threads.@threads).args[1])
+            return showprogressthreads(args...)
+        end
     end
+
+    throw(ArgumentError("Final argument to @showprogress must be a for loop, comprehension, or a map-like function; got $expr"))
+end
+
+function showprogress_map(expr, progressargs)
     metersym = gensym("meter")
-    kind = :invalid # :invalid, :loop, or :map
 
-    if isa(expr, Expr)
-        if expr.head == :for
-            outerassignidx = 1
-            loopbodyidx = lastindex(expr.args)
-            kind = :loop
-        elseif expr.head == :comprehension
-            outerassignidx = lastindex(expr.args)
-            loopbodyidx = 1
-            kind = :loop
-        elseif expr.head == :typed_comprehension
-            outerassignidx = lastindex(expr.args)
-            loopbodyidx = 2
-            kind = :loop
-        elseif expr.head == :call
-            kind = :map
-        elseif expr.head == :do
-            call = expr.args[1]
-            if call.head == :call
-                kind = :map
-            end
+    # isolate call to map
+    if expr.head == :do
+        call = expr.args[1]
+    else
+        call = expr
+    end
+
+    # get args to map to determine progress length
+    mapargs = collect(Any, filter(call.args[2:end]) do a
+        return isa(a, Symbol) || isa(a, Number) || !(a.head in (:kw, :parameters))
+    end)
+    if expr.head == :do
+        insert!(mapargs, 1, identity) # to make args for ncalls line up
+    end
+
+    # change call to progress_map
+    mapfun = call.args[1]
+    call.args[1] = :progress_map
+
+    # escape args as appropriate
+    for i in 2:length(call.args)
+        call.args[i] = esc(call.args[i])
+    end
+    if expr.head == :do
+        expr.args[2] = esc(expr.args[2])
+    end
+
+    # create appropriate Progress expression
+    lenex = :(ncalls($(esc(mapfun)), $(esc.(mapargs)...)))
+    progex = :(Progress($lenex, $(showprogress_process_args(progressargs)...)))
+
+    # insert progress and mapfun kwargs
+    push!(call.args, Expr(:kw, :progress, progex))
+    push!(call.args, Expr(:kw, :mapfun, esc(mapfun)))
+
+    return expr
+end
+
+function showprogress_loop(expr, progressargs)
+    metersym = gensym("meter")
+    orig = expr = copy(expr)
+
+    if expr.head == :for
+        outerassignidx = 1
+        loopbodyidx = lastindex(expr.args)
+    elseif expr.head == :comprehension
+        outerassignidx = lastindex(expr.args)
+        loopbodyidx = 1
+    elseif expr.head == :typed_comprehension
+        outerassignidx = lastindex(expr.args)
+        loopbodyidx = 2
+    end
+    # As of julia 0.5, a comprehension's "loop" is actually one level deeper in the syntax tree.
+    if expr.head !== :for
+        @assert length(expr.args) == loopbodyidx
+        expr = expr.args[outerassignidx] = copy(expr.args[outerassignidx])
+        if expr.head == :flatten
+            # e.g. [x for x in 1:10 for y in 1:x]
+            expr = expr.args[1] = copy(expr.args[1])
+        end
+        @assert expr.head === :generator
+        outerassignidx = lastindex(expr.args)
+        loopbodyidx = 1
+    end
+
+    # Transform the first loop assignment
+    loopassign = expr.args[outerassignidx] = copy(expr.args[outerassignidx])
+
+    if loopassign.head === :filter 
+        # e.g. [x for x=1:10, y=1:10 if x>y]
+        # y will be wrapped in ProgressWrapper        
+        for i in 1:length(loopassign.args)-1
+            loopassign.args[i] = esc(loopassign.args[i])
+        end
+        loopassign = loopassign.args[end] = copy(loopassign.args[end])
+    end
+
+    if loopassign.head === :block
+        # e.g. for x=1:10, y=1:x end
+        # x will be wrapped in ProgressWrapper
+        for i in 2:length(loopassign.args)
+            loopassign.args[i] = esc(loopassign.args[i])
+        end
+        loopassign = loopassign.args[1] = copy(loopassign.args[1])
+    end
+
+    @assert loopassign.head === :(=)
+    @assert length(loopassign.args) == 2
+    obj = loopassign.args[2]
+    loopassign.args[1] = esc(loopassign.args[1])
+    loopassign.args[2] = :(ProgressWrapper(iterable, $(esc(metersym))))
+
+    # Transform the loop body break and return statements
+    if expr.head === :for
+        expr.args[loopbodyidx] = showprogress_process_expr(expr.args[loopbodyidx], metersym)
+    end
+
+    # Escape all args except the loop assignment, which was already appropriately escaped.
+    for i in 1:length(expr.args)
+        if i != outerassignidx
+            expr.args[i] = esc(expr.args[i])
+        end
+    end
+    if orig !== expr
+        # We have additional escaping to do; this will occur for comprehensions with julia 0.5 or later.
+        for i in 1:length(orig.args)-1
+            orig.args[i] = esc(orig.args[i])
         end
     end
 
-    if kind == :invalid
-        throw(ArgumentError("Final argument to @showprogress must be a for loop, comprehension, or a map-like function; got $expr"))
-    elseif kind == :loop
-        # As of julia 0.5, a comprehension's "loop" is actually one level deeper in the syntax tree.
-        if expr.head !== :for
-            @assert length(expr.args) == loopbodyidx
-            expr = expr.args[outerassignidx] = copy(expr.args[outerassignidx])
-            @assert expr.head === :generator
-            outerassignidx = lastindex(expr.args)
-            loopbodyidx = 1
-        end
+    setup = quote
+        iterable = $(esc(obj))
+        $(esc(metersym)) = Progress(length(iterable), $(showprogress_process_args(progressargs)...))
+    end
 
-        # Transform the first loop assignment
-        loopassign = expr.args[outerassignidx] = copy(expr.args[outerassignidx])
-        if loopassign.head === :block # this will happen in a for loop with multiple iteration variables
-            for i in 2:length(loopassign.args)
-                loopassign.args[i] = esc(loopassign.args[i])
-            end
-            loopassign = loopassign.args[1] = copy(loopassign.args[1])
+    if expr.head === :for
+        return quote
+            $setup
+            $expr
         end
-        @assert loopassign.head === :(=)
-        @assert length(loopassign.args) == 2
-        obj = loopassign.args[2]
-        loopassign.args[1] = esc(loopassign.args[1])
-        loopassign.args[2] = :(ProgressWrapper(iterable, $(esc(metersym))))
-
-        # Transform the loop body break and return statements
-        if expr.head === :for
-            expr.args[loopbodyidx] = showprogress_process_expr(expr.args[loopbodyidx], metersym)
-        end
-
-        # Escape all args except the loop assignment, which was already appropriately escaped.
-        for i in 1:length(expr.args)
-            if i != outerassignidx
-                expr.args[i] = esc(expr.args[i])
-            end
-        end
-        if orig !== expr
-            # We have additional escaping to do; this will occur for comprehensions with julia 0.5 or later.
-            for i in 1:length(orig.args)-1
-                orig.args[i] = esc(orig.args[i])
-            end
-        end
-
-        setup = quote
-            iterable = $(esc(obj))
-            $(esc(metersym)) = Progress(length(iterable), $(showprogress_process_args(progressargs)...))
-        end
-
-        if expr.head === :for
-            return quote
+    else
+        # We're dealing with a comprehension
+        return quote
+            begin
                 $setup
-                $expr
-            end
-        else
-            # We're dealing with a comprehension
-            return quote
-                begin
-                    $setup
-                    rv = $orig
-                    next!($(esc(metersym)))
-                    rv
-                end
+                rv = $orig
+                finish!($(esc(metersym)))
+                rv
             end
         end
-    else # kind == :map
-
-        # isolate call to map
-        if expr.head == :do
-            call = expr.args[1]
-        else
-            call = expr
-        end
-
-        # get args to map to determine progress length
-        mapargs = collect(Any, filter(call.args[2:end]) do a
-            return isa(a, Symbol) || isa(a, Number) || !(a.head in (:kw, :parameters))
-        end)
-        if expr.head == :do
-            insert!(mapargs, 1, identity) # to make args for ncalls line up
-        end
-
-        # change call to progress_map
-        mapfun = call.args[1]
-        call.args[1] = :progress_map
-
-        # escape args as appropriate
-        for i in 2:length(call.args)
-            call.args[i] = esc(call.args[i])
-        end
-        if expr.head == :do
-            expr.args[2] = esc(expr.args[2])
-        end
-
-        # create appropriate Progress expression
-        lenex = :(ncalls($(esc(mapfun)), $(esc.(mapargs)...)))
-        progex = :(Progress($lenex, $(showprogress_process_args(progressargs)...)))
-
-        # insert progress and mapfun kwargs
-        push!(call.args, Expr(:kw, :progress, progex))
-        push!(call.args, Expr(:kw, :mapfun, esc(mapfun)))
-
-        return expr
     end
 end
 

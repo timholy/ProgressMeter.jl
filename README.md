@@ -229,7 +229,7 @@ while true
     next!(prog)
     rand(1:2*10^8) == 1 && break
 end
-ProgressMeter.finish!(prog)
+finish!(prog)
 ```
 
 By default, `finish!` changes the spinner to a `✓`, but you can
@@ -421,7 +421,7 @@ p = Progress(n; enabled = false)
 for iter in 1:10
     x *= 2
     sleep(0.5)
-    ProgressMeter.next!(p)
+    next!(p)
 end
 ```
 
