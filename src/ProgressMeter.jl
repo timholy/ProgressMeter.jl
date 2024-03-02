@@ -440,7 +440,7 @@ end
 
 function lock_if_threading(f::Function, p::AbstractProgress)
     if is_threading(p)
-        lock(p.reentrantlocker) do
+        lock(p.lock) do
             f()
         end
     else
