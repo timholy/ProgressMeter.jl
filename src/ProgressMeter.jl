@@ -45,6 +45,30 @@ function BarGlyphs(s::AbstractString)
     end
     return BarGlyphs(glyphs...)
 end
+const defaultglyphs = BarGlyphs('|','█', Sys.iswindows() ? '█' : ['▏','▎','▍','▌','▋','▊','▉'],' ','|',)
+
+# Internal struct for holding common properties for progress meters
+Base.@kwdef mutable struct ProgressCore
+    lock::Threads.ReentrantLock = Threads.ReentrantLock()
+    dt::Real                    = Float64(0.1)
+    counter::Int                = 0
+    tinit::Float64              = time()
+    tsecond::Float64            = time()        # ignore the first loop given usually uncharacteristically slow
+    tlast::Float64              = time()
+    printed::Bool               = false         # true if we have issued at least one status update
+    desc::String                = "Progress: "  # prefix to the percentage, e.g.  "Computing..."
+    barlen::Union{Int,Nothing}  = nothing       # progress bar size (default is available terminal width)
+    barglyphs::BarGlyphs        = defaultglyphs # the characters to be used in the bar
+    color::Symbol               = :green        # default to green
+    output::IO                  = stderr        # output stream into which the progress is written
+    offset::Int                 = 0             # position offset of progress bar (default is 0)
+    numprintedvalues::Int       = 0             # num values printed below progress in last iteration
+    enabled::Bool               = true          # is the output enabled
+    showspeed::Bool             = false         # should the output include average time per iteration
+    check_iterations::Int       = 1
+    prev_update_count::Int      = 1
+    threads_used::Vector{Int}   = Int[]
+end
 
 """
 `prog = Progress(n; dt=0.1, desc="Progress: ", color=:green,
@@ -58,45 +82,28 @@ the current task. Optionally you can disable the progress bar by setting
 """
 mutable struct Progress <: AbstractProgress
     n::Int
-    reentrantlocker::Threads.ReentrantLock
-    dt::Float64
-    counter::Int
-    tinit::Float64
-    tsecond::Float64           # ignore the first loop given usually uncharacteristically slow
-    tlast::Float64
-    printed::Bool              # true if we have issued at least one status update
-    desc::String               # prefix to the percentage, e.g.  "Computing..."
-    barlen::Union{Int,Nothing} # progress bar size (default is available terminal width)
-    barglyphs::BarGlyphs       # the characters to be used in the bar
-    color::Symbol              # default to green
-    output::IO                 # output stream into which the progress is written
-    offset::Int                # position offset of progress bar (default is 0)
-    numprintedvalues::Int      # num values printed below progress in last iteration
     start::Int                 # which iteration number to start from
-    enabled::Bool              # is the output enabled
-    showspeed::Bool            # should the output include average time per iteration
-    check_iterations::Int
-    prev_update_count::Int
-    threads_used::Vector{Int}
+    core::ProgressCore
 
-    function Progress(n::Integer;
-                      dt::Real=0.1,
-                      desc::AbstractString="Progress: ",
-                      color::Symbol=:green,
-                      output::IO=stderr,
-                      barlen=nothing,
-                      barglyphs::BarGlyphs=BarGlyphs('|','█', Sys.iswindows() ? '█' : ['▏','▎','▍','▌','▋','▊','▉'],' ','|',),
-                      offset::Integer=0,
-                      start::Integer=0,
-                      enabled::Bool = true,
-                      showspeed::Bool = false,
-                     )
+    function Progress(n::Integer; start::Integer=0, kwargs...)
         CLEAR_IJULIA[] = clear_ijulia()
-        reentrantlocker = Threads.ReentrantLock()
-        counter = start
-        tinit = tsecond = tlast = time()
-        printed = false
-        new(n, reentrantlocker, dt, counter, tinit, tsecond, tlast, printed, desc, barlen, barglyphs, color, output, offset, 0, start, enabled, showspeed, 1, 1, Int[])
+        core = ProgressCore(;kwargs...)
+        new(n, start, core)
+    end
+end
+# forward common core properties to main types
+function Base.setproperty!(p::T, name::Symbol, value) where T<:AbstractProgress
+    if hasfield(T, name)
+        setfield!(p, name, value)
+    else
+        setproperty!(p.core, name, value)
+    end
+end
+function Base.getproperty(p::T, name::Symbol) where T<:AbstractProgress
+    if hasfield(T, name)
+        getfield(p, name)
+    else
+        getproperty(p.core, name)
     end
 end
 
@@ -113,38 +120,14 @@ setting `showspeed=true`.
 """
 mutable struct ProgressThresh{T<:Real} <: AbstractProgress
     thresh::T
-    reentrantlocker::Threads.ReentrantLock
-    dt::Float64
     val::T
-    counter::Int
     triggered::Bool
-    tinit::Float64
-    tlast::Float64
-    printed::Bool           # true if we have issued at least one status update
-    desc::String            # prefix to the percentage, e.g.  "Computing..."
-    color::Symbol           # default to green
-    output::IO              # output stream into which the progress is written
-    numprintedvalues::Int   # num values printed below progress in last iteration
-    offset::Int             # position offset of progress bar (default is 0)
-    enabled::Bool           # is the output enabled
-    showspeed::Bool         # should the output include average time per iteration
-    check_iterations::Int
-    prev_update_count::Int
-    threads_used::Vector{Int}
+    core::ProgressCore
 
-    function ProgressThresh{T}(thresh;
-                               dt::Real=0.1,
-                               desc::AbstractString="Progress: ",
-                               color::Symbol=:green,
-                               output::IO=stderr,
-                               offset::Integer=0,
-                               enabled = true,
-                               showspeed::Bool = false) where T
+    function ProgressThresh{T}(thresh; val::T=typemax(T), triggered::Bool=false, kwargs...) where T
         CLEAR_IJULIA[] = clear_ijulia()
-        reentrantlocker = Threads.ReentrantLock()
-        tinit = tlast = time()
-        printed = false
-        new{T}(thresh, reentrantlocker, dt, typemax(T), 0, false, tinit, tlast, printed, desc, color, output, 0, offset, enabled, showspeed, 1, 1, Int[])
+        core = ProgressCore(;kwargs...)
+        new{T}(thresh, val, triggered, core)
     end
 end
 ProgressThresh(thresh::Real; kwargs...) = ProgressThresh{typeof(thresh)}(thresh; kwargs...)
@@ -164,41 +147,14 @@ can optionally display a spinning ball by passing `spinner=true`.
 """
 mutable struct ProgressUnknown <: AbstractProgress
     done::Bool
-    reentrantlocker::Threads.ReentrantLock
-    dt::Float64
-    counter::Int
-    spincounter::Int
-    triggered::Bool
-    tinit::Float64
-    tlast::Float64
-    printed::Bool           # true if we have issued at least one status update
-    desc::String            # prefix to the percentage, e.g.  "Computing..."
-    color::Symbol           # default to green
     spinner::Bool           # show a spinner
-    output::IO              # output stream into which the progress is written
-    numprintedvalues::Int   # num values printed below progress in last iteration
-    offset::Int             # position offset of progress bar (default is 0)
-    enabled::Bool           # is the output enabled
-    showspeed::Bool         # should the output include average time per iteration
-    check_iterations::Int
-    prev_update_count::Int
-    threads_used::Vector{Int}
-end
-
-function ProgressUnknown(;
-                         dt::Real=0.1,
-                         desc::AbstractString="Progress: ",
-                         color::Symbol=:green,
-                         spinner::Bool=false,
-                         output::IO=stderr,
-                         offset::Integer=0,
-                         enabled::Bool = true,
-                         showspeed::Bool = false)
-    CLEAR_IJULIA[] = clear_ijulia()
-    reentrantlocker = Threads.ReentrantLock()
-    tinit = tlast = time()
-    printed = false
-    ProgressUnknown(false, reentrantlocker, dt, 0, 0, false, tinit, tlast, printed, desc, color, spinner, output, 0, offset, enabled, showspeed, 1, 1, Int[])
+    spincounter::Int
+    core::ProgressCore
+    function ProgressUnknown(; spinner::Bool=false, kwargs...)
+        CLEAR_IJULIA[] = clear_ijulia()
+        core = ProgressCore(;kwargs...)
+        new(false, spinner, 0, core)
+    end
 end
 
 #...length of percentage and ETA string with days is 29 characters, speed string is always 14 extra characters
@@ -239,9 +195,9 @@ function calc_check_iterations(p, t)
 end
 
 # update progress display
-function updateProgress!(p::Progress; showvalues = (), 
+function updateProgress!(p::Progress; showvalues = (),
                          truncate_lines = false, valuecolor = :blue,
-                         offset::Integer = p.offset, keep = (offset == 0), 
+                         offset::Integer = p.offset, keep = (offset == 0),
                          desc::Union{Nothing,AbstractString} = nothing,
                          ignore_predictor = false, color = p.color, max_steps = p.n)
     !p.enabled && return
@@ -326,9 +282,9 @@ function updateProgress!(p::Progress; showvalues = (),
     return nothing
 end
 
-function updateProgress!(p::ProgressThresh; showvalues = (), 
+function updateProgress!(p::ProgressThresh; showvalues = (),
                          truncate_lines = false, valuecolor = :blue,
-                         offset::Integer = p.offset, keep = (offset == 0), 
+                         offset::Integer = p.offset, keep = (offset == 0),
                          desc = p.desc, ignore_predictor = false,
                          color = p.color, thresh = p.thresh)
     !p.enabled && return
@@ -549,8 +505,8 @@ the message printed and its color.
 
 See also `finish!`.
 """
-function cancel(p::AbstractProgress, msg::AbstractString = "Aborted before all tasks were completed"; 
-                color = :red, showvalues = (), truncate_lines = false, 
+function cancel(p::AbstractProgress, msg::AbstractString = "Aborted before all tasks were completed";
+                color = :red, showvalues = (), truncate_lines = false,
                 valuecolor = :blue, offset = p.offset, keep = (offset == 0))
     lock_if_threading(p) do
         p.offset = offset
@@ -863,13 +819,13 @@ end
 
 @showprogress [desc="Computing..."] pmap(x->x^2, 1:50)
 ```
-displays progress in performing a computation.  You may optionally 
-supply a custom message to be printed that specifies the computation 
+displays progress in performing a computation.  You may optionally
+supply a custom message to be printed that specifies the computation
 being performed or other options.
 
-`@showprogress` works for loops, comprehensions, and `map`-like 
+`@showprogress` works for loops, comprehensions, and `map`-like
 functions. These `map`-like functions rely on `ncalls` being defined
-and can be checked with `methods(ProgressMeter.ncalls)`. New ones can 
+and can be checked with `methods(ProgressMeter.ncalls)`. New ones can
 be added by defining `ProgressMeter.ncalls(::typeof(mapfun), args...) = ...`.
 
 `@showprogress` is thread-safe and will work with `@distributed` loops
@@ -891,7 +847,7 @@ function showprogress(args...)
         throw(ArgumentError("Final argument to @showprogress must be a for loop, comprehension, or a map-like function; got $expr"))
     end
 
-    if expr.head == :call && expr.args[1] == :|> 
+    if expr.head == :call && expr.args[1] == :|>
         # e.g. map(x->x^2) |> sum
         expr.args[2] = showprogress(progressargs..., expr.args[2])
         return expr
@@ -908,7 +864,7 @@ function showprogress(args...)
     elseif expr.head == :macrocall
         macroname = expr.args[1]
 
-        if macroname in (Symbol("@distributed"), :(Distributed.@distributed).args[1]) 
+        if macroname in (Symbol("@distributed"), :(Distributed.@distributed).args[1])
             # can be changed to `:(Distributed.var"@distributed")` if support for pre-1.3 is dropped
             return showprogressdistributed(args...)
 
@@ -991,9 +947,9 @@ function showprogress_loop(expr, progressargs)
     # Transform the first loop assignment
     loopassign = expr.args[outerassignidx] = copy(expr.args[outerassignidx])
 
-    if loopassign.head === :filter 
+    if loopassign.head === :filter
         # e.g. [x for x=1:10, y=1:10 if x>y]
-        # y will be wrapped in ProgressWrapper        
+        # y will be wrapped in ProgressWrapper
         for i in 1:length(loopassign.args)-1
             loopassign.args[i] = esc(loopassign.args[i])
         end
@@ -1109,7 +1065,7 @@ to define the length of the `Progress` in `@showprogress` and `progress_map`.
 Internally uses one of `ncalls_map`, `ncalls_broadcast(!)` or `ncalls_reduce` depending
 on the type of `mapfun`.
 
-Support for additional functions can be added by defining 
+Support for additional functions can be added by defining
 `ProgressMeter.ncalls(::typeof(mapfun), ::Function, args...)`.
 """
 ncalls(::typeof(map), ::Function, args...) = ncalls_map(args...)
