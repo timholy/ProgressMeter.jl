@@ -20,6 +20,22 @@ ProgressMeter
 
 abstract type AbstractProgress end
 
+# forward common core properties to main types
+function Base.setproperty!(p::T, name::Symbol, value) where T<:AbstractProgress
+    if hasfield(T, name)
+        setfield!(p, name, value)
+    else
+        setproperty!(p.core, name, value)
+    end
+end
+function Base.getproperty(p::T, name::Symbol) where T<:AbstractProgress
+    if hasfield(T, name)
+        getfield(p, name)
+    else
+        getproperty(p.core, name)
+    end
+end
+
 """
 Holds the five characters that will be used to generate the progress bar.
 """
@@ -98,21 +114,6 @@ mutable struct Progress <: AbstractProgress
         new(n, start, barlen, barglyphs, core)
     end
 end
-# forward common core properties to main types
-function Base.setproperty!(p::T, name::Symbol, value) where T<:AbstractProgress
-    if hasfield(T, name)
-        setfield!(p, name, value)
-    else
-        setproperty!(p.core, name, value)
-    end
-end
-function Base.getproperty(p::T, name::Symbol) where T<:AbstractProgress
-    if hasfield(T, name)
-        getfield(p, name)
-    else
-        getproperty(p.core, name)
-    end
-end
 
 """
 `prog = ProgressThresh(thresh; dt=0.1, desc="Progress: ",
@@ -139,7 +140,6 @@ mutable struct ProgressThresh{T<:Real} <: AbstractProgress
     end
 end
 ProgressThresh(thresh::Real; kwargs...) = ProgressThresh{typeof(thresh)}(thresh; kwargs...)
-
 
 """
 `prog = ProgressUnknown(; dt=0.1, desc="Progress: ",
