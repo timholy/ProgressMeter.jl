@@ -20,6 +20,22 @@ ProgressMeter
 
 abstract type AbstractProgress end
 
+# forward common core properties to main types
+function Base.setproperty!(p::T, name::Symbol, value) where T<:AbstractProgress
+    if hasfield(T, name)
+        setfield!(p, name, value)
+    else
+        setproperty!(p.core, name, value)
+    end
+end
+function Base.getproperty(p::T, name::Symbol) where T<:AbstractProgress
+    if hasfield(T, name)
+        getfield(p, name)
+    else
+        getproperty(p.core, name)
+    end
+end
+
 """
 Holds the five characters that will be used to generate the progress bar.
 """
@@ -98,19 +114,26 @@ mutable struct Progress <: AbstractProgress
         new(n, start, barlen, barglyphs, core)
     end
 end
-# forward common core properties to main types
-function Base.setproperty!(p::T, name::Symbol, value) where T<:AbstractProgress
-    if hasfield(T, name)
-        setfield!(p, name, value)
-    else
-        setproperty!(p.core, name, value)
-    end
-end
-function Base.getproperty(p::T, name::Symbol) where T<:AbstractProgress
-    if hasfield(T, name)
-        getfield(p, name)
-    else
-        getproperty(p.core, name)
+
+mutable struct ProgressData <: AbstractProgress
+    total::Int             # total number of bytes
+    current::Int           # current number of bytes
+    barlen::Union{Int,Nothing} # progress bar size (default is available terminal width)
+    barglyphs::BarGlyphs   # the characters to be used in the bar
+    # internals
+    speed_history::Vector{Int} # history of speeds in bytes per second
+    core::ProgressCore
+
+    function ProgressData(
+            ;
+            total::Integer=0
+            current::Integer=0,
+            barlen::Union{Int,Nothing}=nothing,
+            barglyphs::BarGlyphs=defaultglyphs,
+            kwargs...)
+        CLEAR_IJULIA[] = clear_ijulia()
+        core = ProgressCore(;kwargs...)
+        new(total, current, barlen, barglyphs, Int[], core)
     end
 end
 
