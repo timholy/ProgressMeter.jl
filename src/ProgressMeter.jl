@@ -47,7 +47,7 @@ function BarGlyphs(s::AbstractString)
 end
 const defaultglyphs = BarGlyphs('|','█', Sys.iswindows() ? '█' : ['▏','▎','▍','▌','▋','▊','▉'],' ','|',)
 
-# Internal struct for holding common properties for progress meters
+# Internal struct for holding common properties and internals for progress meters
 Base.@kwdef mutable struct ProgressCore
     color::Symbol               = :green        # color of the meter
     desc::String                = "Progress: "  # prefix to the percentage, e.g.  "Computing..."
