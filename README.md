@@ -97,7 +97,7 @@ end
 ```
 
 The core methods `Progress()`, `ProgressThresh()`, `ProgressUnknown()`, and their updaters
-are also thread-safe, so can be used with ``, `Threads.@spawn` etc.:
+are also thread-safe, so can be used with `Threads.@threads`, `Threads.@spawn` etc.:
 
 ```julia
 using ProgressMeter
