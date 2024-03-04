@@ -97,7 +97,7 @@ end
 ```
 
 The core methods `Progress()`, `ProgressThresh()`, `ProgressUnknown()`, and their updaters
-are also thread-safe, so can be used with `Threads.@threads`, `Threads.@spawn` etc.:
+are also thread-safe, so can be used with ``, `Threads.@spawn` etc.:
 
 ```julia
 using ProgressMeter
@@ -107,6 +107,13 @@ Threads.@threads for i in 1:10
     next!(p)
 end
 finish!(p)
+```
+and the `@showprogress` macro also works
+```julia
+using ProgressMeter
+@showprogress Threads.@threads for i in 1:10
+    sleep(2*rand())
+end
 ```
 
 ```julia
