@@ -108,6 +108,13 @@ Threads.@threads for i in 1:10
 end
 finish!(p)
 ```
+and the `@showprogress` macro also works
+```julia
+using ProgressMeter
+@showprogress Threads.@threads for i in 1:10
+    sleep(2*rand())
+end
+```
 
 ```julia
 using ProgressMeter
