@@ -68,32 +68,29 @@
     @test sum(vals) <= thresh
     @test length(threadsUsed) == threads #Ensure that all threads are used
 
+    if (Threads.nthreads() > 1)
+        threads = Threads.nthreads() - 1
+        println("Testing Progress() with Threads.@spawn across $threads threads")
+        n = 20 #per thread
+        tasks = Vector{Task}(undef, threads)
+        # threadsUsed = fill(false, threads)
+        vals = ones(n*threads)
+        p = Progress(n*threads)
+        p.threads_used = 1:threads
 
-    @static if VERSION >= v"1.3.0-rc1" #Threads.@spawn not available before 1.3
-        if (Threads.nthreads() > 1)
-            threads = Threads.nthreads() - 1
-            println("Testing Progress() with Threads.@spawn across $threads threads")
-            n = 20 #per thread
-            tasks = Vector{Task}(undef, threads)
-            # threadsUsed = fill(false, threads)
-            vals = ones(n*threads)
-            p = Progress(n*threads)
-            p.threads_used = 1:threads
-
-            for t in 1:threads
-                tasks[t] = Threads.@spawn for i in 1:n
-                    # threadsUsed[Threads.threadid()] = true
-                    vals[(n*(t-1)) + i] = 0
-                    sleep(0.05 + (rand()*0.1))
-                    next!(p)
-                end
+        for t in 1:threads
+            tasks[t] = Threads.@spawn for i in 1:n
+                # threadsUsed[Threads.threadid()] = true
+                vals[(n*(t-1)) + i] = 0
+                sleep(0.05 + (rand()*0.1))
+                next!(p)
             end
-            wait.(tasks)
-            @test !any(vals .== 1) #Check that all elements have been iterated
-            # @test all(threadsUsed) #Ensure that all threads are used (unreliable for @spawn)
-        else
-            @info "Threads.nthreads() == 1, so Threads.@spawn tests cannot be meaningfully tested"
         end
+        wait.(tasks)
+        @test !any(vals .== 1) #Check that all elements have been iterated
+        # @test all(threadsUsed) #Ensure that all threads are used (unreliable for @spawn)
+    else
+        @info "Threads.nthreads() == 1, so Threads.@spawn tests cannot be meaningfully tested"
     end
 
     println("Testing @showprogress on a Threads.@threads for loop")
