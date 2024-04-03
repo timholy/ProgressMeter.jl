@@ -876,11 +876,10 @@ function showprogress(args...)
     elseif expr.head == :macrocall
         macroname = expr.args[1]
 
-        if macroname in (Symbol("@distributed"), :(Distributed.@distributed).args[1])
-            # can be changed to `:(Distributed.var"@distributed")` if support for pre-1.3 is dropped
+        if macroname in (Symbol("@distributed"), :(Distributed.var"@distributed"))
             return showprogressdistributed(args...)
 
-        elseif macroname in (Symbol("@threads"), :(Threads.@threads).args[1])
+        elseif macroname in (Symbol("@threads"), :(Threads.var"@threads"))
             return showprogressthreads(args...)
         end
     end

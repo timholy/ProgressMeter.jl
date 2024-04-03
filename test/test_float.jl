@@ -27,7 +27,7 @@ testfunc2(50, 0.2, 0.2, "progress  ", 70)
 println("Testing floating normal progress bars with changing offset")
 function testfunc3(n, dt, tsleep, desc, barlen)
     p1 = Progress(n; dt=dt, desc=desc, barlen=barlen, offset=0)
-    p2 = Progress(n; dt=dt, desc=desc, barlen=barlen,offset=1)
+    p2 = Progress(n; dt=dt, desc=desc, barlen=barlen, offset=1)
     for i = 1:n
         sleep(tsleep)
         next!(p1; showvalues = [(:i, i) for _ in 1:i], keep=false)
