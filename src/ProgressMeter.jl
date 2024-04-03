@@ -23,6 +23,8 @@ abstract type AbstractProgress end
 # forward common core properties to main types
 function Base.setproperty!(p::T, name::Symbol, value) where T<:AbstractProgress
     if hasfield(T, name)
+        ty = fieldtype(T, name)
+        value = value isa ty ? value : convert(ty, value)
         setfield!(p, name, value)
     else
         setproperty!(p.core, name, value)

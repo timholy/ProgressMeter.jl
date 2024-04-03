@@ -71,3 +71,12 @@ wrap = ProgressMeter.ProgressWrapper(A, prog)
 @test length(wrap) == length(A)
 @test eltype(wrap) == eltype(A)
 @test collect(wrap) == collect(A)
+
+# Test setproperty! on ProgressCore
+prog = Progress(10)
+prog.desc = "New description" # in ProgressCore
+@test prog.desc == "New description"
+prog.n = UInt128(20) # in Progress
+@test prog.n == 20
+prog.offset = Int8(5) # in ProgressCore
+@test prog.offset == 5
