@@ -111,4 +111,12 @@ for i in 1:50
     sleep(0.1)
 end
 
+println("Testing multi-line string")
+p = ProgressMeter.Progress(10)
+for iter in 1:10
+    sleep(0.1)
+    s = "line 1\nline 2\nline 3"
+    next!(p; showvalues = [("lines", s)])
+end
+
 end # if
