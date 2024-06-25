@@ -211,7 +211,8 @@ function updateProgress!(p::Progress; showvalues = (),
                          truncate_lines = false, valuecolor = :blue,
                          offset::Integer = p.offset, keep = (offset == 0),
                          desc::Union{Nothing,AbstractString} = nothing,
-                         ignore_predictor = false, color = p.color, max_steps = p.n)
+                         ignore_predictor = false, force::Bool = false,
+                         color = p.color, max_steps = p.n)
     !p.enabled && return
     if p.counter == 2 # ignore the first loop given usually uncharacteristically slow
         p.tsecond = time()
@@ -253,12 +254,12 @@ function updateProgress!(p::Progress; showvalues = (),
         end
         return nothing
     end
-    if ignore_predictor || predicted_updates_per_dt_have_passed(p)
+    if force || ignore_predictor || predicted_updates_per_dt_have_passed(p)
         t = time()
         if p.counter > 2
             p.check_iterations = calc_check_iterations(p, t)
         end
-        if t > p.tlast+p.dt
+        if force || (t > p.tlast+p.dt)
             barlen = p.barlen isa Nothing ? tty_width(p.desc, p.output, p.showspeed) : p.barlen
             percentage_complete = 100.0 * p.counter / p.n
             percentage_rounded = min(99, round(Int, percentage_complete)) # don't round up to 100% if not finished (#300)
@@ -297,7 +298,8 @@ end
 function updateProgress!(p::ProgressThresh; showvalues = (),
                          truncate_lines = false, valuecolor = :blue,
                          offset::Integer = p.offset, keep = (offset == 0),
-                         desc = p.desc, ignore_predictor = false,
+                         desc = p.desc,
+                         ignore_predictor = false, force::Bool = false,
                          color = p.color, thresh = p.thresh)
     !p.enabled && return
     p.offset = offset
@@ -330,12 +332,12 @@ function updateProgress!(p::ProgressThresh; showvalues = (),
         return
     end
 
-    if ignore_predictor || predicted_updates_per_dt_have_passed(p)
+    if force || ignore_predictor || predicted_updates_per_dt_have_passed(p)
         t = time()
         if p.counter > 2
             p.check_iterations = calc_check_iterations(p, t)
         end
-        if t > p.tlast+p.dt && !p.triggered
+        if force || (t > p.tlast+p.dt && !p.triggered)
             msg = @sprintf "%s (thresh = %g, value = %g)" p.desc p.thresh p.val
             if p.showspeed
                 elapsed_time = t - p.tinit
@@ -368,7 +370,8 @@ spinner_char(p::ProgressUnknown, spinner::AbstractString) =
     p.done ? spinner_done : spinner[nextind(spinner, 1, p.spincounter % length(spinner))]
 
 function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = false,
-                        valuecolor = :blue, desc = p.desc, ignore_predictor = false,
+                        valuecolor = :blue, desc = p.desc,
+                        ignore_predictor = false, force::Bool = false,
                         spinner::Union{AbstractChar,AbstractString,AbstractVector{<:AbstractChar}} = spinner_chars,
                         offset::Integer = p.offset, keep = (offset == 0),
                         color = p.color)
@@ -404,12 +407,12 @@ function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = f
         end
         return
     end
-    if ignore_predictor || predicted_updates_per_dt_have_passed(p)
+    if force || ignore_predictor || predicted_updates_per_dt_have_passed(p)
         t = time()
         if p.counter > 2
             p.check_iterations = calc_check_iterations(p, t)
         end
-        if t > p.tlast+p.dt
+        if force || (t > p.tlast+p.dt)
             dur = durationstring(t-p.tinit)
             if p.spinner
                 msg = @sprintf "%c %s    Time: %s" spinner_char(p, spinner) p.desc dur
