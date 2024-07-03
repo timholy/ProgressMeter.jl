@@ -441,25 +441,6 @@ end
 
 predicted_updates_per_dt_have_passed(p::AbstractProgress) = p.counter - p.prev_update_count >= p.check_iterations
 
-function is_threading(p::AbstractProgress)
-    Threads.nthreads() == 1 && return false
-    length(p.threads_used) > 1 && return true
-    if !in(Threads.threadid(), p.threads_used)
-        push!(p.threads_used, Threads.threadid())
-    end
-    return length(p.threads_used) > 1
-end
-
-function lock_if_threading(f::Function, p::AbstractProgress)
-    if is_threading(p)
-        lock(p.lock) do
-            f()
-        end
-    else
-        f()
-    end
-end
-
 # update progress display
 """
     next!(p::Union{Progress, ProgressUnknown}; step::Int = 1, options...)
@@ -470,7 +451,7 @@ the last update, this may or may not result in a change to the display.
 You may optionally change the `color` of the display. See also `update!`.
 """
 function next!(p::Union{Progress, ProgressUnknown}; step::Int = 1, options...)
-    lock_if_threading(p) do
+    lock(p.lock) do
         p.counter += step
         updateProgress!(p; ignore_predictor = step == 0, options...)
     end
