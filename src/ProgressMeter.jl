@@ -77,11 +77,10 @@ Base.@kwdef mutable struct ProgressCore
     # internals
     check_iterations::Int       = 1             # number of iterations to check time for
     counter::Int                = 0             # current iteration
-    lock::Threads.ReentrantLock = Threads.ReentrantLock()   # lock used when threading detected
+    lock::Threads.ReentrantLock = Threads.ReentrantLock()   # lock necessary when threading 
     numprintedvalues::Int       = 0             # num values printed below progress in last iteration
     prev_update_count::Int      = 1             # counter at last update
     printed::Bool               = false         # true if we have issued at least one status update
-    threads_used::Vector{Int}   = Int[]         # threads that have used this progress meter
     tinit::Float64              = time()        # time meter was initialized
     tlast::Float64              = time()        # time of last update
     tsecond::Float64            = time()        # ignore the first loop given usually uncharacteristically slow
