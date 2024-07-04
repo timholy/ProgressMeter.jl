@@ -81,7 +81,7 @@ Base.@kwdef mutable struct ProgressCore
     numprintedvalues::Int       = 0             # num values printed below progress in last iteration
     prev_update_count::Int      = 1             # counter at last update
     printed::Bool               = false         # true if we have issued at least one status update
-    disable_lock::Bool          = false         # set to false for non-threaded tight loops
+    safe_lock::Bool             = true          # set to false for non-threaded tight loops
     tinit::Float64              = time()        # time meter was initialized
     tlast::Float64              = time()        # time of last update
     tsecond::Float64            = time()        # ignore the first loop given usually uncharacteristically slow
@@ -442,12 +442,12 @@ end
 predicted_updates_per_dt_have_passed(p::AbstractProgress) = p.counter - p.prev_update_count >= p.check_iterations
 
 function lock_if_threading(f::Function, p::AbstractProgress)
-    if p.disable_lock
-        f()
-    else
+    if p.safe_lock
         lock(p.lock) do
             f()
         end
+    else
+        f()
     end
 end
 

@@ -81,22 +81,21 @@ prog.n = UInt128(20) # in Progress
 prog.offset = Int8(5) # in ProgressCore
 @test prog.offset == 5
 
-# Test disable_lock option, initialization and
-# execution. 
-function simple_sum(n; disable_lock = false)
-    p = Progress(n; disable_lock)
+# Test safe_lock option, initialization and execution. 
+function simple_sum(n; safe_lock = true)
+    p = Progress(n; safe_lock)
     s = 0.0
     for i in 1:n
-        s += sin(i)
+        s += sin(i)^2
         next!(p)
     end
     return s
 end
 p = Progress(10)
-@test p.disable_lock == false
-p = Progress(10; disable_lock = true)
-@test p.disable_lock == true
-@test simple_sum(10) ≈ simple_sum(10; disable_lock = true)
+@test p.safe_lock == true
+p = Progress(10; safe_lock = false)
+@test p.safe_lock == false
+@test simple_sum(10) ≈ simple_sum(10; safe_lock = false)
 
 
 
