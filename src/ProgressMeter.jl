@@ -445,8 +445,8 @@ predicted_updates_per_dt_have_passed(p::AbstractProgress) = p.counter - p.prev_u
 function is_threading(p::AbstractProgress)
     Threads.nthreads() == 1 && return false
     length(p.threads_used) > 1 && return true
-    lock(p.threads_used_lock) do
-        if !in(Threads.threadid(), p.threads_used)
+    if !(Threads.threadid() in p.threads_used)
+        lock(p.threads_used_lock) do
             push!(p.threads_used, Threads.threadid())
         end
     end
