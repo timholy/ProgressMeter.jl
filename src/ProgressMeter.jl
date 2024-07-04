@@ -822,7 +822,7 @@ function showprogressthreads(args...)
             length($(esc(iters)));
             $(showprogress_process_args(progressargs)...),
         )
-        $(esc(p)).threads_used .= true
+        $(esc(p)).threading.detected = true
         $(esc(expr))
         finish!($(esc(p)))
     end
