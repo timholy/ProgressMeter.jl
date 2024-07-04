@@ -80,3 +80,23 @@ prog.n = UInt128(20) # in Progress
 @test prog.n == 20
 prog.offset = Int8(5) # in ProgressCore
 @test prog.offset == 5
+
+# Test disable_lock option, initialization and
+# execution. 
+function simple_sum(n; disable_lock = false)
+    p = Progress(n; disable_lock)
+    s = 0.0
+    for i in 1:n
+        s += sin(i)
+        next!(p)
+    end
+    return s
+end
+p = Progress(10)
+@test p.disable_lock == false
+p = Progress(10; disable_lock = true)
+@test p.disable_lock == true
+@test simple_sum(10) ≈ simple_sum(10; disable_lock = true)
+
+
+
