@@ -68,7 +68,8 @@ const defaultglyphs = BarGlyphs('|','█', Sys.iswindows() ? '█' : ['▏','▎
 # Internal struct for holding threading information
 Base.@kwdef mutable struct ThreadingInfo
     detected::Bool = false
-    threads_used::Vector{Bool} = fill(false, Threads.nthreads())
+    counter_lock::ReentrantLock = ReentrantLock()
+    threads_detected::Vector{Int} = Int[]
 end
 
 # Internal struct for holding common properties and internals for progress meters
@@ -450,8 +451,12 @@ predicted_updates_per_dt_have_passed(p::AbstractProgress) = p.counter - p.prev_u
 function is_threading(p::AbstractProgress)
     Threads.nthreads() == 1 && return false
     p.threading.detected && return true
-    p.threading.threads_used[Threads.threadid()] = true
-    p.threading.detected = count(p.threading.threads_used) > 1
+    lock(p.threading.counter_lock) do
+        if !in(Threads.threadid(), p.threading.threads_detected)
+            push!(p.threading.threads_detected,Threads.threadid())
+        end
+    end
+    p.threading.detected = length(p.threading.threads_detected) > 1
     return p.threading.detected
 end
 
