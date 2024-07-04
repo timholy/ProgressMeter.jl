@@ -66,7 +66,7 @@ end
 const defaultglyphs = BarGlyphs('|','█', Sys.iswindows() ? '█' : ['▏','▎','▍','▌','▋','▊','▉'],' ','|',)
 
 # Internal struct for holding threading information
-Base.@kwdef struct ThreadingInfo
+Base.@kwdef mutable struct ThreadingInfo
     detected::Bool = false
     threads_used::Vector{Bool} = fill(false, Threads.nthreads())
 end
