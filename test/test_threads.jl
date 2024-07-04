@@ -7,7 +7,6 @@
     threadsUsed = fill(false, threads)
     vals = ones(n*threads)
     p = Progress(n*threads)
-    p.threads_used = 1:threads # short-circuit the function `is_threading` because it is racy (#232)
     Threads.@threads for i = 1:(n*threads)
         threadsUsed[Threads.threadid()] = true
         vals[i] = 0
@@ -21,7 +20,6 @@
     println("Testing ProgressUnknown() with Threads.@threads across $threads threads")
     trigger = 100.0
     prog = ProgressUnknown(desc="Attempts at exceeding trigger:")
-    prog.threads_used = 1:threads
     vals = Float64[]
     threadsUsed = fill(false, threads)
     lk = ReentrantLock()
@@ -48,7 +46,6 @@
     println("Testing ProgressThresh() with Threads.@threads across $threads threads")
     thresh = 1.0
     prog = ProgressThresh(thresh; desc="Minimizing:")
-    prog.threads_used = 1:threads
     vals = fill(300.0, 1)
     threadsUsed = fill(false, threads)
     Threads.@threads for _ in 1:100000
@@ -76,7 +73,6 @@
         # threadsUsed = fill(false, threads)
         vals = ones(n*threads)
         p = Progress(n*threads)
-        p.threads_used = 1:threads
 
         for t in 1:threads
             tasks[t] = Threads.@spawn for i in 1:n
