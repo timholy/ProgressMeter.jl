@@ -20,7 +20,6 @@
     println("Testing ProgressUnknown() with Threads.@threads across $threads threads")
     trigger = 100.0
     prog = ProgressUnknown(desc="Attempts at exceeding trigger:")
-    prog.threads_used .= true
     vals = Float64[]
     threadsUsed = fill(false, threads)
     lk = ReentrantLock()
@@ -47,7 +46,6 @@
     println("Testing ProgressThresh() with Threads.@threads across $threads threads")
     thresh = 1.0
     prog = ProgressThresh(thresh; desc="Minimizing:")
-    prog.threads_used .= true
     vals = fill(300.0, 1)
     threadsUsed = fill(false, threads)
     Threads.@threads for _ in 1:100000
@@ -75,7 +73,6 @@
         # threadsUsed = fill(false, threads)
         vals = ones(n*threads)
         p = Progress(n*threads)
-        p.threads_used .= true
 
         for t in 1:threads
             tasks[t] = Threads.@spawn for i in 1:n
