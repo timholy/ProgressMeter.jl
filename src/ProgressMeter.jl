@@ -65,6 +65,12 @@ function BarGlyphs(s::AbstractString)
 end
 const defaultglyphs = BarGlyphs('|','█', Sys.iswindows() ? '█' : ['▏','▎','▍','▌','▋','▊','▉'],' ','|',)
 
+# Internal struct for holding threading information
+Base.@kwdef struct ThreadingInfo
+    detected::Bool = false
+    threads_used::Vector{Bool} = fill(false, Threads.nthreads())
+end
+
 # Internal struct for holding common properties and internals for progress meters
 Base.@kwdef mutable struct ProgressCore
     color::Symbol               = :green        # color of the meter
@@ -81,7 +87,7 @@ Base.@kwdef mutable struct ProgressCore
     numprintedvalues::Int       = 0             # num values printed below progress in last iteration
     prev_update_count::Int      = 1             # counter at last update
     printed::Bool               = false         # true if we have issued at least one status update
-    threads_used::Vector{Bool}  = zeros(Bool, Threads.nthreads()) # threads that have used this progress meter
+    threading::ThreadingInfo    = ThreadingInfo() # threading information
     tinit::Float64              = time()        # time meter was initialized
     tlast::Float64              = time()        # time of last update
     tsecond::Float64            = time()        # ignore the first loop given usually uncharacteristically slow
@@ -443,11 +449,10 @@ predicted_updates_per_dt_have_passed(p::AbstractProgress) = p.counter - p.prev_u
 
 function is_threading(p::AbstractProgress)
     Threads.nthreads() == 1 && return false
-    count(p.threads_used) > 1 && return true
-    if !p.threads_used[Threads.threadid()]
-        p.threads_used[Threads.threadid()] = true
-    end
-    return count(p.threads_used) > 1
+    p.threading.detected && return true
+    p.threading.threads_used[Threads.threadid()] = true
+    p.threading.detected = count(p.threading.threads_used) > 1
+    return p.threading.detected
 end
 
 function lock_if_threading(f::Function, p::AbstractProgress)
