@@ -386,6 +386,7 @@ finish!(prog)
 
 println("Testing fractional bars")
 for front in (['▏','▎','▍','▌','▋','▊', '▉'], ['▁' ,'▂' ,'▃' ,'▄' ,'▅' ,'▆', '▇'], ['░', '▒', '▓',])
+    local p
     p = Progress(100, dt=0.01, barglyphs=BarGlyphs('|','█',front,' ','|'), barlen=10)
     for i in 1:100
         next!(p)
