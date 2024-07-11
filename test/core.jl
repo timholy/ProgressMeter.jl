@@ -92,10 +92,7 @@ function simple_sum(n; safe_lock = true)
     return s
 end
 p = Progress(10)
-@test p.safe_lock == true
+@test p.safe_lock == Threads.nthreads() > 1
 p = Progress(10; safe_lock = false)
 @test p.safe_lock == false
-@test simple_sum(10) ≈ simple_sum(10; safe_lock = false)
-
-
-
+@test simple_sum(10; safe_lock = false) ≈ simple_sum(10; safe_lock = false)
