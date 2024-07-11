@@ -80,3 +80,19 @@ prog.n = UInt128(20) # in Progress
 @test prog.n == 20
 prog.offset = Int8(5) # in ProgressCore
 @test prog.offset == 5
+
+# Test safe_lock option, initialization and execution. 
+function simple_sum(n; safe_lock = true)
+    p = Progress(n; safe_lock)
+    s = 0.0
+    for i in 1:n
+        s += sin(i)^2
+        next!(p)
+    end
+    return s
+end
+p = Progress(10)
+@test p.safe_lock == (Threads.nthreads() > 1)
+p = Progress(10; safe_lock = false)
+@test p.safe_lock == false
+@test simple_sum(10; safe_lock = true) ≈ simple_sum(10; safe_lock = false)

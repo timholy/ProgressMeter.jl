@@ -81,7 +81,7 @@ Base.@kwdef mutable struct ProgressCore
     numprintedvalues::Int       = 0             # num values printed below progress in last iteration
     prev_update_count::Int      = 1             # counter at last update
     printed::Bool               = false         # true if we have issued at least one status update
-    threads_used::Vector{Int}   = Int[]         # threads that have used this progress meter
+    safe_lock::Bool             = Threads.nthreads() > 1 # set to false for non-threaded tight loops
     tinit::Float64              = time()        # time meter was initialized
     tlast::Float64              = time()        # time of last update
     tsecond::Float64            = time()        # ignore the first loop given usually uncharacteristically slow
@@ -441,17 +441,8 @@ end
 
 predicted_updates_per_dt_have_passed(p::AbstractProgress) = p.counter - p.prev_update_count >= p.check_iterations
 
-function is_threading(p::AbstractProgress)
-    Threads.nthreads() == 1 && return false
-    length(p.threads_used) > 1 && return true
-    if !in(Threads.threadid(), p.threads_used)
-        push!(p.threads_used, Threads.threadid())
-    end
-    return length(p.threads_used) > 1
-end
-
 function lock_if_threading(f::Function, p::AbstractProgress)
-    if is_threading(p)
+    if p.safe_lock
         lock(p.lock) do
             f()
         end
@@ -817,7 +808,6 @@ function showprogressthreads(args...)
             length($(esc(iters)));
             $(showprogress_process_args(progressargs)...),
         )
-        append!($(esc(p)).threads_used, 1:Threads.nthreads())
         $(esc(expr))
         finish!($(esc(p)))
     end
