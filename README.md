@@ -108,6 +108,13 @@ Threads.@threads for i in 1:10
 end
 finish!(p)
 ```
+and the `@showprogress` macro also works
+```julia
+using ProgressMeter
+@showprogress Threads.@threads for i in 1:10
+    sleep(2*rand())
+end
+```
 
 ```julia
 using ProgressMeter
@@ -229,7 +236,7 @@ while true
     next!(prog)
     rand(1:2*10^8) == 1 && break
 end
-ProgressMeter.finish!(prog)
+finish!(prog)
 ```
 
 By default, `finish!` changes the spinner to a `✓`, but you can
@@ -463,12 +470,12 @@ end
 It possible to disable the progress meter when the use is optional.
 
 ```julia
-x,n = 1,10
+x, n = 1, 10
 p = Progress(n; enabled = false)
 for iter in 1:10
     x *= 2
     sleep(0.5)
-    ProgressMeter.next!(p)
+    next!(p)
 end
 ```
 
@@ -478,7 +485,25 @@ In cases where the output is text output such as CI or in an HPC scheduler, the 
 ```julia
 is_logging(io) = isa(io, Base.TTY) == false || (get(ENV, "CI", nothing) == "true")
 p = Progress(n; output = stderr, enabled = !is_logging(stderr))
-````
+```
+
+### Adding support for more map-like functions
+
+To add support for other functions, `ProgressMeter.ncalls` must be defined,
+where `ncalls_map`, `ncalls_broadcast`, `ncalls_broadcast!` or `ncalls_reduce` can help
+
+For example, with `tmap` from [`ThreadTools.jl`](https://github.com/baggepinnen/ThreadTools.jl):
+
+```julia
+using ThreadTools, ProgressMeter
+
+ProgressMeter.ncalls(::typeof(tmap), ::Function, args...) = ProgressMeter.ncalls_map(args...)
+ProgressMeter.ncalls(::typeof(tmap), ::Function, ::Int, args...) = ProgressMeter.ncalls_map(args...)
+
+@showprogress tmap(abs2, 1:10^5)
+@showprogress tmap(abs2, 4, 1:10^5)
+```
+
 
 ## Development/debugging tips
 

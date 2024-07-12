@@ -22,6 +22,24 @@ ProgressMeter
 
 abstract type AbstractProgress end
 
+# forward common core properties to main types
+function Base.setproperty!(p::T, name::Symbol, value) where T<:AbstractProgress
+    if hasfield(T, name)
+        ty = fieldtype(T, name)
+        value = value isa ty ? value : convert(ty, value)
+        setfield!(p, name, value)
+    else
+        setproperty!(p.core, name, value)
+    end
+end
+function Base.getproperty(p::T, name::Symbol) where T<:AbstractProgress
+    if hasfield(T, name)
+        getfield(p, name)
+    else
+        getproperty(p.core, name)
+    end
+end
+
 """
 Holds the five characters that will be used to generate the progress bar.
 """
@@ -47,6 +65,29 @@ function BarGlyphs(s::AbstractString)
     end
     return BarGlyphs(glyphs...)
 end
+const defaultglyphs = BarGlyphs('|','█', Sys.iswindows() ? '█' : ['▏','▎','▍','▌','▋','▊','▉'],' ','|',)
+
+# Internal struct for holding common properties and internals for progress meters
+Base.@kwdef mutable struct ProgressCore
+    color::Symbol               = :green        # color of the meter
+    desc::String                = "Progress: "  # prefix to the percentage, e.g.  "Computing..."
+    dt::Real                    = Float64(0.1)  # minimum time between updates
+    enabled::Bool               = true          # is the output enabled
+    offset::Int                 = 0             # position offset of progress bar (default is 0)
+    output::IO                  = stderr        # output stream into which the progress is written
+    showspeed::Bool             = false         # should the output include average time per iteration
+    # internals
+    check_iterations::Int       = 1             # number of iterations to check time for
+    counter::Int                = 0             # current iteration
+    lock::Threads.ReentrantLock = Threads.ReentrantLock()   # lock used when threading detected
+    numprintedvalues::Int       = 0             # num values printed below progress in last iteration
+    prev_update_count::Int      = 1             # counter at last update
+    printed::Bool               = false         # true if we have issued at least one status update
+    safe_lock::Bool             = Threads.nthreads() > 1 # set to false for non-threaded tight loops
+    tinit::Float64              = time()        # time meter was initialized
+    tlast::Float64              = time()        # time of last update
+    tsecond::Float64            = time()        # ignore the first loop given usually uncharacteristically slow
+end
 
 """
 `prog = Progress(n; dt=0.1, desc="Progress: ", color=:green,
@@ -59,46 +100,22 @@ the current task. Optionally you can disable the progress bar by setting
 "(12.34 ms/it)" to the description by setting `showspeed=true`.
 """
 mutable struct Progress <: AbstractProgress
-    n::Int
-    reentrantlocker::Threads.ReentrantLock
-    dt::Float64
-    counter::Int
-    tinit::Float64
-    tsecond::Float64           # ignore the first loop given usually uncharacteristically slow
-    tlast::Float64
-    printed::Bool              # true if we have issued at least one status update
-    desc::String               # prefix to the percentage, e.g.  "Computing..."
+    n::Int                  # total number of iterations
+    start::Int              # which iteration number to start from
     barlen::Union{Int,Nothing} # progress bar size (default is available terminal width)
-    barglyphs::BarGlyphs       # the characters to be used in the bar
-    color::Symbol              # default to green
-    output::IO                 # output stream into which the progress is written
-    offset::Int                # position offset of progress bar (default is 0)
-    numprintedvalues::Int      # num values printed below progress in last iteration
-    start::Int                 # which iteration number to start from
-    enabled::Bool              # is the output enabled
-    showspeed::Bool            # should the output include average time per iteration
-    check_iterations::Int
-    prev_update_count::Int
-    threads_used::Vector{Int}
+    barglyphs::BarGlyphs    # the characters to be used in the bar
+    # internals
+    core::ProgressCore
 
-    function Progress(n::Integer;
-                      dt::Real=0.1,
-                      desc::AbstractString="Progress: ",
-                      color::Symbol=:green,
-                      output::IO=stderr,
-                      barlen=nothing,
-                      barglyphs::BarGlyphs=BarGlyphs('|','█', Sys.iswindows() ? '█' : ['▏','▎','▍','▌','▋','▊','▉'],' ','|',),
-                      offset::Integer=0,
-                      start::Integer=0,
-                      enabled::Bool = true,
-                      showspeed::Bool = false,
-                     )
+    function Progress(
+            n::Integer;
+            start::Integer=0,
+            barlen::Union{Int,Nothing}=nothing,
+            barglyphs::BarGlyphs=defaultglyphs,
+            kwargs...)
         CLEAR_IJULIA[] = clear_ijulia()
-        reentrantlocker = Threads.ReentrantLock()
-        counter = start
-        tinit = tsecond = tlast = time()
-        printed = false
-        new(n, reentrantlocker, dt, counter, tinit, tsecond, tlast, printed, desc, barlen, barglyphs, color, output, offset, 0, start, enabled, showspeed, 1, 1, Int[])
+        core = ProgressCore(;kwargs...)
+        new(n, start, barlen, barglyphs, core)
     end
 end
 
@@ -114,43 +131,19 @@ per-iteration average duration like "(12.34 ms/it)" to the description by
 setting `showspeed=true`.
 """
 mutable struct ProgressThresh{T<:Real} <: AbstractProgress
-    thresh::T
-    reentrantlocker::Threads.ReentrantLock
-    dt::Float64
-    val::T
-    counter::Int
-    triggered::Bool
-    tinit::Float64
-    tlast::Float64
-    printed::Bool           # true if we have issued at least one status update
-    desc::String            # prefix to the percentage, e.g.  "Computing..."
-    color::Symbol           # default to green
-    output::IO              # output stream into which the progress is written
-    numprintedvalues::Int   # num values printed below progress in last iteration
-    offset::Int             # position offset of progress bar (default is 0)
-    enabled::Bool           # is the output enabled
-    showspeed::Bool         # should the output include average time per iteration
-    check_iterations::Int
-    prev_update_count::Int
-    threads_used::Vector{Int}
+    thresh::T           # termination threshold
+    val::T              # current value
+    # internals
+    triggered::Bool     # has the threshold been reached?
+    core::ProgressCore  # common properties and internals
 
-    function ProgressThresh{T}(thresh;
-                               dt::Real=0.1,
-                               desc::AbstractString="Progress: ",
-                               color::Symbol=:green,
-                               output::IO=stderr,
-                               offset::Integer=0,
-                               enabled = true,
-                               showspeed::Bool = false) where T
+    function ProgressThresh{T}(thresh; val::T=typemax(T), triggered::Bool=false, kwargs...) where T
         CLEAR_IJULIA[] = clear_ijulia()
-        reentrantlocker = Threads.ReentrantLock()
-        tinit = tlast = time()
-        printed = false
-        new{T}(thresh, reentrantlocker, dt, typemax(T), 0, false, tinit, tlast, printed, desc, color, output, 0, offset, enabled, showspeed, 1, 1, Int[])
+        core = ProgressCore(;kwargs...)
+        new{T}(thresh, val, triggered, core)
     end
 end
 ProgressThresh(thresh::Real; kwargs...) = ProgressThresh{typeof(thresh)}(thresh; kwargs...)
-
 
 """
 `prog = ProgressUnknown(; dt=0.1, desc="Progress: ",
@@ -165,42 +158,17 @@ setting `showspeed=true`.  Instead of displaying a counter, it
 can optionally display a spinning ball by passing `spinner=true`.
 """
 mutable struct ProgressUnknown <: AbstractProgress
-    done::Bool
-    reentrantlocker::Threads.ReentrantLock
-    dt::Float64
-    counter::Int
-    spincounter::Int
-    triggered::Bool
-    tinit::Float64
-    tlast::Float64
-    printed::Bool           # true if we have issued at least one status update
-    desc::String            # prefix to the percentage, e.g.  "Computing..."
-    color::Symbol           # default to green
+    # internals
+    done::Bool              # is the task done?
     spinner::Bool           # show a spinner
-    output::IO              # output stream into which the progress is written
-    numprintedvalues::Int   # num values printed below progress in last iteration
-    offset::Int             # position offset of progress bar (default is 0)
-    enabled::Bool           # is the output enabled
-    showspeed::Bool         # should the output include average time per iteration
-    check_iterations::Int
-    prev_update_count::Int
-    threads_used::Vector{Int}
-end
+    spincounter::Int        # counter for spinner
+    core::ProgressCore      # common properties and internals
 
-function ProgressUnknown(;
-                         dt::Real=0.1,
-                         desc::AbstractString="Progress: ",
-                         color::Symbol=:green,
-                         spinner::Bool=false,
-                         output::IO=stderr,
-                         offset::Integer=0,
-                         enabled::Bool = true,
-                         showspeed::Bool = false)
-    CLEAR_IJULIA[] = clear_ijulia()
-    reentrantlocker = Threads.ReentrantLock()
-    tinit = tlast = time()
-    printed = false
-    ProgressUnknown(false, reentrantlocker, dt, 0, 0, false, tinit, tlast, printed, desc, color, spinner, output, 0, offset, enabled, showspeed, 1, 1, Int[])
+    function ProgressUnknown(; spinner::Bool=false, kwargs...)
+        CLEAR_IJULIA[] = clear_ijulia()
+        core = ProgressCore(;kwargs...)
+        new(false, spinner, 0, core)
+    end
 end
 
 #...length of percentage and ETA string with days is 29 characters, speed string is always 14 extra characters
@@ -241,9 +209,9 @@ function calc_check_iterations(p, t)
 end
 
 # update progress display
-function updateProgress!(p::Progress; showvalues = (), 
+function updateProgress!(p::Progress; showvalues = (),
                          truncate_lines = false, valuecolor = :blue,
-                         offset::Integer = p.offset, keep = (offset == 0), 
+                         offset::Integer = p.offset, keep = (offset == 0),
                          desc::Union{Nothing,AbstractString} = nothing,
                          ignore_predictor = false, color = p.color, max_steps = p.n)
     !p.enabled && return
@@ -264,11 +232,12 @@ function updateProgress!(p::Progress; showvalues = (),
             t = time()
             barlen = p.barlen isa Nothing ? tty_width(p.desc, p.output, p.showspeed) : p.barlen
             percentage_complete = 100.0 * p.counter / p.n
+            percentage_rounded = 100
             bar = barstring(barlen, percentage_complete, barglyphs=p.barglyphs)
             elapsed_time = t - p.tinit
             dur = durationstring(elapsed_time)
             spacer = endswith(p.desc, " ") ? "" : " "
-            msg = @sprintf "%s%s%3u%%%s Time: %s" p.desc spacer round(Int, percentage_complete) bar dur
+            msg = @sprintf "%s%s%3u%%%s Time: %s" p.desc spacer percentage_rounded bar dur
             if p.showspeed
                 sec_per_iter = elapsed_time / (p.counter - p.start)
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
@@ -294,6 +263,7 @@ function updateProgress!(p::Progress; showvalues = (),
         if t > p.tlast+p.dt
             barlen = p.barlen isa Nothing ? tty_width(p.desc, p.output, p.showspeed) : p.barlen
             percentage_complete = 100.0 * p.counter / p.n
+            percentage_rounded = min(99, round(Int, percentage_complete)) # don't round up to 100% if not finished (#300)
             bar = barstring(barlen, percentage_complete, barglyphs=p.barglyphs)
             elapsed_time = t - p.tinit
             est_total_time = elapsed_time * (p.n - p.start) / (p.counter - p.start)
@@ -304,7 +274,7 @@ function updateProgress!(p::Progress; showvalues = (),
                 eta = "N/A"
             end
             spacer = endswith(p.desc, " ") ? "" : " "
-            msg = @sprintf "%s%s%3u%%%s  ETA: %s" p.desc spacer round(Int, percentage_complete) bar eta
+            msg = @sprintf "%s%s%3u%%%s  ETA: %s" p.desc spacer percentage_rounded bar eta
             if p.showspeed
                 sec_per_iter = elapsed_time / (p.counter - p.start)
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
@@ -326,9 +296,9 @@ function updateProgress!(p::Progress; showvalues = (),
     return nothing
 end
 
-function updateProgress!(p::ProgressThresh; showvalues = (), 
+function updateProgress!(p::ProgressThresh; showvalues = (),
                          truncate_lines = false, valuecolor = :blue,
-                         offset::Integer = p.offset, keep = (offset == 0), 
+                         offset::Integer = p.offset, keep = (offset == 0),
                          desc = p.desc, ignore_predictor = false,
                          color = p.color, thresh = p.thresh)
     !p.enabled && return
@@ -473,18 +443,9 @@ end
 
 predicted_updates_per_dt_have_passed(p::AbstractProgress) = p.counter - p.prev_update_count >= p.check_iterations
 
-function is_threading(p::AbstractProgress)
-    Threads.nthreads() == 1 && return false
-    length(p.threads_used) > 1 && return true
-    if !in(Threads.threadid(), p.threads_used)
-        push!(p.threads_used, Threads.threadid())
-    end
-    return length(p.threads_used) > 1
-end
-
 function lock_if_threading(f::Function, p::AbstractProgress)
-    if is_threading(p)
-        lock(p.reentrantlocker) do
+    if p.safe_lock
+        lock(p.lock) do
             f()
         end
     else
@@ -549,8 +510,8 @@ the message printed and its color.
 
 See also `finish!`.
 """
-function cancel(p::AbstractProgress, msg::AbstractString = "Aborted before all tasks were completed"; 
-                color = :red, showvalues = (), truncate_lines = false, 
+function cancel(p::AbstractProgress, msg::AbstractString = "Aborted before all tasks were completed";
+                color = :red, showvalues = (), truncate_lines = false,
                 valuecolor = :blue, offset = p.offset, keep = (offset == 0))
     lock_if_threading(p) do
         p.offset = offset
@@ -746,7 +707,13 @@ struct ProgressWrapper{T}
     meter::Progress
 end
 
+Base.IteratorSize(wrap::ProgressWrapper) = Base.IteratorSize(wrap.obj)
+Base.axes(wrap::ProgressWrapper, dim...) = Base.axes(wrap.obj, dim...)
+Base.size(wrap::ProgressWrapper, dim...) = Base.size(wrap.obj, dim...)
 Base.length(wrap::ProgressWrapper) = Base.length(wrap.obj)
+
+Base.IteratorEltype(wrap::ProgressWrapper) = Base.IteratorEltype(wrap.obj)
+Base.eltype(wrap::ProgressWrapper) = Base.eltype(wrap.obj)
 
 function Base.iterate(wrap::ProgressWrapper, state...)
     ir = iterate(wrap.obj, state...)
@@ -757,13 +724,13 @@ function Base.iterate(wrap::ProgressWrapper, state...)
         next!(wrap.meter)
     end
 
-    ir
+    return ir
 end
 
 """
 Equivalent of @showprogress for a distributed for loop.
 ```
-result = @showprogress dt "Computing..." @distributed (+) for i = 1:50
+result = @showprogress @distributed (+) for i = 1:50
     sleep(0.1)
     i^2
 end
@@ -775,10 +742,6 @@ function showprogressdistributed(args...)
     end
     progressargs = args[1:end-1]
     expr = Base.remove_linenums!(args[end])
-
-    if expr.head != :macrocall || expr.args[1] != Symbol("@distributed")
-        throw(ArgumentError("malformed @showprogress @distributed expression"))
-    end
 
     distargs = filter(x -> !(x isa LineNumberNode), expr.args[2:end])
     na = length(distargs)
@@ -798,47 +761,57 @@ function showprogressdistributed(args...)
     r = loop.args[1].args[2]
     body = loop.args[2]
 
-    setup = quote
-        n = length($(esc(r)))
-        p = Progress(n, $(showprogress_process_args(progressargs)...))
-        ch = RemoteChannel(() -> Channel{Bool}(n))
-    end
-
     if na == 1
         # would be nice to do this with @sync @distributed but @sync is broken
         # https://github.com/JuliaLang/julia/issues/28979
         compute = quote
-            display = @async let i = 0
-                while i < n
-                    take!(ch)
-                    next!(p)
-                    i += 1
-                end
-            end
-            @distributed for $(esc(var)) = $(esc(r))
+            waiting = @distributed for $(esc(var)) = $(esc(r))
                 $(esc(body))
                 put!(ch, true)
             end
+            wait(waiting)
             nothing
         end
     else
         compute = quote
-            display = @async while take!(ch) next!(p) end
-            results = @distributed $(esc(reducer)) for $(esc(var)) = $(esc(r))
+            @distributed $(esc(reducer)) for $(esc(var)) = $(esc(r))
                 x = $(esc(body))
                 put!(ch, true)
                 x
             end
-            put!(ch, false)
-            results
         end
     end
 
     quote
-        $setup
-        results = $compute
-        wait(display)
-        results
+        let n = length($(esc(r)))
+            p = Progress(n, $(showprogress_process_args(progressargs)...))
+            ch = RemoteChannel(() -> Channel{Bool}(n))
+
+            @async while take!(ch) next!(p) end
+            results = $compute
+            put!(ch, false)
+            finish!(p)
+            results
+        end
+    end
+end
+
+function showprogressthreads(args...)
+    progressargs = args[1:end-1]
+    expr = args[end]
+    loop = expr.args[end]
+    iters = loop.args[1].args[end]
+
+    p = gensym()
+    push!(loop.args[end].args, :(next!($p)))
+
+    quote
+        $(esc(p)) = Progress(
+            length($(esc(iters)));
+            $(showprogress_process_args(progressargs)...),
+        )
+        $(esc(expr))
+        finish!($(esc(p)))
     end
 end
 
@@ -850,13 +823,18 @@ end
 
 @showprogress [desc="Computing..."] pmap(x->x^2, 1:50)
 ```
-displays progress in performing a computation.  You may optionally 
-supply a custom message to be printed that specifies the computation 
+displays progress in performing a computation.  You may optionally
+supply a custom message to be printed that specifies the computation
 being performed or other options.
 
-`@showprogress` works for loops, comprehensions, `asyncmap`, 
-`broadcast`, `broadcast!`, `foreach`, `map`, `mapfoldl`, 
-`mapfoldr`, `mapreduce`, `pmap` and `reduce`.
+`@showprogress` works for loops, comprehensions, and `map`-like
+functions. These `map`-like functions rely on `ncalls` being defined
+and can be checked with `methods(ProgressMeter.ncalls)`. New ones can
+be added by defining `ProgressMeter.ncalls(::typeof(mapfun), args...) = ...`.
+
+`@showprogress` is thread-safe and will work with `@distributed` loops
+as well as threaded or distributed functions like `pmap` and `asyncmap`.
+
 """
 macro showprogress(args...)
     showprogress(args...)
@@ -868,145 +846,172 @@ function showprogress(args...)
     end
     progressargs = args[1:end-1]
     expr = args[end]
-    if expr.head == :macrocall && expr.args[1] == Symbol("@distributed")
-        return showprogressdistributed(args...)
+
+    if !isa(expr, Expr)
+        throw(ArgumentError("Final argument to @showprogress must be a for loop, comprehension, or a map-like function; got $expr"))
     end
-    orig = expr = copy(expr)
-    if expr.args[1] == :|> # e.g. map(x->x^2) |> sum
+
+    if expr.head == :call && expr.args[1] == :|>
+        # e.g. map(x->x^2) |> sum
         expr.args[2] = showprogress(progressargs..., expr.args[2])
         return expr
+
+    elseif expr.head in (:for, :comprehension, :typed_comprehension)
+        return showprogress_loop(expr, progressargs)
+
+    elseif expr.head == :call
+        return showprogress_map(expr, progressargs)
+
+    elseif expr.head == :do && expr.args[1].head == :call
+        return showprogress_map(expr, progressargs)
+
+    elseif expr.head == :macrocall
+        macroname = expr.args[1]
+
+        if macroname in (Symbol("@distributed"), :(Distributed.var"@distributed"))
+            return showprogressdistributed(args...)
+
+        elseif macroname in (Symbol("@threads"), :(Threads.var"@threads"))
+            return showprogressthreads(args...)
+        end
     end
+
+    throw(ArgumentError("Final argument to @showprogress must be a for loop, comprehension, or a map-like function; got $expr"))
+end
+
+function showprogress_map(expr, progressargs)
     metersym = gensym("meter")
-    mapfuns = (:asyncmap, :broadcast, :broadcast!, :foreach, :map, 
-               :mapfoldl, :mapfoldr, :mapreduce, :pmap, :reduce)
-    kind = :invalid # :invalid, :loop, or :map
 
-    if isa(expr, Expr)
-        if expr.head == :for
-            outerassignidx = 1
-            loopbodyidx = lastindex(expr.args)
-            kind = :loop
-        elseif expr.head == :comprehension
-            outerassignidx = lastindex(expr.args)
-            loopbodyidx = 1
-            kind = :loop
-        elseif expr.head == :typed_comprehension
-            outerassignidx = lastindex(expr.args)
-            loopbodyidx = 2
-            kind = :loop
-        elseif expr.head == :call && expr.args[1] in mapfuns
-            kind = :map
-        elseif expr.head == :do
-            call = expr.args[1]
-            if call.head == :call && call.args[1] in mapfuns
-                kind = :map
-            end
+    # isolate call to map
+    if expr.head == :do
+        call = expr.args[1]
+    else
+        call = expr
+    end
+
+    # get args to map to determine progress length
+    mapargs = collect(Any, filter(call.args[2:end]) do a
+        return isa(a, Symbol) || isa(a, Number) || !(a.head in (:kw, :parameters))
+    end)
+    if expr.head == :do
+        insert!(mapargs, 1, identity) # to make args for ncalls line up
+    end
+
+    # change call to progress_map
+    mapfun = call.args[1]
+    call.args[1] = :progress_map
+
+    # escape args as appropriate
+    for i in 2:length(call.args)
+        call.args[i] = esc(call.args[i])
+    end
+    if expr.head == :do
+        expr.args[2] = esc(expr.args[2])
+    end
+
+    # create appropriate Progress expression
+    lenex = :(ncalls($(esc(mapfun)), $(esc.(mapargs)...)))
+    progex = :(Progress($lenex, $(showprogress_process_args(progressargs)...)))
+
+    # insert progress and mapfun kwargs
+    push!(call.args, Expr(:kw, :progress, progex))
+    push!(call.args, Expr(:kw, :mapfun, esc(mapfun)))
+
+    return expr
+end
+
+function showprogress_loop(expr, progressargs)
+    metersym = gensym("meter")
+    orig = expr = copy(expr)
+
+    if expr.head == :for
+        outerassignidx = 1
+        loopbodyidx = lastindex(expr.args)
+    elseif expr.head == :comprehension
+        outerassignidx = lastindex(expr.args)
+        loopbodyidx = 1
+    elseif expr.head == :typed_comprehension
+        outerassignidx = lastindex(expr.args)
+        loopbodyidx = 2
+    end
+    # As of julia 0.5, a comprehension's "loop" is actually one level deeper in the syntax tree.
+    if expr.head !== :for
+        @assert length(expr.args) == loopbodyidx
+        expr = expr.args[outerassignidx] = copy(expr.args[outerassignidx])
+        if expr.head == :flatten
+            # e.g. [x for x in 1:10 for y in 1:x]
+            expr = expr.args[1] = copy(expr.args[1])
+        end
+        @assert expr.head === :generator
+        outerassignidx = lastindex(expr.args)
+        loopbodyidx = 1
+    end
+
+    # Transform the first loop assignment
+    loopassign = expr.args[outerassignidx] = copy(expr.args[outerassignidx])
+
+    if loopassign.head === :filter
+        # e.g. [x for x=1:10, y=1:10 if x>y]
+        # y will be wrapped in ProgressWrapper
+        for i in 1:length(loopassign.args)-1
+            loopassign.args[i] = esc(loopassign.args[i])
+        end
+        loopassign = loopassign.args[end] = copy(loopassign.args[end])
+    end
+
+    if loopassign.head === :block
+        # e.g. for x=1:10, y=1:x end
+        # x will be wrapped in ProgressWrapper
+        for i in 2:length(loopassign.args)
+            loopassign.args[i] = esc(loopassign.args[i])
+        end
+        loopassign = loopassign.args[1] = copy(loopassign.args[1])
+    end
+
+    @assert loopassign.head === :(=)
+    @assert length(loopassign.args) == 2
+    obj = loopassign.args[2]
+    loopassign.args[1] = esc(loopassign.args[1])
+    loopassign.args[2] = :(ProgressWrapper(iterable, $(esc(metersym))))
+
+    # Transform the loop body break and return statements
+    if expr.head === :for
+        expr.args[loopbodyidx] = showprogress_process_expr(expr.args[loopbodyidx], metersym)
+    end
+
+    # Escape all args except the loop assignment, which was already appropriately escaped.
+    for i in 1:length(expr.args)
+        if i != outerassignidx
+            expr.args[i] = esc(expr.args[i])
+        end
+    end
+    if orig !== expr
+        # We have additional escaping to do; this will occur for comprehensions with julia 0.5 or later.
+        for i in 1:length(orig.args)-1
+            orig.args[i] = esc(orig.args[i])
         end
     end
 
-    if kind == :invalid
-        throw(ArgumentError("Final argument to @showprogress must be a for loop, comprehension, map, reduce, or pmap; got $expr"))
-    elseif kind == :loop
-        # As of julia 0.5, a comprehension's "loop" is actually one level deeper in the syntax tree.
-        if expr.head !== :for
-            @assert length(expr.args) == loopbodyidx
-            expr = expr.args[outerassignidx] = copy(expr.args[outerassignidx])
-            @assert expr.head === :generator
-            outerassignidx = lastindex(expr.args)
-            loopbodyidx = 1
-        end
+    setup = quote
+        iterable = $(esc(obj))
+        $(esc(metersym)) = Progress(length(iterable), $(showprogress_process_args(progressargs)...))
+    end
 
-        # Transform the first loop assignment
-        loopassign = expr.args[outerassignidx] = copy(expr.args[outerassignidx])
-        if loopassign.head === :block # this will happen in a for loop with multiple iteration variables
-            for i in 2:length(loopassign.args)
-                loopassign.args[i] = esc(loopassign.args[i])
-            end
-            loopassign = loopassign.args[1] = copy(loopassign.args[1])
+    if expr.head === :for
+        return quote
+            $setup
+            $expr
         end
-        @assert loopassign.head === :(=)
-        @assert length(loopassign.args) == 2
-        obj = loopassign.args[2]
-        loopassign.args[1] = esc(loopassign.args[1])
-        loopassign.args[2] = :(ProgressWrapper(iterable, $(esc(metersym))))
-
-        # Transform the loop body break and return statements
-        if expr.head === :for
-            expr.args[loopbodyidx] = showprogress_process_expr(expr.args[loopbodyidx], metersym)
-        end
-
-        # Escape all args except the loop assignment, which was already appropriately escaped.
-        for i in 1:length(expr.args)
-            if i != outerassignidx
-                expr.args[i] = esc(expr.args[i])
-            end
-        end
-        if orig !== expr
-            # We have additional escaping to do; this will occur for comprehensions with julia 0.5 or later.
-            for i in 1:length(orig.args)-1
-                orig.args[i] = esc(orig.args[i])
-            end
-        end
-
-        setup = quote
-            iterable = $(esc(obj))
-            $(esc(metersym)) = Progress(length(iterable), $(showprogress_process_args(progressargs)...))
-        end
-
-        if expr.head === :for
-            return quote
+    else
+        # We're dealing with a comprehension
+        return quote
+            begin
                 $setup
-                $expr
-            end
-        else
-            # We're dealing with a comprehension
-            return quote
-                begin
-                    $setup
-                    rv = $orig
-                    next!($(esc(metersym)))
-                    rv
-                end
+                rv = $orig
+                finish!($(esc(metersym)))
+                rv
             end
         end
-    else # kind == :map
-
-        # isolate call to map
-        if expr.head == :do
-            call = expr.args[1]
-        else
-            call = expr
-        end
-
-        # get args to map to determine progress length
-        mapargs = collect(Any, filter(call.args[2:end]) do a
-            return isa(a, Symbol) || isa(a, Number) || !(a.head in (:kw, :parameters))
-        end)
-        if expr.head == :do
-            insert!(mapargs, 1, :nothing) # to make args for ncalls line up
-        end
-
-        # change call to progress_map
-        mapfun = call.args[1]
-        call.args[1] = :progress_map
-
-        # escape args as appropriate
-        for i in 2:length(call.args)
-            call.args[i] = esc(call.args[i])
-        end
-        if expr.head == :do
-            expr.args[2] = esc(expr.args[2])
-        end
-
-        # create appropriate Progress expression
-        lenex = :(ncalls($(esc(mapfun)), ($([esc(a) for a in mapargs]...),)))
-        progex = :(Progress($lenex, $(showprogress_process_args(progressargs)...)))
-
-        # insert progress and mapfun kwargs
-        push!(call.args, Expr(:kw, :progress, progex))
-        push!(call.args, Expr(:kw, :mapfun, esc(mapfun)))
-
-        return expr
     end
 end
 
@@ -1016,10 +1021,12 @@ end
 Run a `map`-like function while displaying progress.
 
 `mapfun` can be any function, but it is only tested with `map`, `reduce` and `pmap`.
+`ProgressMeter.ncalls(::typeof(mapfun), ::Function, args...)` must be defined to
+specify the number of calls to `f`.
 """
 function progress_map(args...; mapfun=map,
-                               progress=Progress(ncalls(mapfun, args)),
-                               channel_bufflen=min(1000, ncalls(mapfun, args)),
+                               progress=Progress(ncalls(mapfun, args...)),
+                               channel_bufflen=min(1000, ncalls(mapfun, args...)),
                                kwargs...)
     isempty(args) && return mapfun(; kwargs...)
     f = first(args)
@@ -1054,36 +1061,50 @@ Run `pmap` while displaying progress.
 progress_pmap(args...; kwargs...) = progress_map(args...; mapfun=pmap, kwargs...)
 
 """
-Infer the number of calls to the mapped function (i.e. the length of the returned array) given the input arguments to map, reduce or pmap.
+    ProgressMeter.ncalls(::typeof(mapfun), ::Function, args...)
+
+Infer the number of calls to the mapped function (often the length of the returned array)
+to define the length of the `Progress` in `@showprogress` and `progress_map`.
+Internally uses one of `ncalls_map`, `ncalls_broadcast(!)` or `ncalls_reduce` depending
+on the type of `mapfun`.
+
+Support for additional functions can be added by defining
+`ProgressMeter.ncalls(::typeof(mapfun), ::Function, args...)`.
 """
-function ncalls(::typeof(broadcast), map_args)
-    length(map_args) < 2 && return 1
-    return prod(length, Broadcast.combine_axes(map_args[2:end]...))
+ncalls(::typeof(map), ::Function, args...) = ncalls_map(args...)
+ncalls(::typeof(map!), ::Function, args...) = ncalls_map(args...)
+ncalls(::typeof(foreach), ::Function, args...) = ncalls_map(args...)
+ncalls(::typeof(asyncmap), ::Function, args...) = ncalls_map(args...)
+
+ncalls(::typeof(pmap), ::Function, args...) = ncalls_map(args...)
+ncalls(::typeof(pmap), ::Function, ::AbstractWorkerPool, args...) = ncalls_map(args...)
+
+ncalls(::typeof(mapfoldl), ::Function, ::Function, args...) = ncalls_map(args...)
+ncalls(::typeof(mapfoldr), ::Function, ::Function, args...) = ncalls_map(args...)
+ncalls(::typeof(mapreduce), ::Function, ::Function, args...) = ncalls_map(args...)
+
+ncalls(::typeof(broadcast), ::Function, args...) = ncalls_broadcast(args...)
+ncalls(::typeof(broadcast!), ::Function, args...) = ncalls_broadcast!(args...)
+
+ncalls(::typeof(foldl), ::Function, arg) = ncalls_reduce(arg)
+ncalls(::typeof(foldr), ::Function, arg) = ncalls_reduce(arg)
+ncalls(::typeof(reduce), ::Function, arg) = ncalls_reduce(arg)
+
+ncalls_reduce(arg) = length(arg) - 1
+
+function ncalls_broadcast(args...)
+    length(args) < 1 && return 1
+    return prod(length, Broadcast.combine_axes(args...))
 end
 
-function ncalls(::typeof(broadcast!), map_args)
-    length(map_args) < 2 && return 1
-    return length(map_args[2])
+function ncalls_broadcast!(args...)
+    length(args) < 1 && return 1
+    return length(args[1])
 end
 
-function ncalls(::Union{typeof(mapreduce),typeof(mapfoldl),typeof(mapfoldr)}, map_args)
-    length(map_args) < 3 && return 1
-    return minimum(length, map_args[3:end])
-end
-
-function ncalls(::typeof(pmap), map_args)
-    if length(map_args) ≥ 2 && map_args[2] isa AbstractWorkerPool
-        length(map_args) < 3 && return 1
-        return minimum(length, map_args[3:end])
-    else
-        length(map_args) < 2 && return 1
-        return minimum(length, map_args[2:end])
-    end
-end
-
-function ncalls(mapfun::Function, map_args)
-    length(map_args) < 2 && return 1
-    return minimum(length, map_args[2:end])
+function ncalls_map(args...)
+    length(args) < 1 && return 1
+    return minimum(length, args)
 end
 
 include("parallel_progress.jl")
