@@ -373,6 +373,7 @@ by going through a `RemoteChannel`
 
 ```julia
 using Distributed
+addprocs(2)
 @everywhere using ProgressMeter
 
 n_steps = 20
@@ -410,7 +411,9 @@ using Distributed
 addprocs(2)
 @everywhere using ProgressMeter
 
-p = MultipleProgress([Progress(10; desc="task $i ") for i in 1:5], Progress(50; desc="global "))
+progs = [Progress(10; desc="task $i ") for i in 1:5]
+mainprog = Progress(50; desc="global ")
+p = MultipleProgress(progs, mainprog)
 res = pmap(1:5) do i
     for _ in 1:10
         sleep(rand())
@@ -433,14 +436,14 @@ updated with `p[0]`, otherwise `p[:main]` or by specifying the kwarg `main` when
 
 If no main progress is given, one will be automatically generated. See `?MultipleProgress` for all available options.
 
-Additional progress bars can be added with `addprogress!` from another worker
+Additional progress bars can be added from another worker:
 
 ```julia
 p = MultipleProgress(Progress(10; desc="tasks done "); count_finishes=true)
 sleep(0.1)
 pmap(1:10) do i
     N = rand(20:50)
-    addprogress!(p[i], Progress, N; desc=" task $i ")
+    p[i] = Progress(N; desc=" task $i ")
     for _ in 1:N
         next!(p[i])
         sleep(0.05)
