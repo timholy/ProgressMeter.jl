@@ -4,19 +4,35 @@ mutable struct ParallelProgress <: AbstractProgress
 end
 
 @enum ProgressAction begin
+    PP_ADD
+    PP_PING
     PP_NEXT
     PP_CANCEL
     PP_FINISH
     PP_UPDATE
-    MP_ADD_THRESH
-    MP_ADD_UNKNOWN
-    MP_ADD_PROGRESS
 end
 
-next!(pp::ParallelProgress, args...; kw...) = (put!(pp.channel, (PP_NEXT, args, kw)); nothing)
-cancel(pp::ParallelProgress, args...; kw...) = (put!(pp.channel, (PP_CANCEL, args, kw)); nothing)
-finish!(pp::ParallelProgress, args...; kw...) = (put!(pp.channel, (PP_FINISH, args, kw)); nothing)
-update!(pp::ParallelProgress, args...; kw...) = (put!(pp.channel, (PP_UPDATE, args, kw)); nothing)
+function try_put!(pp::ParallelProgress, x)
+    # try to put! in channel, but don't error if closed
+    try
+        put!(pp.channel, x)
+    catch e
+        if e == Base.closed_exception() ||
+            e isa RemoteException && e.captured isa CapturedException && e.captured.ex == Base.closed_exception()
+            # progress has finished or been closed
+            pp.channel = FakeChannel()
+        else
+            rethrow()
+        end
+    end
+    return nothing
+end
+
+ping(pp::ParallelProgress, args...; kw...) = try_put!(pp, (PP_PING, args, kw))
+next!(pp::ParallelProgress, args...; kw...) = try_put!(pp, (PP_NEXT, args, kw))
+cancel(pp::ParallelProgress, args...; kw...) = try_put!(pp, (PP_CANCEL, args, kw))
+finish!(pp::ParallelProgress, args...; kw...) = try_put!(pp, (PP_FINISH, args, kw))
+update!(pp::ParallelProgress, args...; kw...) = try_put!(pp, (PP_UPDATE, args, kw))
 
 """
 `ParallelProgress(n; kw...)`
@@ -55,7 +71,9 @@ function ParallelProgress(progress::AbstractProgress)
         try
             while !has_finished(progress) && !has_finished(pp)
                 f, args, kw = take!(channel)
-                if f == PP_NEXT
+                if f == PP_PING
+                    print(args...)
+                elseif f == PP_NEXT
                     next!(progress, args...; kw...)
                 elseif f == PP_CANCEL
                     cancel(progress, args...; kw...)
@@ -102,11 +120,10 @@ Distributed.put!(mc::MultipleChannel, x) = put!(mc.channel, (mc.id, x...))
 mutable struct MultipleProgress
     channel
     main
-    keys::Vector
 end
 
 Base.getindex(mp::MultipleProgress, n) = ParallelProgress.(MultipleChannel.(Ref(mp.channel), n))
-Base.keys(mp::MultipleProgress) = mp.keys
+Base.setindex!(mp::MultipleProgress, p::AbstractProgress, n) = (put!(mp.channel, (n, PP_ADD, (p,), ())); nothing)
 
 """
     MultipleProgress(progresses::AbstractDict{T, <:AbstractProgress},
@@ -180,7 +197,7 @@ function MultipleProgress(progresses::AbstractDict{T,<:AbstractProgress},
                           count_overshoot = false,
                           auto_reset_timer = true) where T
 
-    !enabled && return MultipleProgress(FakeChannel(), main, collect(keys(progresses)))
+    !enabled && return MultipleProgress(FakeChannel(), main)
 
     if main ∈ keys(progresses)
         error("`main=$main` cannot be used in `progresses`")
@@ -188,7 +205,7 @@ function MultipleProgress(progresses::AbstractDict{T,<:AbstractProgress},
 
     channel = RemoteChannel(() -> Channel{NTuple{4,Any}}(1024))
 
-    mp = MultipleProgress(channel, main, collect(keys(progresses)))
+    mp = MultipleProgress(channel, main)
     @async runMultipleProgress(progresses, mainprogress, mp;
         auto_close=auto_close,
         count_finishes=count_finishes, 
@@ -235,7 +252,9 @@ function runMultipleProgress(progresses::AbstractDict{T,<:AbstractProgress},
             
             p, f, args, kwt = take!(channel)
 
-            if p == mp.main # main progressbar
+            if f == PP_PING
+                println(args...)
+            elseif p == mp.main # main progressbar
                 if f == PP_CANCEL
                     finish!(mainprogress; keep=false)
                     cancel(mainprogress, args...; kwt..., keep=false)
@@ -252,18 +271,14 @@ function runMultipleProgress(progresses::AbstractDict{T,<:AbstractProgress},
                 end
             else
                 # add progress
-                if f ∈ (MP_ADD_PROGRESS, MP_ADD_THRESH, MP_ADD_UNKNOWN)
+                if f == PP_ADD
                     if p ∈ keys(progresses)
                         error("key `$p` already in use")
                     end
-                    if f == MP_ADD_PROGRESS
-                        progresses[p] = Progress(args...; kwt..., offset=-1)
-                    elseif f == MP_ADD_UNKNOWN
-                        progresses[p] = ProgressUnknown(args...; kwt..., offset=-1)
-                    else
-                        progresses[p] = ProgressThresh(args...; kwt..., offset=-1)
-                    end
-                    push!(mp.keys, p)
+                    newprog = args[1]
+                    newprog.output = mainprogress.output
+                    newprog.offset = -1
+                    progresses[p] = newprog
                     continue
                 end
 
@@ -363,28 +378,3 @@ isfakechannel(::AbstractChannel) = false
 isfakechannel(::RemoteChannel) = false
 isfakechannel(::FakeChannel) = true
 isfakechannel(mc::MultipleChannel) = isfakechannel(mc.channel)
-
-"""
-    addprogress!(mp[i], T::Type{<:AbstractProgress}, args...; kw...)
-
-will add the progressbar `T(args..., kw...)` to the MultipleProgress `mp` at index `i`
-
-# Example
-
-```julia
-p = MultipleProgress(Progress(N, "tasks done "); count_finishes=true)
-sleep(0.1)
-pmap(1:N) do i
-    L = rand(20:50)
-    addprogress!(p[i], Progress, L, desc=" task \$i ")
-    for _ in 1:L
-        sleep(0.05)
-        next!(p[i])
-    end
-end
-
-```
-"""
-addprogress!(p::ParallelProgress, ::Type{Progress}, args...; kw...) = (put!(p.channel, (MP_ADD_PROGRESS, args, kw)); nothing)
-addprogress!(p::ParallelProgress, ::Type{ProgressThresh}, args...; kw...) = (put!(p.channel, (MP_ADD_THRESH, args, kw)); nothing)
-addprogress!(p::ParallelProgress, ::Type{ProgressUnknown}, args...; kw...) = (put!(p.channel, (MP_ADD_UNKNOWN, args, kw)); nothing)

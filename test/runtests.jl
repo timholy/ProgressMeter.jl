@@ -1,4 +1,5 @@
 using ProgressMeter
+using Distributed
 using Test
 
 if get(ENV, "CI", "false") == "true"

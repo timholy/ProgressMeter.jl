@@ -5,7 +5,7 @@ using Distributed
 
 export Progress, ProgressThresh, ProgressUnknown, BarGlyphs, next!, update!, cancel, 
        finish!, @showprogress, progress_map, progress_pmap, ijulia_behavior,
-       MultipleProgress, ParallelProgress, addprogress!
+       MultipleProgress, ParallelProgress
 
 """
 `ProgressMeter` contains a suite of utilities for displaying progress
