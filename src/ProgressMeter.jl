@@ -206,6 +206,7 @@ function calc_check_iterations(p, t)
     return round(Int, clamp(iterations_per_dt, 1, p.check_iterations * 10))
 end
 
+# improve performance by checking if enabled before dealing with the options
 function updateProgress!(p::AbstractProgress; options...)
     !p.enabled && return nothing
     _updateProgress!(p; options...)

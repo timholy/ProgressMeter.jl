@@ -25,8 +25,8 @@ for ns in [1, 9, 10, 99, 100, 999, 1_000, 9_999, 10_000, 99_000, 100_000, 999_99
 end
 
 # Performance test (from #171, #323)
-function prog_perf(n; dt=0.1, enabled=true, force=false)
-    prog = Progress(n; dt, enabled)
+function prog_perf(n; dt=0.1, enabled=true, force=false, safe_lock=false)
+    prog = Progress(n; dt, enabled, safe_lock)
     x = 0.0
     for i in 1:n
         x += rand()
@@ -48,22 +48,28 @@ println("Performance tests...")
 #precompile
 noprog_perf(10)
 prog_perf(10)
+prog_perf(10; safe_lock=true)
 prog_perf(10; dt=9999)
 prog_perf(10; enabled=false)
+prog_perf(10; enabled=false, safe_lock=true)
 prog_perf(10; force=true)
 
 t_noprog = (@elapsed noprog_perf(10^8))/10^8
 t_prog = (@elapsed prog_perf(10^8))/10^8
+t_lock = (@elapsed prog_perf(10^8; safe_lock=true))/10^8
 t_noprint = (@elapsed prog_perf(10^8; dt=9999))/10^8
 t_disabled = (@elapsed prog_perf(10^8; enabled=false))/10^8
+t_disabled_lock = (@elapsed prog_perf(10^8; enabled=false, safe_lock=true))/10^8
 t_force = (@elapsed prog_perf(10^2; force=true))/10^2
 
 println("Performance results:")
-println("without progress: ", t_noprog*10^9, " ns")
-println("with progress: ", t_prog*10^9, " ns")
-println("with no printing: ", t_noprint*10^9, " ns")
-println("with `enabled=false`: ", t_disabled*10^9, " ns")
-println("with `force=true`: ", t_force*10^6, " µs")
+println("without progress:     ", ProgressMeter.speedstring(t_noprog))
+println("with defaults:        ", ProgressMeter.speedstring(t_prog))
+println("with no printing:     ", ProgressMeter.speedstring(t_noprint))
+println("with disabled:        ", ProgressMeter.speedstring(t_disabled))
+println("with lock:            ", ProgressMeter.speedstring(t_lock))
+println("with lock, disabled:  ", ProgressMeter.speedstring(t_disabled_lock))
+println("with force:           ", ProgressMeter.speedstring(t_force))
 
 if get(ENV, "CI", "false") == "false" # CI environment is too unreliable for performance tests 
     @test t_prog < 9*t_noprog
