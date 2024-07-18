@@ -48,17 +48,20 @@ println("Performance tests...")
 #precompile
 noprog_perf(10)
 prog_perf(10)
+prog_perf(10; dt=9999)
 prog_perf(10; enabled=false)
 prog_perf(10; force=true)
 
 t_noprog = (@elapsed noprog_perf(10^8))/10^8
 t_prog = (@elapsed prog_perf(10^8))/10^8
+t_noprint = (@elapsed prog_perf(10^8; dt=9999))/10^8
 t_disabled = (@elapsed prog_perf(10^8; enabled=false))/10^8
 t_force = (@elapsed prog_perf(10^2; force=true))/10^2
 
 println("Performance results:")
 println("without progress: ", t_noprog*10^9, " ns")
 println("with progress: ", t_prog*10^9, " ns")
+println("with no printing: ", t_noprint*10^9, " ns")
 println("with `enabled=false`: ", t_disabled*10^9, " ns")
 println("with `force=true`: ", t_force*10^6, " µs")
 

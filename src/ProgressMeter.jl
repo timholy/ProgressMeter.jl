@@ -206,14 +206,18 @@ function calc_check_iterations(p, t)
     return round(Int, clamp(iterations_per_dt, 1, p.check_iterations * 10))
 end
 
+function updateProgress!(p::AbstractProgress; options...)
+    !p.enabled && return nothing
+    _updateProgress!(p; options...)
+end
+
 # update progress display
-function updateProgress!(p::Progress; showvalues = (),
+function _updateProgress!(p::Progress; showvalues = (),
                          truncate_lines = false, valuecolor = :blue,
                          offset::Integer = p.offset, keep = (offset == 0),
                          desc::Union{Nothing,AbstractString} = nothing,
                          ignore_predictor = false, force::Bool = false,
                          color = p.color, max_steps = p.n)
-    !p.enabled && return
     if p.counter == 2 # ignore the first loop given usually uncharacteristically slow
         p.tsecond = time()
     end
@@ -295,13 +299,12 @@ function updateProgress!(p::Progress; showvalues = (),
     return nothing
 end
 
-function updateProgress!(p::ProgressThresh; showvalues = (),
+function _updateProgress!(p::ProgressThresh; showvalues = (),
                          truncate_lines = false, valuecolor = :blue,
                          offset::Integer = p.offset, keep = (offset == 0),
                          desc = p.desc,
                          ignore_predictor = false, force::Bool = false,
                          color = p.color, thresh = p.thresh)
-    !p.enabled && return
     p.offset = offset
     p.thresh = thresh
     p.color = color
@@ -329,7 +332,7 @@ function updateProgress!(p::ProgressThresh; showvalues = (),
             end
             flush(p.output)
         end
-        return
+        return nothing
     end
 
     if force || ignore_predictor || predicted_updates_per_dt_have_passed(p)
@@ -358,6 +361,7 @@ function updateProgress!(p::ProgressThresh; showvalues = (),
             p.prev_update_count = p.counter
         end
     end
+    return nothing
 end
 
 const spinner_chars = ['◐','◓','◑','◒']
@@ -369,13 +373,12 @@ spinner_char(p::ProgressUnknown, spinner::AbstractVector{<:AbstractChar}) =
 spinner_char(p::ProgressUnknown, spinner::AbstractString) =
     p.done ? spinner_done : spinner[nextind(spinner, 1, p.spincounter % length(spinner))]
 
-function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = false,
+function _updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = false,
                         valuecolor = :blue, desc = p.desc,
                         ignore_predictor = false, force::Bool = false,
                         spinner::Union{AbstractChar,AbstractString,AbstractVector{<:AbstractChar}} = spinner_chars,
                         offset::Integer = p.offset, keep = (offset == 0),
                         color = p.color)
-    !p.enabled && return
     p.offset = offset
     p.color = color
     p.desc = desc
@@ -405,7 +408,7 @@ function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = f
             end
             flush(p.output)
         end
-        return
+        return nothing
     end
     if force || ignore_predictor || predicted_updates_per_dt_have_passed(p)
         t = time()
@@ -437,9 +440,9 @@ function updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = f
             p.tlast = t + 2*(time()-t)
             p.printed = true
             p.prev_update_count = p.counter
-            return
         end
     end
+    return nothing
 end
 
 predicted_updates_per_dt_have_passed(p::AbstractProgress) = p.counter - p.prev_update_count >= p.check_iterations
@@ -528,7 +531,7 @@ function cancel(p::AbstractProgress, msg::AbstractString = "Aborted before all t
             end
         end
     end
-    return
+    return nothing
 end
 
 """
