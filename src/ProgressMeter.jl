@@ -27,14 +27,14 @@ function Base.setproperty!(p::T, name::Symbol, value) where T<:AbstractProgress
         value = value isa ty ? value : convert(ty, value)
         setfield!(p, name, value)
     else
-        setproperty!(p.core, name, value)
+        setproperty!(getfield(p, :core), name, value)
     end
 end
 function Base.getproperty(p::T, name::Symbol) where T<:AbstractProgress
     if hasfield(T, name)
         getfield(p, name)
     else
-        getproperty(p.core, name)
+        getproperty(getfield(p, :core), name)
     end
 end
 

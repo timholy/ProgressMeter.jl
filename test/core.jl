@@ -24,13 +24,13 @@ for ns in [1, 9, 10, 99, 100, 999, 1_000, 9_999, 10_000, 99_000, 100_000, 999_99
     end
 end
 
-# Performance test (from #171)
-function prog_perf(n)
-    prog = Progress(n)
+# Performance test (from #171, #323)
+function prog_perf(n; dt=0.1, enabled=true, force=false)
+    prog = Progress(n; dt, enabled)
     x = 0.0
     for i in 1:n
         x += rand()
-        next!(prog)
+        next!(prog; force)
     end
     return x
 end
@@ -43,12 +43,27 @@ function noprog_perf(n)
     return x
 end
 
-if !parse(Bool, get(ENV, "CI", "false")) # CI environment is too unreliable for performance tests 
-    prog_perf(10^7)
-    noprog_perf(10^7)
-    @time prog_perf(10^7)
-    @time noprog_perf(10^7)
-    @test @elapsed(prog_perf(10^7)) < 9*@elapsed(noprog_perf(10^7))
+println("Performance tests...")
+
+#precompile
+noprog_perf(10)
+prog_perf(10)
+prog_perf(10; enabled=false)
+prog_perf(10; force=true)
+
+t_noprog = (@elapsed noprog_perf(10^8))/10^8
+t_prog = (@elapsed prog_perf(10^8))/10^8
+t_disabled = (@elapsed prog_perf(10^8; enabled=false))/10^8
+t_force = (@elapsed prog_perf(10^2; force=true))/10^2
+
+println("Performance results:")
+println("without progress: ", t_noprog*10^9, " ns")
+println("with progress: ", t_prog*10^9, " ns")
+println("with `enabled=false`: ", t_disabled*10^9, " ns")
+println("with `force=true`: ", t_force*10^6, " µs")
+
+if get(ENV, "CI", "false") == "false" # CI environment is too unreliable for performance tests 
+    @test t_prog < 9*t_noprog
 end
 
 # Avoid a NaN due to the estimated print time compensation
