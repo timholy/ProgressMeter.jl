@@ -24,13 +24,13 @@ for ns in [1, 9, 10, 99, 100, 999, 1_000, 9_999, 10_000, 99_000, 100_000, 999_99
     end
 end
 
-# Performance test (from #171)
-function prog_perf(n)
-    prog = Progress(n)
+# Performance test (from #171, #323)
+function prog_perf(n; dt=0.1, enabled=true, force=false, safe_lock=false)
+    prog = Progress(n; dt, enabled, safe_lock)
     x = 0.0
     for i in 1:n
         x += rand()
-        next!(prog)
+        next!(prog; force)
     end
     return x
 end
@@ -43,12 +43,36 @@ function noprog_perf(n)
     return x
 end
 
-if !parse(Bool, get(ENV, "CI", "false")) # CI environment is too unreliable for performance tests 
-    prog_perf(10^7)
-    noprog_perf(10^7)
-    @time prog_perf(10^7)
-    @time noprog_perf(10^7)
-    @test @elapsed(prog_perf(10^7)) < 9*@elapsed(noprog_perf(10^7))
+println("Performance tests...")
+
+#precompile
+noprog_perf(10)
+prog_perf(10)
+prog_perf(10; safe_lock=true)
+prog_perf(10; dt=9999)
+prog_perf(10; enabled=false)
+prog_perf(10; enabled=false, safe_lock=true)
+prog_perf(10; force=true)
+
+t_noprog = (@elapsed noprog_perf(10^8))/10^8
+t_prog = (@elapsed prog_perf(10^8))/10^8
+t_lock = (@elapsed prog_perf(10^8; safe_lock=true))/10^8
+t_noprint = (@elapsed prog_perf(10^8; dt=9999))/10^8
+t_disabled = (@elapsed prog_perf(10^8; enabled=false))/10^8
+t_disabled_lock = (@elapsed prog_perf(10^8; enabled=false, safe_lock=true))/10^8
+t_force = (@elapsed prog_perf(10^2; force=true))/10^2
+
+println("Performance results:")
+println("without progress:     ", ProgressMeter.speedstring(t_noprog))
+println("with defaults:        ", ProgressMeter.speedstring(t_prog))
+println("with no printing:     ", ProgressMeter.speedstring(t_noprint))
+println("with disabled:        ", ProgressMeter.speedstring(t_disabled))
+println("with lock:            ", ProgressMeter.speedstring(t_lock))
+println("with lock, disabled:  ", ProgressMeter.speedstring(t_disabled_lock))
+println("with force:           ", ProgressMeter.speedstring(t_force))
+
+if get(ENV, "CI", "false") == "false" # CI environment is too unreliable for performance tests 
+    @test t_prog < 9*t_noprog
 end
 
 # Avoid a NaN due to the estimated print time compensation
