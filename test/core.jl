@@ -25,11 +25,12 @@ for ns in [1, 9, 10, 99, 100, 999, 1_000, 9_999, 10_000, 99_000, 100_000, 999_99
 end
 
 # Performance test (from #171, #323)
-function prog_perf(n; dt=0.1, enabled=true, force=false, safe_lock=0)
+function prog_perf(n; dt=0.1, enabled=true, force=false, safe_lock=false)
     prog = Progress(n; dt, enabled, safe_lock)
     x = 0.0
     for i in 1:n
         x += rand()
+        next!(prog; force)
         next!(prog; force)
     end
     return x
