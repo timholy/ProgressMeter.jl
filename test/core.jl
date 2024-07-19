@@ -25,12 +25,11 @@ for ns in [1, 9, 10, 99, 100, 999, 1_000, 9_999, 10_000, 99_000, 100_000, 999_99
 end
 
 # Performance test (from #171, #323)
-function prog_perf(n; dt=0.1, enabled=true, force=false, safe_lock=false)
+function prog_perf(n; dt=0.1, enabled=true, force=false, safe_lock=0)
     prog = Progress(n; dt, enabled, safe_lock)
     x = 0.0
     for i in 1:n
         x += rand()
-        next!(prog; force)
         next!(prog; force)
     end
     return x
@@ -67,15 +66,15 @@ println("Performance tests...")
 #precompile
 noprog_perf(10)
 prog_perf(10)
-prog_perf(10; safe_lock=true)
-prog_perf(10; dt=9999)
+prog_perf(10; safe_lock=1)
+prog_perf(10; dt=9999.9)
 prog_perf(10; enabled=false)
-prog_perf(10; enabled=false, safe_lock=true)
+prog_perf(10; enabled=false, safe_lock=1)
 prog_perf(10; force=true)
 
 noprog_threaded(2*Threads.nthreads())
 prog_threaded(2*Threads.nthreads())
-prog_threaded(2*Threads.nthreads(); safe_lock=true)
+prog_threaded(2*Threads.nthreads(); safe_lock=1)
 prog_threaded(2*Threads.nthreads(); dt=9999)
 prog_threaded(2*Threads.nthreads(); enabled=false)
 prog_threaded(2*Threads.nthreads(); force=true)
@@ -86,7 +85,7 @@ t_noprog = (@elapsed noprog_perf(N))/N
 t_prog = (@elapsed prog_perf(N))/N
 t_lock = (@elapsed prog_perf(N; safe_lock=1))/N
 t_detect = (@elapsed prog_perf(N; safe_lock=2))/N
-t_noprint = (@elapsed prog_perf(N; dt=9999))/N
+t_noprint = (@elapsed prog_perf(N; dt=9999.9))/N
 t_disabled = (@elapsed prog_perf(N; enabled=false))/N
 t_disabled_lock = (@elapsed prog_perf(N; enabled=false, safe_lock=1))/N
 t_force = (@elapsed prog_perf(N_force; force=true))/N_force
@@ -96,7 +95,7 @@ Nth_force = Threads.nthreads() * 100
 th_noprog = (@elapsed noprog_threaded(Nth))/Nth
 th_detect = (@elapsed prog_threaded(Nth))/Nth
 th_lock = (@elapsed prog_threaded(Nth; safe_lock=1))/Nth
-th_noprint = (@elapsed prog_threaded(Nth; dt=9999))/Nth
+th_noprint = (@elapsed prog_threaded(Nth; dt=9999.9))/Nth
 th_disabled = (@elapsed prog_threaded(Nth; enabled=false))/Nth
 th_force = (@elapsed prog_threaded(Nth_force; force=true))/Nth_force
 
