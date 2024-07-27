@@ -281,7 +281,7 @@ p = Progress(n)
 for iter in 1:10
     x *= 2
     sleep(0.5)
-    next!(p; showvalues = [(:iter,iter), (:x,x)])
+    next!(p; showvalues = [("iteration count",iter), ("x",x)])
 end
 ```
 
@@ -292,7 +292,7 @@ you can alternatively pass a zero-argument function as a callback to the `showva
 ```julia
 x,n = 1,10
 p = Progress(n)
-generate_showvalues(iter, x) = () -> [(:iter,iter), (:x,x)]
+generate_showvalues(iter, x) = () -> [("iteration count",iter), ("x",x)]
 for iter in 1:10
     x *= 2
     sleep(0.5)
