@@ -3,7 +3,9 @@ module ProgressMeter
 using Printf: @sprintf
 using Distributed
 
-export Progress, ProgressThresh, ProgressUnknown, BarGlyphs, next!, update!, cancel, finish!, @showprogress, progress_map, progress_pmap, ijulia_behavior
+export Progress, ProgressThresh, ProgressUnknown, BarGlyphs, next!, update!, cancel, 
+       finish!, @showprogress, progress_map, progress_pmap, ijulia_behavior,
+       MultipleProgress, ParallelProgress
 
 """
 `ProgressMeter` contains a suite of utilities for displaying progress
@@ -1125,6 +1127,7 @@ function ncalls_map(args...)
     return minimum(length, args)
 end
 
+include("parallel_progress.jl")
 include("deprecated.jl")
 
 end # module
