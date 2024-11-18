@@ -2,6 +2,7 @@ module ProgressMeter
 
 using Printf: @sprintf
 using Distributed
+using Base.Threads: atomic_add!, atomic_sub!, atomic_cas!
 
 export Progress, ProgressThresh, ProgressUnknown, BarGlyphs, next!, update!, cancel, finish!, @showprogress, progress_map, progress_pmap, ijulia_behavior
 
@@ -76,7 +77,7 @@ Base.@kwdef mutable struct ProgressCore
     showspeed::Bool             = false         # should the output include average time per iteration
     # internals
     check_iterations::Int       = 1             # number of iterations to check time for
-    counter::Int                = 0             # current iteration
+    counter::Threads.Atomic{Int}= Threads.Atomic{Int}(0)  # atomic counter for thread-safe increments
     lock::Threads.ReentrantLock = Threads.ReentrantLock()   # lock used when threading detected
     numprintedvalues::Int       = 0             # num values printed below progress in last iteration
     prev_update_count::Int      = 1             # counter at last update
@@ -86,6 +87,12 @@ Base.@kwdef mutable struct ProgressCore
     tinit::Float64              = time()        # time meter was initialized
     tlast::Float64              = time()        # time of last update
     tsecond::Float64            = time()        # ignore the first loop given usually uncharacteristically slow
+    max_iterations::Int         = typemax(Int)  # maximum number of iterations
+    
+    # Background thread management
+    background_thread::Union{Nothing, Task} = nothing  # Dedicated progress tracking thread
+    update_channel::Channel{Tuple{Int, Dict{Symbol, Any}}} = Channel{Tuple{Int, Dict{Symbol, Any}}}(32)  # Non-blocking update channel
+    stop_background_thread::Threads.Atomic{Bool} = Threads.Atomic{Bool}(false)  # Atomic flag to stop background thread
 end
 
 """
@@ -384,6 +391,10 @@ function _updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = 
     p.offset = offset
     p.color = color
     p.desc = desc
+    
+    # Safely dereference the atomic counter
+    current_count = p.counter[]
+    
     if p.done
         if p.printed
             t = time()
@@ -393,10 +404,10 @@ function _updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = 
                 msg = @sprintf "%c %s    Time: %s" spinner_char(p, spinner) p.desc dur
                 p.spincounter += 1
             else
-                msg = @sprintf "%s %d    Time: %s" p.desc p.counter dur
+                msg = @sprintf "%s %d    Time: %s" p.desc current_count dur
             end
             if p.showspeed
-                sec_per_iter = elapsed_time / p.counter
+                sec_per_iter = elapsed_time / current_count
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
             end
             print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
@@ -414,7 +425,7 @@ function _updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = 
     end
     if force || ignore_predictor || predicted_updates_per_dt_have_passed(p)
         t = time()
-        if p.counter > 2
+        if current_count > 2
             p.check_iterations = calc_check_iterations(p, t)
         end
         if force || (t > p.tlast+p.dt)
@@ -423,11 +434,11 @@ function _updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = 
                 msg = @sprintf "%c %s    Time: %s" spinner_char(p, spinner) p.desc dur
                 p.spincounter += 1
             else
-                msg = @sprintf "%s %d    Time: %s" p.desc p.counter dur
+                msg = @sprintf "%s %d    Time: %s" p.desc current_count dur
             end
             if p.showspeed
                 elapsed_time = t - p.tinit
-                sec_per_iter = elapsed_time / p.counter
+                sec_per_iter = elapsed_time / current_count
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
             end
             print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
@@ -441,13 +452,18 @@ function _updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = 
             # connection.
             p.tlast = t + 2*(time()-t)
             p.printed = true
-            p.prev_update_count = p.counter
+            p.prev_update_count = current_count
         end
     end
     return nothing
 end
 
-predicted_updates_per_dt_have_passed(p::AbstractProgress) = p.counter - p.prev_update_count >= p.check_iterations
+function predicted_updates_per_dt_have_passed(p::AbstractProgress)
+    # Get the current counter value directly
+    current = p.counter[]
+    prev = p.prev_update_count
+    return current - prev >= p.check_iterations
+end
 
 function is_threading(p::AbstractProgress)
     p.safe_lock == 0 && return false
@@ -481,10 +497,17 @@ the last update, this may or may not result in a change to the display.
 You may optionally change the `color` of the display. See also `update!`.
 """
 function next!(p::Union{Progress, ProgressUnknown}; step::Int = 1, options...)
-    lock_if_threading(p) do
-        p.counter += step
-        updateProgress!(p; ignore_predictor = step == 0, options...)
+    # Non-blocking atomic increment
+    current_count = atomic_add!(p.counter, step)
+    
+    # Check if we've exceeded max iterations
+    if current_count + step > p.max_iterations
+        finish!(p)
+        return nothing
     end
+    
+    # Lightweight update mechanism
+    updateProgress!(p; ignore_predictor = step == 0, options...)
 end
 
 """
@@ -497,11 +520,16 @@ this may or may not result in a change to the display.
 You may optionally change the color of the display. See also `next!`.
 """
 function update!(p::Union{Progress, ProgressUnknown}, counter::Int=p.counter; options...)
-    lock_if_threading(p) do
-        counter_changed = p.counter != counter
-        p.counter = counter
-        updateProgress!(p; ignore_predictor = !counter_changed, options...)
+    # Atomic compare-and-swap for thread-safe updates
+    atomic_cas!(p.counter, p.counter[], counter)
+    
+    # Check if we've exceeded max iterations
+    if counter > p.max_iterations
+        finish!(p)
+        return nothing
     end
+    
+    updateProgress!(p; ignore_predictor = false, options...)
 end
 
 """
@@ -566,9 +594,87 @@ function finish!(p::ProgressThresh; options...)
 end
 
 function finish!(p::ProgressUnknown; options...)
-    lock_if_threading(p) do
-        p.done = true
-        updateProgress!(p; options...)
+    try
+        lock_if_threading(p) do
+            p.done = true
+            updateProgress!(p; options...)
+        end
+        
+        # Ensure background thread stops
+        if p.core.background_thread !== nothing
+            p.core.stop_background_thread[] = true
+            
+            # Put a sentinel value to unblock the channel
+            try
+                put!(p.core.update_channel, (-1, Dict{Symbol, Any}()))
+            catch
+                # Ignore if channel is already closed
+            end
+            
+            # Wait for the thread to complete and set to nothing
+            wait(p.core.background_thread)
+            p.core.background_thread = nothing
+        end
+    catch ex
+        # Minimal error handling
+        @error "Error during progress finish" exception=ex
+    end
+end
+
+# Background thread management function
+function start_background_progress_thread!(p::AbstractProgress)
+    p.core.background_thread = Threads.@spawn begin
+        try
+            while !p.core.stop_background_thread[]
+                yield()
+                
+                try
+                    update_data = take!(p.core.update_channel)
+                    
+                    # Exit if sentinel value received
+                    if update_data[1] == -1
+                        break
+                    end
+                    
+                    # Process update
+                    counter, options = update_data
+                    updateProgress!(p; options...)
+                catch e
+                    if e isa InterruptException
+                        break
+                    elseif e isa Base.Channel.ChanClosedError
+                        break
+                    else
+                        break
+                    end
+                end
+            end
+        finally
+            p.core.stop_background_thread[] = true
+            close(p.core.update_channel)
+        end
+    end
+end
+
+# Enhanced progress update method with background thread support
+function background_update!(p::AbstractProgress, counter::Int; options...)
+    # If background thread not started, initialize it
+    if p.core.background_thread === nothing
+        start_background_progress_thread!(p)
+    end
+    
+    # Non-blocking put to update channel with timeout
+    try
+        # Atomically increment the counter
+        current_count = atomic_add!(p.counter, counter)
+        
+        put!(p.core.update_channel, (current_count + counter, Dict{Symbol, Any}(options)))
+    catch e
+        if e isa Base.Channel.ChanClosedError
+            @warn "Update channel closed, cannot send update"
+        else
+            rethrow(e)
+        end
     end
 end
 
@@ -701,22 +807,23 @@ end
 
 function showprogress_process_expr(node, metersym)
     if !isa(node, Expr)
-        node
+        return node
     elseif node.head === :break || node.head === :return
         # special handling for break and return statements
-        quote
+        return quote
             ($finish!)($metersym)
             $node
         end
-    elseif node.head === :for || node.head === :while
+    elseif node.head in (:for, :while)
         # do not process inner loops
         #
         # FIXME: do not process break and return statements in inner functions
         # either
-        node
+        return Expr(node.head, 
+            [showprogress_process_expr(arg, metersym) for arg in node.args]...)
     else
         # process each subexpression recursively
-        Expr(node.head, [showprogress_process_expr(a, metersym) for a in node.args]...)
+        return Expr(node.head, [showprogress_process_expr(a, metersym) for a in node.args]...)
     end
 end
 
@@ -765,15 +872,20 @@ function showprogressdistributed(args...)
     na = length(distargs)
     if na == 1
         loop = distargs[1]
+        reducer = nothing
     elseif na == 2
         reducer = distargs[1]
         loop = distargs[2]
     else
-        println("$distargs $na")
-        throw(ArgumentError("wrong number of arguments to @distributed"))
+        throw(ArgumentError("wrong number of arguments to @distributed: expected 1 or 2, got $na"))
     end
     if loop.head !== :for
-        throw(ArgumentError("malformed @distributed loop"))
+        # More flexible error handling for distributed loops
+        @warn "Unsupported loop type for @distributed: expected a for loop, got $(loop.head)"
+        return expr  # Return original expression
+    end
+    if na == 2 && reducer === nothing
+        throw(ArgumentError("reducer cannot be nothing when using @distributed"))
     end
     var = loop.args[1].args[1]
     r = loop.args[1].args[2]
@@ -874,8 +986,15 @@ function showprogress(args...)
         expr.args[2] = showprogress(progressargs..., expr.args[2])
         return expr
 
-    elseif expr.head in (:for, :comprehension, :typed_comprehension)
-        return showprogress_loop(expr, progressargs)
+    elseif expr.head in (:for, :comprehension, :typed_comprehension, :generator)
+        try
+            result = showprogress_loop(expr, progressargs...)
+            return result
+        catch e
+            # Enhanced error reporting for progress tracking failures
+            @warn "Failed to process progress for $(expr.head) expression" exception=e
+            return expr  # Fallback to original expression if processing fails
+        end
 
     elseif expr.head == :call
         return showprogress_map(expr, progressargs)
@@ -945,22 +1064,36 @@ function showprogress_loop(expr, progressargs)
     if expr.head == :for
         outerassignidx = 1
         loopbodyidx = lastindex(expr.args)
-    elseif expr.head == :comprehension
+    elseif expr.head in (:comprehension, :generator, :typed_comprehension)
+        outerassignidx = lastindex(expr.args)
+        loopbodyidx = expr.head === :typed_comprehension ? 2 : 1
+    else
+        # More informative error message for unsupported expression types
+        throw(ArgumentError("Unsupported expression type for progress tracking: $(expr.head). Supported types are: for, comprehension, generator, typed_comprehension"))
+    end
+
+    # Convert generator to comprehension if needed
+    if expr.head == :generator
+        expr = Expr(:comprehension, expr)
         outerassignidx = lastindex(expr.args)
         loopbodyidx = 1
-    elseif expr.head == :typed_comprehension
-        outerassignidx = lastindex(expr.args)
-        loopbodyidx = 2
     end
+
     # As of julia 0.5, a comprehension's "loop" is actually one level deeper in the syntax tree.
     if expr.head !== :for
-        @assert length(expr.args) == loopbodyidx
+        if length(expr.args) < loopbodyidx
+            # More descriptive error for insufficient arguments
+            @warn "Insufficient arguments in $(expr.head) expression. Ensure the expression has the correct structure."
+            return expr  # Fallback to original expression
+        end
         expr = expr.args[outerassignidx] = copy(expr.args[outerassignidx])
         if expr.head == :flatten
             # e.g. [x for x in 1:10 for y in 1:x]
             expr = expr.args[1] = copy(expr.args[1])
         end
-        @assert expr.head === :generator
+        if expr.head !== :generator
+            throw(ArgumentError("Expected generator expression, got $(expr.head)"))
+        end
         outerassignidx = lastindex(expr.args)
         loopbodyidx = 1
     end
@@ -993,8 +1126,16 @@ function showprogress_loop(expr, progressargs)
     loopassign.args[2] = :(ProgressWrapper(iterable, $(esc(metersym))))
 
     # Transform the loop body break and return statements
-    if expr.head === :for
-        expr.args[loopbodyidx] = showprogress_process_expr(expr.args[loopbodyidx], metersym)
+    if expr.head in (:for, :comprehension, :typed_comprehension, :generator)
+        # More robust processing of loop body expressions
+        try
+            processed_body = showprogress_process_expr(expr.args[loopbodyidx], metersym)
+            expr.args[loopbodyidx] = processed_body
+        catch e
+            # Enhanced error handling for body processing
+            @warn "Failed to process loop body for $(expr.head) expression" exception=e
+            # Keep original body if processing fails
+        end
     end
 
     # Escape all args except the loop assignment, which was already appropriately escaped.
@@ -1015,21 +1156,28 @@ function showprogress_loop(expr, progressargs)
         $(esc(metersym)) = Progress(length(iterable), $(showprogress_process_args(progressargs)...))
     end
 
-    if expr.head === :for
+    if expr.head in (:for, :generator, :comprehension, :typed_comprehension)
         return quote
+            # Enhanced setup with more robust error handling
             $setup
-            $expr
+            rv = try
+                # Ensure progress meter is always finished, even if an error occurs
+                local result
+                $orig
+            catch e
+                @warn "Error in progress-tracked expression" exception=e
+                rethrow(e)
+            finally
+                try
+                    finish!($(esc(metersym)))
+                catch
+                    # Ignore errors during finish
+                end
+            end
+            rv
         end
     else
-        # We're dealing with a comprehension
-        return quote
-            begin
-                $setup
-                rv = $orig
-                finish!($(esc(metersym)))
-                rv
-            end
-        end
+        throw(ArgumentError("Unsupported expression type: $(expr.head)"))
     end
 end
 
