@@ -2,6 +2,7 @@ module ProgressMeter
 
 using Printf: @sprintf
 using Distributed
+import Base.show
 
 export Progress, ProgressThresh, ProgressUnknown, BarGlyphs, next!, update!, cancel, finish!, @showprogress, progress_map, progress_pmap, ijulia_behavior
 
@@ -116,6 +117,23 @@ mutable struct Progress <: AbstractProgress
         core = ProgressCore(;kwargs...)
         new(n, start, barlen, barglyphs, core)
     end
+end
+
+"""
+Pretty print short description of Progress
+"""
+function Base.show(io::IO, p::Progress)
+    print(io, "Progress(n=$(p.n)")
+    if p.start != 0
+        print(io, ",start=$(p.start)")
+    end
+    if !isnothing(p.barlen)
+        print(io, ",barlen=$(p.barlen)")
+    end
+    if p.barglyphs != defaultglyphs
+        print(io, ",barglyphs=$(p.barglyphs)")
+    end
+    print(io, ")")
 end
 
 """
