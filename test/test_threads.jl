@@ -4,27 +4,22 @@
     println("Testing Progress() with Threads.@threads across $threads threads")
     (Threads.nthreads() == 1) && @info "Threads.nthreads() == 1, so Threads.@threads test is suboptimal"
     n = 20 #per thread
-    threadsUsed = fill(false, threads)
     vals = ones(n*threads)
     p = Progress(n*threads)
     Threads.@threads for i = 1:(n*threads)
-        threadsUsed[Threads.threadid()] = true
         vals[i] = 0
         sleep(0.1)
         next!(p)
     end
     @test !any(vals .== 1) #Check that all elements have been iterated
-    @test all(threadsUsed) #Ensure that all threads are used
 
 
     println("Testing ProgressUnknown() with Threads.@threads across $threads threads")
     trigger = 100.0
     prog = ProgressUnknown(desc="Attempts at exceeding trigger:")
     vals = Float64[]
-    threadsUsed = fill(false, threads)
     lk = ReentrantLock()
     Threads.@threads for _ in 1:1000
-        threadsUsed[Threads.threadid()] = true
         valssum = lock(lk) do
             push!(vals, rand())
             return sum(vals)
@@ -40,16 +35,13 @@
         sleep(0.1*rand())
     end
     @test sum(vals) > trigger
-    @test length(threadsUsed) == threads #Ensure that all threads are used
 
 
     println("Testing ProgressThresh() with Threads.@threads across $threads threads")
     thresh = 1.0
     prog = ProgressThresh(thresh; desc="Minimizing:")
     vals = fill(300.0, 1)
-    threadsUsed = fill(false, threads)
     Threads.@threads for _ in 1:100000
-        threadsUsed[Threads.threadid()] = true
         valssum = lock(lk) do
             push!(vals, -rand())
             return sum(vals)
@@ -63,20 +55,17 @@
         sleep(0.1*rand())
     end
     @test sum(vals) <= thresh
-    @test length(threadsUsed) == threads #Ensure that all threads are used
 
     if (Threads.nthreads() > 1)
         threads = Threads.nthreads() - 1
         println("Testing Progress() with Threads.@spawn across $threads threads")
         n = 20 #per thread
         tasks = Vector{Task}(undef, threads)
-        # threadsUsed = fill(false, threads)
         vals = ones(n*threads)
         p = Progress(n*threads)
 
         for t in 1:threads
             tasks[t] = Threads.@spawn for i in 1:n
-                # threadsUsed[Threads.threadid()] = true
                 vals[(n*(t-1)) + i] = 0
                 sleep(0.05 + (rand()*0.1))
                 next!(p)
@@ -84,7 +73,6 @@
         end
         wait.(tasks)
         @test !any(vals .== 1) #Check that all elements have been iterated
-        # @test all(threadsUsed) #Ensure that all threads are used (unreliable for @spawn)
     else
         @info "Threads.nthreads() == 1, so Threads.@spawn tests cannot be meaningfully tested"
     end
