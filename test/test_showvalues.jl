@@ -111,4 +111,17 @@ for i in 1:50
     sleep(0.1)
 end
 
+
 end # if
+
+println("Testing Base.show for Progress")
+prog = Progress(50)
+io = IOBuffer()
+Base.show(io, prog)
+progShowStr = String(take!(io))
+@test progShowStr == "Progress(n=50)"
+prog = Progress(50, start=10, barlen=100)
+io = IOBuffer()
+Base.show(io, prog)
+progShowStr = String(take!(io))
+@test progShowStr == "Progress(n=50,start=10,barlen=100)"
