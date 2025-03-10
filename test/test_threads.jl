@@ -13,7 +13,6 @@
     end
     @test !any(vals .== 1) #Check that all elements have been iterated
 
-
     println("Testing ProgressUnknown() with Threads.@threads across $threads threads")
     trigger = 100.0
     prog = ProgressUnknown(desc="Attempts at exceeding trigger:")
