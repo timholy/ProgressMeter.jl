@@ -580,12 +580,12 @@ function printvalues!(p::AbstractProgress, showvalues; color = :normal, truncate
     p.numprintedvalues = 0
 
     for (name, value) in showvalues
-        string_value = if value isa AbstractString
+        string_value = "\e[0m" * if value isa AbstractString
             value
         else
             let io = PipeBuffer()
                 show(IOContext(io, :color => true), value)
-                "\e[0m" * read(io, String)
+                read(io, String)
             end
         end
         if countlines(IOBuffer(string_value)) > 1
