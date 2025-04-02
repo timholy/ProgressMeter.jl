@@ -580,7 +580,13 @@ function printvalues!(p::AbstractProgress, showvalues; color = :normal, truncate
     p.numprintedvalues = 0
 
     for (name, value) in showvalues
-        msg = "\n  " * lpad(string(name) * ": ", maxwidth+2+1) * string(value)
+        string_value = string(value, color=true)
+        if countlines(IOBuffer(string_value)) > 1
+            # Multiline objects should go on their own line so their
+            # alignment doesn't get messed up
+            string_value = "\n" * string_value
+        end
+        msg = "\n  " * lpad(string(name) * ": ", maxwidth+2+1) * string_value
         max_len = (displaysize(p.output)::Tuple{Int,Int})[2]
         # I don't understand why the minus 1 is necessary here, but empircally
         # it is needed.
