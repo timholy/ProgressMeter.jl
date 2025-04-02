@@ -584,7 +584,7 @@ function printvalues!(p::AbstractProgress, showvalues; color = :normal, truncate
         max_len = (displaysize(p.output)::Tuple{Int,Int})[2]
         # I don't understand why the minus 1 is necessary here, but empircally
         # it is needed.
-        msg_lines = ceil(Int, (length(msg)-1) / max_len)
+        msg_lines = countlines(IOBuffer(msg))-1
         if truncate && msg_lines >= 2
             # For multibyte characters, need to index with nextind.
             printover(p.output, msg[1:nextind(msg, 1, max_len-1)] * "…", color)
