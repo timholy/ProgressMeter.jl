@@ -580,7 +580,10 @@ function printvalues!(p::AbstractProgress, showvalues; color = :normal, truncate
     p.numprintedvalues = 0
 
     for (name, value) in showvalues
-        string_value = string(value, color=true)
+        string_value = let io = PipeBuffer()
+            show(IOContext(io, :color => true), value)
+            "\e[0m" * read(io, String)
+        end
         if countlines(IOBuffer(string_value)) > 1
             # Multiline objects should go on their own line so their
             # alignment doesn't get messed up
