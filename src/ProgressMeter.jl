@@ -580,24 +580,11 @@ function printvalues!(p::AbstractProgress, showvalues; color = :normal, truncate
     p.numprintedvalues = 0
 
     for (name, value) in showvalues
-        string_value = "\e[0m" * if value isa AbstractString
-            value
-        else
-            let io = PipeBuffer()
-                show(IOContext(io, :color => true), value)
-                read(io, String)
-            end
-        end
-        if countlines(IOBuffer(string_value)) > 1
-            # Multiline objects should go on their own line so their
-            # alignment doesn't get messed up
-            string_value = "\n" * string_value
-        end
-        msg = "\n  " * lpad(string(name) * ": ", maxwidth+2+1) * string_value
+        msg = "\n  " * lpad(string(name) * ": ", maxwidth+2+1) * string(value)
         max_len = (displaysize(p.output)::Tuple{Int,Int})[2]
         # I don't understand why the minus 1 is necessary here, but empircally
         # it is needed.
-        msg_lines = countlines(IOBuffer(msg))-1
+        msg_lines = ceil(Int, (length(msg)-1) / max_len)
         if truncate && msg_lines >= 2
             # For multibyte characters, need to index with nextind.
             printover(p.output, msg[1:nextind(msg, 1, max_len-1)] * "…", color)
