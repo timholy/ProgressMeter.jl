@@ -13,7 +13,9 @@ julia = "1.6"
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 InteractiveUtils = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+StyledStrings = "f489334b-da3d-4c2e-b8f0-e476e12c162b"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+UnicodePlots = "b8865327-cd53-5732-bb35-84acbb429228"
 
 [targets]
-test = ["Test", "Random", "Distributed", "InteractiveUtils"]
+test = ["Test", "Random", "Distributed", "InteractiveUtils", "StyledStrings", "UnicodePlots"]
