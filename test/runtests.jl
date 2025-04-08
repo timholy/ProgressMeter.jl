@@ -1,4 +1,5 @@
 using ProgressMeter
+using Distributed
 using Test
 
 if get(ENV, "CI", "false") == "true"
@@ -21,6 +22,10 @@ end
 end
 @testset "Threading" begin
     include("test_threads.jl")
+end
+@testset "Parallel" begin
+    include("test_parallel.jl")
+    include("test_multiple.jl")
 end
 @testset "Deprecated" begin
     include("deprecated.jl")
