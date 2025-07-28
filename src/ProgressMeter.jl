@@ -617,7 +617,12 @@ function printover(io::IO, s::AbstractString, color::Symbol = :color_normal)
     print(io, "\r")
     printstyled(io, s; color=color)
     if isdefined(Main, :IJulia)
-        Main.IJulia.stdio_bytes[] = 0 # issue #76: circumvent IJulia I/O throttling
+        # issue #76: circumvent IJulia I/O throttling
+        if pkgversion(Main.IJulia) < v"1.30"
+            Main.IJulia.stdio_bytes[] = 0
+        else
+            Main.IJulia.reset_stdio_count()
+        end
     elseif isdefined(Main, :ESS) || isdefined(Main, :Atom)
     else
         print(io, "\u1b[K")     # clear the rest of the line
