@@ -318,6 +318,8 @@ end
 
 testfunc14a(:blocks)
 testfunc14a(:braille)
+testfunc14a(:blocks_debruijn)
+testfunc14a(:braille_debruijn)
 @test_throws ErrorException testfunc14a(:xxyyzz)
 
 # Threshold-based progress reports
