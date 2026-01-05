@@ -301,6 +301,37 @@ next!(p; showvalues = generate_showvalues(iter, x))
 end
 ```
 
+### Showing elapsed time
+
+When using a `Progress`, it might be useful to show the elapsed time
+in addition to or instead of the estimated time.
+You can include elapsed time in your progress meter
+by setting the optional keyword argument `showelapsed=true`.
+If you want to additionally disable the estimated time,
+you can set the optional keyword argument `showeta=false`.
+
+```julia
+x,n = 1,10
+p = Progress(n; showselapsed=true)
+for iter in 1:n
+    x *= 2
+    sleep(0.5)
+    next!(p; showvalues = [(:iter,iter), (:x,x)])
+end
+```
+
+will yield something like:
+
+```
+Progress:  XX%|███████████████████████████          | Time: XX:YY:ZZ  ETA: XX:YY:ZZ
+```
+
+instead of
+
+```
+Progress:  XX%|███████████████████████████                         |  ETA: XX:YY:ZZ
+```
+
 ### Showing average time per iteration
 
 You can include an average per-iteration duration in your progress meter

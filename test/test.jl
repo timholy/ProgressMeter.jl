@@ -579,3 +579,21 @@ function testfunc23(N, range, dt, tsleep)
 end
 println("Testing rounding (#300)")
 testfunc23(1000, [980;982;985;989;995;999;1000], 0.1, 1)
+
+function testfunc24(n, dt, tsleep; kwargs...)
+    p = Progress(n; dt, kwargs...)
+    for i in 1:n
+        sleep(tsleep)
+        next!(p)
+    end
+end
+
+println("Testing showelapsed and showeta options")
+testfunc24(1_000, 0.01, 0.002; desc="nothing", showelapsed=false, showeta=false)
+testfunc24(1_000, 0.01, 0.002; desc="ETA only", showelapsed=false, showeta=true)
+testfunc24(1_000, 0.01, 0.002; desc="Elapsed only", showelapsed=true, showeta=false)
+testfunc24(1_000, 0.01, 0.002; desc="Elapsed + ETA", showelapsed=true, showeta=true)
+testfunc24(1_000, 0.01, 0.002; desc="speed only", showelapsed=false, showeta=false, showspeed=true)
+testfunc24(1_000, 0.01, 0.002; desc="ETA + speed", showelapsed=false, showeta=true, showspeed=true)
+testfunc24(1_000, 0.01, 0.002; desc="Elapsed + speed", showelapsed=true, showeta=false, showspeed=true)
+testfunc24(1_000, 0.01, 0.002; desc="Elapsed + ETA + speed", showelapsed=true, showeta=true, showspeed=true)
