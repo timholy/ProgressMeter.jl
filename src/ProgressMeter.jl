@@ -90,19 +90,23 @@ end
 
 """
 `prog = Progress(n; dt=0.1, desc="Progress: ", color=:green,
-output=stderr, barlen=tty_width(desc), start=0)` creates a progress meter for a
+output=stderr, start=0)` creates a progress meter for a
 task with `n` iterations or stages starting from `start`. Output will be
 generated at intervals at least `dt` seconds apart, and perhaps longer if each
 iteration takes longer than `dt`. `desc` is a description of
 the current task. Optionally you can disable the progress bar by setting
 `enabled=false`. You can also append a per-iteration average duration like
 "(12.34 ms/it)" to the description by setting `showspeed=true`.
+By setting `showelapsed=true`, elapsed time will additionally be shown.
+To disable the eta display, set `showeta=false`.
 """
 mutable struct Progress <: AbstractProgress
     n::Int                  # total number of iterations
     start::Int              # which iteration number to start from
     barlen::Union{Int,Nothing} # progress bar size (default is available terminal width)
     barglyphs::BarGlyphs    # the characters to be used in the bar
+    showelapsed::Bool       # whether to show elapsed time
+    showeta::Bool           # whether to show eta time
     # internals
     core::ProgressCore
 
@@ -111,10 +115,12 @@ mutable struct Progress <: AbstractProgress
             start::Integer=0,
             barlen::Union{Int,Nothing}=nothing,
             barglyphs::BarGlyphs=defaultglyphs,
+            showelapsed::Bool=false,
+            showeta::Bool=true,
             kwargs...)
         CLEAR_IJULIA[] = clear_ijulia()
         core = ProgressCore(;kwargs...)
-        new(n, start, barlen, barglyphs, core)
+        new(n, start, barlen, barglyphs, showelapsed, showeta, core)
     end
 end
 
@@ -170,13 +176,15 @@ mutable struct ProgressUnknown <: AbstractProgress
     end
 end
 
-#...length of percentage and ETA string with days is 29 characters, speed string is always 14 extra characters
-function tty_width(desc, output, showspeed::Bool)
+function tty_width(desc, output, showelapsed::Bool, showeta::Bool, showspeed::Bool)
     full_width = displaysize(output)[2]
     desc_width = length(desc)
-    eta_width = 29
-    speed_width = showspeed ? 14 : 0
-    return max(0, full_width - desc_width - eta_width - speed_width)
+    percent_width = 5                       # " NNN%" at most
+    barend_width = 2                        # "||"
+    elapsed_width = showelapsed ? 23 : 0    # " Time: D days, HH:MM:SS" at most
+    eta_width = showeta ? 23 : 0            # "  ETA: D days, HH:MM:SS" at most
+    speed_width = showspeed ? 14 : 0        # " (NN.NN  s/it)"
+    return max(0, full_width - desc_width - percent_width - barend_width - elapsed_width - eta_width - speed_width)
 end
 
 # Package level behavior of IJulia clear output
@@ -235,14 +243,16 @@ function _updateProgress!(p::Progress; showvalues = (),
     if p.counter >= p.n
         if p.counter == p.n && p.printed
             t = time()
-            barlen = p.barlen isa Nothing ? tty_width(p.desc, p.output, p.showspeed) : p.barlen
+            barlen = p.barlen isa Nothing ? tty_width(p.desc, p.output, p.showelapsed, p.showeta, p.showspeed) : p.barlen
             percentage_complete = 100.0 * p.counter / p.n
             percentage_rounded = 100
             bar = barstring(barlen, percentage_complete, barglyphs=p.barglyphs)
             elapsed_time = t - p.tinit
-            dur = durationstring(elapsed_time)
             spacer = endswith(p.desc, " ") ? "" : " "
-            msg = @sprintf "%s%s%3u%%%s Time: %s" p.desc spacer percentage_rounded bar dur
+            msg = @sprintf "%s%s%3u%%%s" p.desc spacer percentage_rounded bar
+            if p.showelapsed || p.showeta
+                msg = @sprintf "%s Time: %s" msg durationstring(elapsed_time)
+            end
             if p.showspeed
                 sec_per_iter = elapsed_time / (p.counter - p.start)
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
@@ -266,7 +276,7 @@ function _updateProgress!(p::Progress; showvalues = (),
             p.check_iterations = calc_check_iterations(p, t)
         end
         if force || (t > p.tlast+p.dt)
-            barlen = p.barlen isa Nothing ? tty_width(p.desc, p.output, p.showspeed) : p.barlen
+            barlen = p.barlen isa Nothing ? tty_width(p.desc, p.output, p.showelapsed, p.showeta, p.showspeed) : p.barlen
             percentage_complete = 100.0 * p.counter / p.n
             percentage_rounded = min(99, round(Int, percentage_complete)) # don't round up to 100% if not finished (#300)
             bar = barstring(barlen, percentage_complete, barglyphs=p.barglyphs)
@@ -279,7 +289,13 @@ function _updateProgress!(p::Progress; showvalues = (),
                 eta = "N/A"
             end
             spacer = endswith(p.desc, " ") ? "" : " "
-            msg = @sprintf "%s%s%3u%%%s  ETA: %s" p.desc spacer percentage_rounded bar eta
+            msg = @sprintf "%s%s%3u%%%s" p.desc spacer percentage_rounded bar
+            if p.showelapsed
+                msg = @sprintf "%s Time: %s" msg durationstring(elapsed_time)
+            end
+            if p.showeta
+                msg = @sprintf "%s  ETA: %s" msg eta
+            end
             if p.showspeed
                 sec_per_iter = elapsed_time / (p.counter - p.start)
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
