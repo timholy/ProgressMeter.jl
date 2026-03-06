@@ -106,7 +106,7 @@ mutable struct Progress <: AbstractProgress
     n::Int                  # total number of iterations
     start::Int              # which iteration number to start from
     barlen::Union{Int,Nothing} # progress bar size (default is available terminal width)
-    elements::ProgressElements # which elements to show in the progress bar (default is color, description, percentage, bar, and ETA)
+    elements::ProgressElements # which elements to show in the progress bar
     # internals
     core::ProgressCore
 
@@ -254,93 +254,6 @@ function printprogresselements(p::Progress)
     msg = join(prog_string(e, p) for e in p.elements.elements)
     printstyled(p.output, msg; color = p.color)
 end
-
-# function _updateProgress!(p::Progress; showvalues = (),
-#                          truncate_lines = false, valuecolor = :blue,
-#                          offset::Integer = p.offset, keep = (offset == 0),
-#                          desc::Union{Nothing,AbstractString} = nothing,
-#                          ignore_predictor = false, force::Bool = false,
-#                          color = p.color, max_steps = p.n)
-#     if p.counter == 2 # ignore the first loop given usually uncharacteristically slow
-#         p.tsecond = time()
-#     end
-#     if desc !== nothing && desc !== p.desc
-#         if p.barlen !== nothing
-#             p.barlen += length(p.desc) - length(desc) #adjust bar length to accommodate new description
-#         end
-#         p.desc = desc
-#     end
-#     p.offset = offset
-#     p.color = color
-#     p.n = max_steps
-#     if p.counter >= p.n
-#         if p.counter == p.n && p.printed
-#             t = time()
-#             barlen = p.barlen isa Nothing ? tty_width(p.desc, p.output, p.showspeed) : p.barlen
-#             percentage_complete = 100.0 * p.counter / p.n
-#             percentage_rounded = 100
-#             bar = barstring(barlen, percentage_complete, barglyphs=p.barglyphs)
-#             elapsed_time = t - p.tinit
-#             dur = durationstring(elapsed_time)
-#             spacer = endswith(p.desc, " ") ? "" : " "
-#             msg = @sprintf "%s%s%3u%%%s Time: %s" p.desc spacer percentage_rounded bar dur
-#             if p.showspeed
-#                 sec_per_iter = elapsed_time / (p.counter - p.start)
-#                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
-#             end
-#             !CLEAR_IJULIA[] && print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
-#             move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
-#             printover(p.output, msg, p.color)
-#             printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
-#             if keep
-#                 println(p.output)
-#             else
-#                 print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
-#             end
-#             flush(p.output)
-#         end
-#         return nothing
-#     end
-#     if force || ignore_predictor || predicted_updates_per_dt_have_passed(p)
-#         t = time()
-#         if p.counter > 2
-#             p.check_iterations = calc_check_iterations(p, t)
-#         end
-#         if force || (t > p.tlast+p.dt)
-#             barlen = p.barlen isa Nothing ? tty_width(p.desc, p.output, p.showspeed) : p.barlen
-#             percentage_complete = 100.0 * p.counter / p.n
-#             percentage_rounded = min(99, round(Int, percentage_complete)) # don't round up to 100% if not finished (#300)
-#             bar = barstring(barlen, percentage_complete, barglyphs=p.barglyphs)
-#             elapsed_time = t - p.tinit
-#             est_total_time = elapsed_time * (p.n - p.start) / (p.counter - p.start)
-#             if 0 <= est_total_time <= typemax(Int)
-#                 eta_sec = round(Int, est_total_time - elapsed_time )
-#                 eta = durationstring(eta_sec)
-#             else
-#                 eta = "N/A"
-#             end
-#             spacer = endswith(p.desc, " ") ? "" : " "
-#             msg = @sprintf "%s%s%3u%%%s  ETA: %s" p.desc spacer percentage_rounded bar eta
-#             if p.showspeed
-#                 sec_per_iter = elapsed_time / (p.counter - p.start)
-#                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
-#             end
-#             !CLEAR_IJULIA[] && print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
-#             move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
-#             printover(p.output, msg, p.color)
-#             printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
-#             !CLEAR_IJULIA[] && print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
-#             flush(p.output)
-#             # Compensate for any overhead of printing. This can be
-#             # especially important if you're running over a slow network
-#             # connection.
-#             p.tlast = t + 2*(time()-t)
-#             p.printed = true
-#             p.prev_update_count = p.counter
-#         end
-#     end
-#     return nothing
-# end
 
 function _updateProgress!(p::ProgressThresh; showvalues = (),
                          truncate_lines = false, valuecolor = :blue,
