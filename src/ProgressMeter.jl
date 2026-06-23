@@ -173,7 +173,7 @@ end
 #...length of percentage and ETA string with days is 29 characters, speed string is always 14 extra characters
 function tty_width(desc, output, showspeed::Bool)
     full_width = displaysize(output)[2]
-    desc_width = length(desc)
+    desc_width = length(desc) + (endswith(desc, " ") ? 0 : 1)
     eta_width = 29
     speed_width = showspeed ? 14 : 0
     return max(0, full_width - desc_width - eta_width - speed_width)
