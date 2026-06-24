@@ -13,6 +13,11 @@
 @test Progress(5, desc="Progress:", offset=Int16(5)).offset == 5
 @test ProgressThresh(0.2, desc="Progress:", offset=Int16(5)).offset == 5
 
+let output = IOContext(IOBuffer(), :displaysize => (24, 80))
+    @test ProgressMeter.tty_width("Building grid...", output, false) ==
+          ProgressMeter.tty_width("Building grid... ", output, false)
+end
+
 # test speed string formatting
 for ns in [1, 9, 10, 99, 100, 999, 1_000, 9_999, 10_000, 99_000, 100_000, 999_999, 1_000_000, 9_000_000, 10_000_000, 99_999_000, 1_234_567_890, 1_234_567_890 * 10, 1_234_567_890 * 100, 1_234_567_890 * 1_000, 1_234_567_890 * 10_000, 1_234_567_890 * 100_000, 1_234_567_890 * 1_000_000, 1_234_567_890 * 10_000_000]
     sec = ns / 1_000_000_000

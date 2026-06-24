@@ -171,9 +171,11 @@ mutable struct ProgressUnknown <: AbstractProgress
 end
 
 #...length of percentage and ETA string with days is 29 characters, speed string is always 14 extra characters
+description_prefix(desc::AbstractString) = isempty(desc) || endswith(desc, " ") ? desc : desc * " "
+
 function tty_width(desc, output, showspeed::Bool)
     full_width = displaysize(output)[2]
-    desc_width = length(desc)
+    desc_width = length(description_prefix(desc))
     eta_width = 29
     speed_width = showspeed ? 14 : 0
     return max(0, full_width - desc_width - eta_width - speed_width)
@@ -241,8 +243,8 @@ function _updateProgress!(p::Progress; showvalues = (),
             bar = barstring(barlen, percentage_complete, barglyphs=p.barglyphs)
             elapsed_time = t - p.tinit
             dur = durationstring(elapsed_time)
-            spacer = endswith(p.desc, " ") ? "" : " "
-            msg = @sprintf "%s%s%3u%%%s Time: %s" p.desc spacer percentage_rounded bar dur
+            prefix = description_prefix(p.desc)
+            msg = @sprintf "%s%3u%%%s Time: %s" prefix percentage_rounded bar dur
             if p.showspeed
                 sec_per_iter = elapsed_time / (p.counter - p.start)
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
@@ -278,8 +280,8 @@ function _updateProgress!(p::Progress; showvalues = (),
             else
                 eta = "N/A"
             end
-            spacer = endswith(p.desc, " ") ? "" : " "
-            msg = @sprintf "%s%s%3u%%%s  ETA: %s" p.desc spacer percentage_rounded bar eta
+            prefix = description_prefix(p.desc)
+            msg = @sprintf "%s%3u%%%s  ETA: %s" prefix percentage_rounded bar eta
             if p.showspeed
                 sec_per_iter = elapsed_time / (p.counter - p.start)
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
