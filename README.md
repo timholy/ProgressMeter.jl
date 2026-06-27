@@ -366,44 +366,94 @@ remove **all** output from the cell. You can restore previous behavior by callin
 `ProgressMeter.ijulia_behavior(:append)`. You can enable it again by calling `ProgressMeter.ijulia_behavior(:clear)`,
 which will also disable the warning message.
 
-### Tips for parallel programming
+### Parallel programming with `ParallelProgress`
 
-For remote parallelization, when multiple processes or tasks are being used for a computation,
-the workers should communicate back to a single task for displaying the progress bar. This
-can be accomplished with a `RemoteChannel`:
+`ParallelProgress` wraps an `AbstractProgress` to allow updating from other workers, 
+by going through a `RemoteChannel`
 
 ```julia
-using ProgressMeter
 using Distributed
+addprocs(2)
+@everywhere using ProgressMeter
 
 n_steps = 20
-p = Progress(n_steps)
-channel = RemoteChannel(() -> Channel{Bool}(), 1)
+p = ParallelProgress(n_steps)
 
 # introduce a long-running dummy task to all workers
 @everywhere long_task() = sum([ 1/x for x in 1:100_000_000 ])
 @time long_task() # a single execution is about 0.3 seconds
 
-@sync begin # start two tasks which will be synced in the very end
-    # the first task updates the progress bar
-    @async while take!(channel)
-        next!(p)
-    end
-
-    # the second task does the computation
-    @async begin
-        @distributed (+) for i in 1:n_steps
-            long_task()
-            put!(channel, true) # trigger a progress bar update
-            i^2
-        end
-        put!(channel, false) # this tells the printing task to finish
-    end
+@distributed (+) for i in 1:n_steps
+    long_task()
+    next!(p)
+    i^2
 end
+
+finish!(p)
 ```
 
-Here, returning some number `i^2` and reducing it somehow `(+)`
-is necessary to make the distribution happen.
+Here, returning some number `i^2` and reducing it somehow `(+)`is necessary to make the distribution happen. 
+`finish!(p)` or `close(p)` makes sure that the underlying `Channel` is closed
+
+```julia
+pu = ParallelProgress(ProgressUnknown(color=:red))
+pt = ParallelProgress(ProgressThresh(0.1, desc="Optimizing..."))
+close(pu)
+close(pt)
+```
+
+### Mutliple progressbars across multiple workers with `MutlipleProgress`
+
+`MultipleProgress` combines multiple progressbars, allowing them to update simultaneously across multiple workers
+
+```julia
+using Distributed
+addprocs(2)
+@everywhere using ProgressMeter
+
+progs = [Progress(10; desc="task $i ") for i in 1:5]
+mainprog = Progress(50; desc="global ")
+p = MultipleProgress(progs, mainprog)
+res = pmap(1:5) do i
+    for _ in 1:10
+        sleep(rand())
+        next!(p[i])
+    end
+    sleep(0.01)
+    myid()
+end
+close(p)
+```
+
+```
+global 100%|██████████████████████████████████████████████| Time: 0:00:24
+task 4 100%|██████████████████████████████████████████████| Time: 0:00:05
+task 5 100%|██████████████████████████████████████████████| Time: 0:00:05
+```
+
+the progress bars can be passed in an `Vector` or a `Dict`. In the first case the main progress bar can be
+updated with `p[0]`, otherwise `p[:main]` or by specifying the kwarg `main` when building the `MultipleProgress`
+
+If no main progress is given, one will be automatically generated. See `?MultipleProgress` for all available options.
+
+Additional progress bars can be added from another worker:
+
+```julia
+p = MultipleProgress(Progress(10; desc="tasks done "); count_finishes=true)
+sleep(0.1)
+pmap(1:10) do i
+    N = rand(20:50)
+    p[i] = Progress(N; desc=" task $i ")
+    for _ in 1:N
+        next!(p[i])
+        sleep(0.05)
+    end
+end
+close(p)
+```
+
+the main progress bar can be a `Progress` or a `ProgessUnknown`, 
+while the other progresses can be any `AbstractProgress`
 
 ### `progress_map`
 
