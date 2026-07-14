@@ -306,6 +306,22 @@ println("Testing custom bar glyphs")
 testfunc14("[=> ]")
 @test_throws ErrorException testfunc14("gklelt")
 
+function testfunc14a(barglyphs::Symbol)
+    n = 30
+    p = Progress(n, barglyphs=BarGlyphs(barglyphs))
+    for i in 1:n
+        sleep(0.05)
+        next!(p)
+    end
+    finish!(p)
+end
+
+testfunc14a(:blocks)
+testfunc14a(:braille)
+testfunc14a(:blocks_debruijn)
+testfunc14a(:braille_debruijn)
+@test_throws ErrorException testfunc14a(:xxyyzz)
+
 # Threshold-based progress reports
 println("Testing threshold-based progress")
 prog = ProgressThresh(1e-5; desc="Minimizing:")
