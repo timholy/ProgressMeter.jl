@@ -751,6 +751,18 @@ function Base.iterate(wrap::ProgressWrapper, state...)
     return ir
 end
 
+# Defined in ProgressMeterDistributedExt.
+"""
+Equivalent of @showprogress for a distributed for loop.
+```
+result = @showprogress @distributed (+) for i = 1:50
+    sleep(0.1)
+    i^2
+end
+```
+"""
+function showprogressdistributed end
+
 function showprogressthreads(args...)
     progressargs = args[1:end-1]
     expr = args[end]
@@ -786,6 +798,7 @@ being performed or other options.
 functions. These `map`-like functions rely on `ncalls` being defined
 and can be checked with `methods(ProgressMeter.ncalls)`. New ones can
 be added by defining `ProgressMeter.ncalls(::typeof(mapfun), args...) = ...`.
+Those that run on worker processes also need a `ProgressMeter.progress_channel` method.
 
 `@showprogress` is thread-safe and will work with `@distributed` loops
 as well as threaded or distributed functions like `pmap` and `asyncmap`.
@@ -825,9 +838,7 @@ function showprogress(args...)
         macroname = expr.args[1]
 
         if macroname in (Symbol("@distributed"), :(Distributed.var"@distributed"))
-            ext = Base.get_extension(@__MODULE__, :ProgressMeterDistributedExt)
-            ext === nothing && throw(ArgumentError("@showprogress @distributed requires `using Distributed`"))
-            return ext.showprogressdistributed(args...)
+            return showprogressdistributed(args...)
 
         elseif macroname in (Symbol("@threads"), :(Threads.var"@threads"))
             return showprogressthreads(args...)
@@ -980,7 +991,8 @@ Run a `map`-like function while displaying progress.
 
 `mapfun` can be any function, but it is only tested with `map`, `reduce` and `pmap`.
 `ProgressMeter.ncalls(::typeof(mapfun), ::Function, args...)` must be defined to
-specify the number of calls to `f`.
+specify the number of calls to `f`. A `mapfun` that calls `f` on worker processes
+also needs a `ProgressMeter.progress_channel` method.
 """
 function progress_map(args...; mapfun=map,
                                progress=Progress(ncalls(mapfun, args...)),
@@ -989,9 +1001,7 @@ function progress_map(args...; mapfun=map,
     isempty(args) && return mapfun(; kwargs...)
     f = first(args)
     other_args = args[2:end]
-    # With Distributed loaded, `mapfun` may run `f` on workers, which report through a RemoteChannel.
-    ext = Base.get_extension(@__MODULE__, :ProgressMeterDistributedExt)
-    channel = ext === nothing ? Channel{Bool}(channel_bufflen) : ext.progress_channel(channel_bufflen)
+    channel = progress_channel(mapfun, channel_bufflen)
     local vals
     @sync begin
         # display task
@@ -1012,6 +1022,16 @@ function progress_map(args...; mapfun=map,
     end
     return vals
 end
+
+"""
+    ProgressMeter.progress_channel(::typeof(mapfun), bufflen)
+
+Create the channel that carries progress updates from `mapfun`'s calls to the
+progress display. The default is a local `Channel{Bool}(bufflen)`. With Distributed
+loaded, `pmap` gets a `RemoteChannel`; define a method returning a `RemoteChannel`
+for any other `mapfun` that runs on worker processes.
+"""
+progress_channel(mapfun, bufflen) = Channel{Bool}(bufflen)
 
 """
     progress_pmap(f, [::AbstractWorkerPool], c...; progress=Progress(...), kwargs...)
@@ -1062,6 +1082,14 @@ end
 function ncalls_map(args...)
     length(args) < 1 && return 1
     return minimum(length, args)
+end
+
+function __init__()
+    Base.Experimental.register_error_hint(MethodError) do io, exc, argtypes, kwargs
+        if exc.f in (showprogressdistributed, progress_pmap) && isempty(methods(exc.f))
+            print(io, "\n`@showprogress @distributed` and `progress_pmap` load with `using Distributed`.")
+        end
+    end
 end
 
 include("deprecated.jl")

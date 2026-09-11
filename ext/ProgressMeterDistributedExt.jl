@@ -4,23 +4,14 @@ using Distributed
 using ProgressMeter
 using ProgressMeter: ncalls_map, showprogress_process_args
 
-progress_channel(bufflen) = RemoteChannel(() -> Channel{Bool}(bufflen), 1)
+ProgressMeter.progress_channel(::typeof(pmap), bufflen) = RemoteChannel(() -> Channel{Bool}(bufflen), 1)
 
 ProgressMeter.progress_pmap(args...; kwargs...) = progress_map(args...; mapfun=pmap, kwargs...)
 
 ProgressMeter.ncalls(::typeof(pmap), ::Function, args...) = ncalls_map(args...)
 ProgressMeter.ncalls(::typeof(pmap), ::Function, ::AbstractWorkerPool, args...) = ncalls_map(args...)
 
-"""
-Equivalent of @showprogress for a distributed for loop.
-```
-result = @showprogress @distributed (+) for i = 1:50
-    sleep(0.1)
-    i^2
-end
-```
-"""
-function showprogressdistributed(args...)
+function ProgressMeter.showprogressdistributed(args...)
     if length(args) < 1
         throw(ArgumentError("@showprogress @distributed requires at least 1 argument"))
     end
