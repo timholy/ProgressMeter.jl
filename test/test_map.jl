@@ -101,6 +101,14 @@ wp = WorkerPool(procs)
     vals = @showprogress color=:red mymap(x->(sleep(0.1); x^2), 1:10)
     @test vals == map(x->x^2, [1:10; 1:10])
 
+    # a custom mapfun that runs f on workers still reaches the progress display
+    myworkermap(f, x) = pmap(f, x)
+    ProgressMeter.ncalls(::typeof(myworkermap), ::Function, args...) = ProgressMeter.ncalls_map(args...)
+    p = Progress(10; output=devnull)
+    vals = progress_map(x->x^2, 1:10; mapfun=myworkermap, progress=p)
+    @test vals == map(x->x^2, 1:10)
+    @test p.counter == 10
+
     # @showprogress
     vals = @showprogress map(1:10) do x
         return x^2

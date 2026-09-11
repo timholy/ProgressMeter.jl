@@ -798,7 +798,6 @@ being performed or other options.
 functions. These `map`-like functions rely on `ncalls` being defined
 and can be checked with `methods(ProgressMeter.ncalls)`. New ones can
 be added by defining `ProgressMeter.ncalls(::typeof(mapfun), args...) = ...`.
-Those that run on worker processes also need a `ProgressMeter.progress_channel` method.
 
 `@showprogress` is thread-safe and will work with `@distributed` loops
 as well as threaded or distributed functions like `pmap` and `asyncmap`.
@@ -991,8 +990,8 @@ Run a `map`-like function while displaying progress.
 
 `mapfun` can be any function, but it is only tested with `map`, `reduce` and `pmap`.
 `ProgressMeter.ncalls(::typeof(mapfun), ::Function, args...)` must be defined to
-specify the number of calls to `f`. A `mapfun` that calls `f` on worker processes
-also needs a `ProgressMeter.progress_channel` method.
+specify the number of calls to `f`. Progress updates travel through the channel
+returned by `ProgressMeter.progress_channel`.
 """
 function progress_map(args...; mapfun=map,
                                progress=Progress(ncalls(mapfun, args...)),
@@ -1028,8 +1027,9 @@ end
 
 Create the channel that carries progress updates from `mapfun`'s calls to the
 progress display. The default is a local `Channel{Bool}(bufflen)`. With Distributed
-loaded, `pmap` gets a `RemoteChannel`; define a method returning a `RemoteChannel`
-for any other `mapfun` that runs on worker processes.
+loaded, every function `mapfun` reports through a `RemoteChannel`, which also reaches
+worker processes. A `mapfun` known to run on the main process can keep the local
+channel by defining `progress_channel(::typeof(mapfun), bufflen) = Channel{Bool}(bufflen)`.
 """
 progress_channel(mapfun, bufflen) = Channel{Bool}(bufflen)
 

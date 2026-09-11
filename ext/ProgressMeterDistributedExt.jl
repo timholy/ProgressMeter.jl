@@ -4,7 +4,9 @@ using Distributed
 using ProgressMeter
 using ProgressMeter: ncalls_map, showprogress_process_args
 
-ProgressMeter.progress_channel(::typeof(pmap), bufflen) = RemoteChannel(() -> Channel{Bool}(bufflen), 1)
+# More specific than the fallback in ProgressMeter, so any function-valued
+# `mapfun` reports through a RemoteChannel once Distributed is loaded.
+ProgressMeter.progress_channel(::Function, bufflen) = RemoteChannel(() -> Channel{Bool}(bufflen), 1)
 
 ProgressMeter.progress_pmap(args...; kwargs...) = progress_map(args...; mapfun=pmap, kwargs...)
 
