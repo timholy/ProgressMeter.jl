@@ -3,8 +3,13 @@ uuid = "92933f4c-e287-5a05-a399-4b506db050ca"
 version = "1.11.0"
 
 [deps]
-Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+
+[weakdeps]
+Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
+
+[extensions]
+ProgressMeterDistributedExt = "Distributed"
 
 [compat]
 julia = "1.10"
