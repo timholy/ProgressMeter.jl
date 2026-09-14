@@ -394,76 +394,9 @@ for front in (['▏','▎','▍','▌','▋','▊', '▉'], ['▁' ,'▂' ,'▃'
     end
 end
 
-function testfunc15(n, dt, tsleep)
-    result = @showprogress dt=dt @distributed (+) for i in 1:n
-        if rand() < 0.7
-            sleep(tsleep)
-        end
-        i ^ 2
-    end
-    @test result == sum(abs2.(1:n))
-end
-
-println("Testing @showprogress macro on distributed for loop with reducer")
-testfunc15(3000, 0.01, 0.001)
-
-function testfunc16(n, dt, tsleep)
-    @showprogress dt=dt desc="Description: " @distributed for i in 1:n
-        if rand() < 0.7
-            sleep(tsleep)
-        end
-        i ^ 2
-    end
-end
-
-println("Testing @showprogress macro on distributed for loop without reducer")
-testfunc16(3000, 0.01, 0.001)
-
-function testfunc16cb(N, dt, tsleep)
-    @showprogress dt=dt @distributed for i in N
-        if rand() < 0.7
-            sleep(tsleep)
-        end
-        200 < i < 400 && continue
-        i > 1500 && break
-        i ^ 2
-    end
-end
-
-println("Testing @showprogress macro on distributed for loop with continue")
-testfunc16cb(1:1000, 0.01, 0.002)
-
-println("Testing @showprogress macro on distributed for loop with break")
-testfunc16cb(1000:2000, 0.01, 0.003)
-
-function testfunc16d(n, dt, tsleep)
-    @showprogress Distributed.@distributed for i in 1:n
-        if rand() < 0.7
-            sleep(tsleep)
-        end
-        i ^ 2
-    end
-end
-
-println("Testing @showprogress macro on Distributed.@distributed")
-testfunc16d(3000, 0.01, 0.001)
-
-
-println("testing `@showprogress @distributed` in global scope")
-@showprogress @distributed for i in 1:10
-    sleep(0.1)
-    i^2
-end
-
-println("testing `@showprogress @distributed (+)` in global scope") #243
-result = @showprogress @distributed (+) for i in 1:10
-    sleep(0.1)
-    i^2
-end
-@test result == sum(abs2, 1:10)
-
-
-
+@test Base.get_extension(ProgressMeter, :ProgressMeterDistributedExt) === nothing
+@test_throws MethodError @macroexpand @showprogress @distributed for i in 1:10 end
+@test_throws "using Distributed" @macroexpand @showprogress @distributed for i in 1:10 end
 
 function testfunc17()
     n = 30

@@ -6,16 +6,6 @@ if get(ENV, "CI", "false") == "true"
     display(versioninfo())   # among other things, this shows the number of threads
 end
 
-@testset "Without Distributed" begin
-    @test Base.get_extension(ProgressMeter, :ProgressMeterDistributedExt) === nothing
-    @test progress_map(x -> x^2, 1:10) == map(x -> x^2, 1:10)
-    @test_throws MethodError @macroexpand @showprogress @distributed for i in 1:10 end
-    @test_throws "using Distributed" @macroexpand @showprogress @distributed for i in 1:10 end
-    @test_throws "using Distributed" progress_pmap(identity, 1:10)
-end
-
-using Distributed
-
 @testset "Core" begin
     include("core.jl")
     include("test.jl")
@@ -34,4 +24,10 @@ end
 end
 @testset "Deprecated" begin
     include("deprecated.jl")
+end
+
+using Distributed
+
+@testset "DistributedExt" begin
+    include("test_distributed.jl")
 end
