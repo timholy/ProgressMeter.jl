@@ -189,3 +189,42 @@ println("Brute-forcing thread safety... ($(Threads.nthreads()) threads)")
 end
 
 
+
+# printover reproduces printstyled's escape codes, and only when the output
+# advertises color support (printstyled itself cannot be compiled with --trim)
+let plain = IOBuffer(), colored = IOContext(IOBuffer(), :color => true)
+    ProgressMeter.printover(plain, "msg", :red)
+    @test String(take!(plain)) == "\rmsg\e[K"
+    for (s, c) in (("msg", :red), ("line1\nline2", :blue), ("\n  a: 1\n\n  b: 2", :green),
+                   ("msg", :light_black), ("msg", :color_normal))
+        ref = IOContext(IOBuffer(), :color => true)
+        print(ref, "\r"); printstyled(ref, s; color=c); print(ref, "\e[K")
+        ProgressMeter.printover(colored, s, c)
+        @test String(take!(colored.io)) == String(take!(ref.io))
+    end
+end
+
+# meters are parametrized on the output type and store dt as a Float64
+let io = IOBuffer()
+    p = Progress(10; output=io, dt=1)
+    @test p isa Progress{IOBuffer}
+    @test p.dt === 1.0
+    @test ProgressThresh(0.5; output=io) isa ProgressThresh{Float64, IOBuffer}
+    @test ProgressUnknown(; output=io) isa ProgressUnknown{IOBuffer}
+end
+
+# color escape codes reach the output only if it supports color
+let io = IOBuffer(), cio = IOContext(IOBuffer(), :color => true)
+    for out in (io, cio)
+        p = Progress(3; output=out, dt=0, color=:red, barlen=10)
+        for i in 1:3
+            update!(p, i; force=true)
+        end
+    end
+    @test !occursin("\e[31m", String(take!(io)))
+    @test occursin("\e[31m", String(take!(cio.io)))
+end
+
+# compute_front returns a Char for both kinds of `front`, and inferrably so
+@test (@inferred ProgressMeter.compute_front(ProgressMeter.defaultglyphs, 0.5)) isa Char
+@test (@inferred ProgressMeter.compute_front(BarGlyphs("[=> ]"), 0.5)) === '>'
