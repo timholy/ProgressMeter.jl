@@ -247,3 +247,14 @@ let l = ReentrantLock()
     @test Progress(1; dt=1, offset=Int16(2)).offset === 2
     @test_throws MethodError Progress(1; bogus=1)
 end
+
+
+# IJulia support is a package extension; without IJulia loaded the hooks are inert
+@test ProgressMeter.IJULIA_BACKEND[] isa ProgressMeter.NoIJulia
+@test !ProgressMeter.running_ijulia_kernel()
+@test ProgressMeter.ijulia_clear_output(ProgressMeter.IJULIA_BACKEND[]) === nothing
+@test ProgressMeter.ijulia_reset_stdio(ProgressMeter.IJULIA_BACKEND[]) === nothing
+let io = IOBuffer()
+    ProgressMeter.printover(io, "msg")
+    @test endswith(String(take!(io)), "\e[K")   # line clear: not in a notebook
+end

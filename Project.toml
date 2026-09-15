@@ -7,11 +7,14 @@ Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 
 [weakdeps]
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
+IJulia = "7073ff75-c697-5162-941a-fcdaad2a7d2a"
 
 [extensions]
 ProgressMeterDistributedExt = "Distributed"
+ProgressMeterIJuliaExt = "IJulia"
 
 [compat]
+IJulia = "1"
 julia = "1.10"
 
 [extras]
