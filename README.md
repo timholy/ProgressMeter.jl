@@ -366,6 +366,8 @@ remove **all** output from the cell. You can restore previous behavior by callin
 `ProgressMeter.ijulia_behavior(:append)`. You can enable it again by calling `ProgressMeter.ijulia_behavior(:clear)`,
 which will also disable the warning message.
 
+The IJulia integration is a package extension that loads with `using IJulia`.
+
 ### Tips for parallel programming
 
 For remote parallelization, when multiple processes or tasks are being used for a computation,

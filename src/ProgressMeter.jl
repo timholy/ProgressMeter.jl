@@ -195,7 +195,21 @@ end
 
 # Whether or not to use IJulia.clear_output
 const CLEAR_IJULIA = Ref{Bool}(false)
-running_ijulia_kernel() = isdefined(Main, :IJulia) && Main.IJulia.inited
+
+# IJulia support lives in the package extension ProgressMeterIJuliaExt, which
+# registers its backend here when `using IJulia` loads it.  each hook has a
+# single method until then, so the calls resolve statically and meters also
+# compile under `juliac --trim`
+abstract type IJuliaBackend end
+struct NoIJulia <: IJuliaBackend end
+const IJULIA_BACKEND = Ref{IJuliaBackend}(NoIJulia())
+
+ijulia_loaded(::NoIJulia) = false          # is IJulia loaded?
+ijulia_running(::NoIJulia) = false         # is a kernel running?
+ijulia_clear_output(::NoIJulia) = nothing  # IJulia.clear_output(true)
+ijulia_reset_stdio(::NoIJulia) = nothing   # circumvent I/O throttling (issue #76)
+
+running_ijulia_kernel() = ijulia_running(IJULIA_BACKEND[])
 clear_ijulia() = (IJULIABEHAVIOR[] != IJuliaAppend) && running_ijulia_kernel()
 
 function calc_check_iterations(p, t)
@@ -604,7 +618,7 @@ printvalues!(p::AbstractProgress, showvalues::Function; kwargs...) = printvalues
 
 function move_cursor_up_while_clearing_lines(io, numlinesup)
     if numlinesup > 0 && CLEAR_IJULIA[]
-        Main.IJulia.clear_output(true)
+        ijulia_clear_output(IJULIA_BACKEND[])
         if IJULIABEHAVIOR[] == IJuliaWarned
             @warn "ProgressMeter by default refresh meters with additional information in IJulia via `IJulia.clear_output`, which clears all outputs in the cell. \n - To prevent this behaviour, do `ProgressMeter.ijulia_behavior(:append)`. \n - To disable this warning message, do `ProgressMeter.ijulia_behavior(:clear)`."
         end
@@ -618,13 +632,8 @@ end
 function printover(io::IO, s::AbstractString, color::Symbol = :color_normal)
     print(io, "\r")
     printstyled(io, s; color=color)
-    if isdefined(Main, :IJulia)
-        # issue #76: circumvent IJulia I/O throttling
-        if pkgversion(Main.IJulia) < v"1.30"
-            Main.IJulia.stdio_bytes[] = 0
-        else
-            Main.IJulia.reset_stdio_count()
-        end
+    if ijulia_loaded(IJULIA_BACKEND[])
+        ijulia_reset_stdio(IJULIA_BACKEND[])  # issue #76: circumvent IJulia I/O throttling
     elseif isdefined(Main, :ESS) || isdefined(Main, :Atom)
     else
         print(io, "\u1b[K")     # clear the rest of the line
