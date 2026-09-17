@@ -256,9 +256,7 @@ function _updateProgress!(p::Progress; showvalues = (),
                 sec_per_iter = elapsed_time / (p.counter - p.start)
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
             end
-            if !CLEAR_IJULIA[]
-                print_repeat(p.output, "\n", p.offset + p.numprintedvalues)
-            end
+            CLEAR_IJULIA[] || print_repeat(p.output, "\n", p.offset + p.numprintedvalues)
             move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             printover(p.output, msg, p.color)
             printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
@@ -295,15 +293,11 @@ function _updateProgress!(p::Progress; showvalues = (),
                 sec_per_iter = elapsed_time / (p.counter - p.start)
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
             end
-            if !CLEAR_IJULIA[]
-                print_repeat(p.output, "\n", p.offset + p.numprintedvalues)
-            end
+            CLEAR_IJULIA[] || print_repeat(p.output, "\n", p.offset + p.numprintedvalues)
             move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             printover(p.output, msg, p.color)
             printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
-            if !CLEAR_IJULIA[]
-                print_repeat(p.output, "\r\u1b[A", p.offset + p.numprintedvalues)
-            end
+            CLEAR_IJULIA[] || print_repeat(p.output, "\r\u1b[A", p.offset + p.numprintedvalues)
             flush(p.output)
             # Compensate for any overhead of printing. This can be
             # especially important if you're running over a slow network
