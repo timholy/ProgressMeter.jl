@@ -228,3 +228,13 @@ end
 # compute_front returns a Char for both kinds of `front`, and inferrably so
 @test (@inferred ProgressMeter.compute_front(ProgressMeter.defaultglyphs, 0.5)) isa Char
 @test (@inferred ProgressMeter.compute_front(BarGlyphs("[=> ]"), 0.5)) === '>'
+
+# every ProgressCore field stays a keyword, internals included, and unknown ones error
+let l = ReentrantLock()
+    p = Progress(1; safe_lock=1, check_iterations=5, lock=l)
+    @test p.safe_lock == 1
+    @test p.check_iterations == 5
+    @test p.lock === l
+    @test Progress(1; dt=1, offset=Int16(2)).offset === 2
+    @test_throws MethodError Progress(1; bogus=1)
+end

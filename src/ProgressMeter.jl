@@ -65,51 +65,34 @@ function BarGlyphs(s::AbstractString)
 end
 const defaultglyphs = BarGlyphs('|','█', Sys.iswindows() ? '█' : ['▏','▎','▍','▌','▋','▊','▉'],' ','|',)
 
-# Internal struct for holding common properties and internals for progress meters
-mutable struct ProgressCore{O<:IO}
-    color::Symbol               # color of the meter
-    desc::String                # prefix to the percentage, e.g.  "Computing..."
-    dt::Float64                 # minimum time between updates
-    enabled::Bool               # is the output enabled
-    offset::Int                 # position offset of progress bar (default is 0)
-    output::O                   # output stream into which the progress is written
-    showspeed::Bool             # should the output include average time per iteration
+# Internal struct for holding common properties and internals for progress meters.
+# parametrized on the output type so that printing to it is not a dynamic dispatch
+Base.@kwdef mutable struct ProgressCore{O<:IO}
+    color::Symbol               = :green        # color of the meter
+    desc::String                = "Progress: "  # prefix to the percentage, e.g.  "Computing..."
+    dt::Float64                 = 0.1           # minimum time between updates
+    enabled::Bool               = true          # is the output enabled
+    offset::Int                 = 0             # position offset of progress bar (default is 0)
+    output::O                   = stderr        # output stream into which the progress is written
+    showspeed::Bool             = false         # should the output include average time per iteration
     # internals
-    check_iterations::Int       # number of iterations to check time for
-    counter::Int                # current iteration
-    lock::Threads.ReentrantLock # lock used when threading detected
-    numprintedvalues::Int       # num values printed below progress in last iteration
-    prev_update_count::Int      # counter at last update
-    printed::Bool               # true if we have issued at least one status update
-    safe_lock::Int              # 0: no lock, 1: lock, 2: detect
-    thread_id::Int              # id of the thread that created the progressmeter
-    tinit::Float64              # time meter was initialized
-    tlast::Float64              # time of last update
-    tsecond::Float64            # ignore the first loop given usually uncharacteristically slow
-
-    function ProgressCore{O}(color, desc, dt, enabled, offset, output::O, showspeed,
-                            check_iterations, counter, lock, numprintedvalues, prev_update_count,
-                            printed, safe_lock, thread_id, tinit, tlast, tsecond) where O<:IO
-        new{O}(color, desc, dt, enabled, offset, output, showspeed,
-               check_iterations, counter, lock, numprintedvalues, prev_update_count,
-               printed, safe_lock, thread_id, tinit, tlast, tsecond)
-    end
+    check_iterations::Int       = 1             # number of iterations to check time for
+    counter::Int                = 0             # current iteration
+    lock::Threads.ReentrantLock = Threads.ReentrantLock()   # lock used when threading detected
+    numprintedvalues::Int       = 0             # num values printed below progress in last iteration
+    prev_update_count::Int      = 1             # counter at last update
+    printed::Bool               = false         # true if we have issued at least one status update
+    safe_lock::Int              = 2*(Threads.nthreads()>1) # 0: no lock, 1: lock, 2: detect
+    thread_id::Int              = Threads.threadid() # id of the thread that created the progressmeter
+    tinit::Float64              = time()        # time meter was initialized
+    tlast::Float64              = time()        # time of last update
+    tsecond::Float64            = time()        # ignore the first loop given usually uncharacteristically slow
 end
-
-function ProgressCore(;
-        color::Symbol = :green,
-        desc::String = "Progress: ",
-        dt::Real = 0.1,
-        enabled::Bool = true,
-        offset::Integer = 0,
-        output::O = stderr,
-        showspeed::Bool = false,
-        kwargs...) where O<:IO
-    ProgressCore{O}(
-        color, desc, Float64(dt), enabled, Int(offset), output, showspeed,
-        1, 0, Threads.ReentrantLock(), 0, 1, false,
-        2*(Threads.nthreads()>1), Threads.threadid(), time(), time(), time())
-end
+# the default outer constructor of a parametric struct does not convert its
+# arguments, unlike the parametrized one:  route through it so that `dt=1` or
+# `offset=Int16(2)` keep working
+ProgressCore(color, desc, dt, enabled, offset, output::O, showspeed, internals::Vararg{Any,11}) where O<:IO =
+    ProgressCore{O}(color, desc, dt, enabled, offset, output, showspeed, internals...)
 
 """
 `prog = Progress(n; dt=0.1, desc="Progress: ", color=:green,
