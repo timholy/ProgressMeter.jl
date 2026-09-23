@@ -60,6 +60,8 @@ end
 
 In the case of a `@distributed` for loop without a reducer, an `@sync` is implied.
 
+Support for `@distributed` and `pmap` is a package extension that loads with `using Distributed`.
+
 You can also control progress updates and reports manually:
 
 ```julia

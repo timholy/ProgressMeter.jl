@@ -21,51 +21,39 @@ end
 
 println("Testing deprecated Progress building")
 
-@test_deprecated begin
-    local p = Progress(10, 23, "ABC", 47, :red, stdout)
-    @test p.n == 10
-    @test p.dt == 23
-    @test p.desc == "ABC"
-    @test p.barlen == 47
-    @test p.color == :red
-    @test p.output == stdout
-end
+p = @test_deprecated Progress(10, 23, "ABC", 47, :red, stdout)
+@test p.n == 10
+@test p.dt == 23
+@test p.desc == "ABC"
+@test p.barlen == 47
+@test p.color == :red
+@test p.output == stdout
 
-@test_deprecated begin
-    local p = Progress(10, "ABC", 23)
-    @test p.n == 10
-    @test p.desc == "ABC"
-    @test p.offset == 23
-end
+p = @test_deprecated Progress(10, "ABC", 23)
+@test p.n == 10
+@test p.desc == "ABC"
+@test p.offset == 23
 
-@test_deprecated begin 
-    local p = ProgressThresh(0.1, 23, "ABC", :red, stdout)
-    @test p.thresh == 0.1
-    @test p.dt == 23
-    @test p.desc == "ABC"
-    @test p.color == :red
-    @test p.output == stdout
-end
+p = @test_deprecated ProgressThresh(0.1, 23, "ABC", :red, stdout)
+@test p.thresh == 0.1
+@test p.dt == 23
+@test p.desc == "ABC"
+@test p.color == :red
+@test p.output == stdout
 
-@test_deprecated begin
-    local p = ProgressThresh(0.1, "ABC", 23)
-    @test p.thresh == 0.1
-    @test p.desc == "ABC"
-    @test p.offset == 23
-end
+p = @test_deprecated ProgressThresh(0.1, "ABC", 23)
+@test p.thresh == 0.1
+@test p.desc == "ABC"
+@test p.offset == 23
 
-@test_deprecated begin 
-    local p = ProgressUnknown(23, "ABC", :red, stdout)
-    @test p.dt == 23
-    @test p.desc == "ABC"
-    @test p.color == :red
-    @test p.output == stdout
-end
+p = @test_deprecated ProgressUnknown(23, "ABC", :red, stdout)
+@test p.dt == 23
+@test p.desc == "ABC"
+@test p.color == :red
+@test p.output == stdout
 
-@test_deprecated begin
-    local p = ProgressUnknown("ABC")
-    @test p.desc == "ABC"
-end
+p = @test_deprecated ProgressUnknown("ABC")
+@test p.desc == "ABC"
 
 println("Testing deprecated updating")
 
