@@ -1,7 +1,6 @@
 module ProgressMeter
 
 using Printf: @sprintf
-using Distributed
 
 export Progress, ProgressThresh, ProgressUnknown, BarGlyphs, next!, update!, cancel, finish!, @showprogress, progress_map, progress_pmap, ijulia_behavior
 
@@ -795,6 +794,7 @@ function Base.iterate(wrap::ProgressWrapper, state...)
     return ir
 end
 
+# Defined in ProgressMeterDistributedExt.
 """
 Equivalent of @showprogress for a distributed for loop.
 ```
@@ -804,65 +804,7 @@ result = @showprogress @distributed (+) for i = 1:50
 end
 ```
 """
-function showprogressdistributed(args...)
-    if length(args) < 1
-        throw(ArgumentError("@showprogress @distributed requires at least 1 argument"))
-    end
-    progressargs = args[1:end-1]
-    expr = Base.remove_linenums!(args[end])
-
-    distargs = filter(x -> !(x isa LineNumberNode), expr.args[2:end])
-    na = length(distargs)
-    if na == 1
-        loop = distargs[1]
-    elseif na == 2
-        reducer = distargs[1]
-        loop = distargs[2]
-    else
-        println("$distargs $na")
-        throw(ArgumentError("wrong number of arguments to @distributed"))
-    end
-    if loop.head !== :for
-        throw(ArgumentError("malformed @distributed loop"))
-    end
-    var = loop.args[1].args[1]
-    r = loop.args[1].args[2]
-    body = loop.args[2]
-
-    if na == 1
-        # would be nice to do this with @sync @distributed but @sync is broken
-        # https://github.com/JuliaLang/julia/issues/28979
-        compute = quote
-            waiting = @distributed for $(esc(var)) = $(esc(r))
-                $(esc(body))
-                put!(ch, true)
-            end
-            wait(waiting)
-            nothing
-        end
-    else
-        compute = quote
-            @distributed $(esc(reducer)) for $(esc(var)) = $(esc(r))
-                x = $(esc(body))
-                put!(ch, true)
-                x
-            end
-        end
-    end
-
-    quote
-        let n = length($(esc(r)))
-            p = Progress(n, $(showprogress_process_args(progressargs)...))
-            ch = RemoteChannel(() -> Channel{Bool}(n))
-
-            @async while take!(ch) next!(p) end
-            results = $compute
-            put!(ch, false)
-            finish!(p)
-            results
-        end
-    end
-end
+function showprogressdistributed end
 
 function showprogressthreads(args...)
     progressargs = args[1:end-1]
@@ -902,6 +844,7 @@ be added by defining `ProgressMeter.ncalls(::typeof(mapfun), args...) = ...`.
 
 `@showprogress` is thread-safe and will work with `@distributed` loops
 as well as threaded or distributed functions like `pmap` and `asyncmap`.
+Support for `@distributed` and `pmap` loads with `using Distributed`.
 
 """
 macro showprogress(args...)
@@ -1090,7 +1033,8 @@ Run a `map`-like function while displaying progress.
 
 `mapfun` can be any function, but it is only tested with `map`, `reduce` and `pmap`.
 `ProgressMeter.ncalls(::typeof(mapfun), ::Function, args...)` must be defined to
-specify the number of calls to `f`.
+specify the number of calls to `f`. Progress updates travel through the channel
+returned by `ProgressMeter.progress_channel`.
 """
 function progress_map(args...; mapfun=map,
                                progress=Progress(ncalls(mapfun, args...)),
@@ -1099,7 +1043,7 @@ function progress_map(args...; mapfun=map,
     isempty(args) && return mapfun(; kwargs...)
     f = first(args)
     other_args = args[2:end]
-    channel = RemoteChannel(()->Channel{Bool}(channel_bufflen), 1)
+    channel = progress_channel(mapfun, channel_bufflen)
     local vals
     @sync begin
         # display task
@@ -1122,11 +1066,22 @@ function progress_map(args...; mapfun=map,
 end
 
 """
+    ProgressMeter.progress_channel(::typeof(mapfun), bufflen)
+
+Create the channel that carries progress updates from `mapfun`'s calls to the
+progress display. The default is a local `Channel{Bool}(bufflen)`. With Distributed
+loaded, every function `mapfun` reports through a `RemoteChannel`, which also reaches
+worker processes. A `mapfun` known to run on the main process can keep the local
+channel by defining `progress_channel(::typeof(mapfun), bufflen) = Channel{Bool}(bufflen)`.
+"""
+progress_channel(mapfun, bufflen) = Channel{Bool}(bufflen)
+
+"""
     progress_pmap(f, [::AbstractWorkerPool], c...; progress=Progress(...), kwargs...)
 
-Run `pmap` while displaying progress.
+Run `pmap` while displaying progress. Requires `using Distributed`.
 """
-progress_pmap(args...; kwargs...) = progress_map(args...; mapfun=pmap, kwargs...)
+function progress_pmap end
 
 """
     ProgressMeter.ncalls(::typeof(mapfun), ::Function, args...)
@@ -1143,9 +1098,6 @@ ncalls(::typeof(map), ::Function, args...) = ncalls_map(args...)
 ncalls(::typeof(map!), ::Function, args...) = ncalls_map(args...)
 ncalls(::typeof(foreach), ::Function, args...) = ncalls_map(args...)
 ncalls(::typeof(asyncmap), ::Function, args...) = ncalls_map(args...)
-
-ncalls(::typeof(pmap), ::Function, args...) = ncalls_map(args...)
-ncalls(::typeof(pmap), ::Function, ::AbstractWorkerPool, args...) = ncalls_map(args...)
 
 ncalls(::typeof(mapfoldl), ::Function, ::Function, args...) = ncalls_map(args...)
 ncalls(::typeof(mapfoldr), ::Function, ::Function, args...) = ncalls_map(args...)
@@ -1173,6 +1125,14 @@ end
 function ncalls_map(args...)
     length(args) < 1 && return 1
     return minimum(length, args)
+end
+
+function __init__()
+    Base.Experimental.register_error_hint(MethodError) do io, exc, argtypes, kwargs
+        if exc.f in (showprogressdistributed, progress_pmap) && isempty(methods(exc.f))
+            print(io, "\n`@showprogress @distributed` and `progress_pmap` load with `using Distributed`.")
+        end
+    end
 end
 
 include("deprecated.jl")

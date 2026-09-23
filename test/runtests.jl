@@ -25,3 +25,9 @@ end
 @testset "Deprecated" begin
     include("deprecated.jl")
 end
+
+using Distributed
+
+@testset "DistributedExt" begin
+    include("test_distributed.jl")
+end
