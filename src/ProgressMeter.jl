@@ -615,9 +615,7 @@ function move_cursor_up_while_clearing_lines(io, numlinesup)
             @warn "ProgressMeter by default refresh meters with additional information in IJulia via `IJulia.clear_output`, which clears all outputs in the cell. \n - To prevent this behaviour, do `ProgressMeter.ijulia_behavior(:append)`. \n - To disable this warning message, do `ProgressMeter.ijulia_behavior(:clear)`."
         end
     else
-        for _ in 1:numlinesup
-            print(io, "\r\u1b[K\u1b[A")
-        end
+        print_repeat(io, "\r\u1b[K\u1b[A", numlinesup)
     end
 end
 
@@ -670,7 +668,7 @@ function compute_front(barglyphs::BarGlyphs, frac_solid::AbstractFloat)
 end
 
 # Helper for verifier-friendly string repetition
-function print_repeat(io::IO, s::AbstractString, n::Integer)
+function print_repeat(io::IO, s::Union{AbstractChar,AbstractString}, n::Integer)
     n <= 0 && return
     for _ in 1:Int(n)
         print(io, s)
@@ -682,20 +680,14 @@ function barstring(barlen, percentage_complete; barglyphs)
     res = IOBuffer()
     print(res, barglyphs.leftend)
     if percentage_complete >= 100
-        for _ in 1:Int(barlen)
-            print(res, barglyphs.fill)
-        end
+        print_repeat(res, barglyphs.fill, barlen)
     else
         n_bars = barlen * percentage_complete / 100
         nsolid = trunc(Int, n_bars)
-        for _ in 1:max(0, nsolid)
-            print(res, barglyphs.fill)
-        end
+        print_repeat(res, barglyphs.fill, max(0, nsolid))
         print(res, compute_front(barglyphs, n_bars - nsolid))
         nempty = Int(barlen) - nsolid - 1
-        for _ in 1:max(0, nempty)
-            print(res, barglyphs.empty)
-        end
+        print_repeat(res, barglyphs.empty, max(0, nempty))
     end
     print(res, barglyphs.rightend)
     return String(take!(res))
