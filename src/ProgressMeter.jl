@@ -93,6 +93,17 @@ end
 ProgressCore(color, desc, dt, enabled, offset, output::O, showspeed, internals::Vararg{Any,11}) where O<:IO =
     ProgressCore{O}(color, desc, dt, enabled, offset, output, showspeed, internals...)
 
+# `stderr` is a typed global of *abstract* type `IO`, so parametrizing on
+# `typeof(stderr)` would make the default constructors type-unstable and turn
+# every subsequent `next!`/`update!` into a runtime dispatch.  When no output
+# is passed, store it behind `IO`: `ProgressCore{IO}` is concrete, so meter
+# construction infers and the hot path stays static, with a dynamic dispatch
+# only at the occasional actual print (as before the parametrization).
+# Passing a concretely typed `output` yields a fully static meter, which is
+# what `--trim=safe` binaries need.
+progress_core(output::Nothing; kwargs...) = ProgressCore{IO}(; output=stderr, kwargs...)
+progress_core(output::O; kwargs...) where O<:IO = ProgressCore{O}(; output, kwargs...)
+
 """
 `prog = Progress(n; dt=0.1, desc="Progress: ", color=:green,
 output=stderr, barlen=tty_width(desc), start=0)` creates a progress meter for a
@@ -112,16 +123,23 @@ mutable struct Progress{O<:IO} <: AbstractProgress
     core::ProgressCore{O}
 
     function Progress(
-            n::Integer;
-            output::O=stderr,
+            n::Integer,
+            core::ProgressCore{O};
             start::Integer=0,
             barlen::Union{Int,Nothing}=nothing,
-            barglyphs::BarGlyphs=defaultglyphs,
-            kwargs...) where O<:IO
+            barglyphs::BarGlyphs=defaultglyphs) where O<:IO
         CLEAR_IJULIA[] = clear_ijulia()
-        core = ProgressCore(;output=output, kwargs...)
         new{O}(n, start, barlen, barglyphs, core)
     end
+end
+function Progress(
+        n::Integer;
+        output::Union{IO,Nothing}=nothing,
+        start::Integer=0,
+        barlen::Union{Int,Nothing}=nothing,
+        barglyphs::BarGlyphs=defaultglyphs,
+        kwargs...)
+    return Progress(n, progress_core(output; kwargs...); start, barlen, barglyphs)
 end
 
 """
@@ -142,13 +160,15 @@ mutable struct ProgressThresh{T<:Real, O<:IO} <: AbstractProgress
     triggered::Bool     # has the threshold been reached?
     core::ProgressCore{O}  # common properties and internals
 
-    function ProgressThresh{T, O}(thresh; val::T=typemax(T), triggered::Bool=false, output::O=stderr, kwargs...) where {T, O<:IO}
+    function ProgressThresh{T}(thresh, core::ProgressCore{O}; val::T=typemax(T), triggered::Bool=false) where {T, O<:IO}
         CLEAR_IJULIA[] = clear_ijulia()
-        core = ProgressCore(;output=output, kwargs...)
         new{T, O}(thresh, val, triggered, core)
     end
 end
-ProgressThresh(thresh::Real; output::O=stderr, kwargs...) where O<:IO = ProgressThresh{typeof(thresh), O}(thresh; output=output, kwargs...)
+function ProgressThresh{T}(thresh; val::T=typemax(T), triggered::Bool=false, output::Union{IO,Nothing}=nothing, kwargs...) where T
+    return ProgressThresh{T}(thresh, progress_core(output; kwargs...); val, triggered)
+end
+ProgressThresh(thresh::Real; kwargs...) = ProgressThresh{typeof(thresh)}(thresh; kwargs...)
 
 """
 `prog = ProgressUnknown(; dt=0.1, desc="Progress: ",
@@ -169,11 +189,13 @@ mutable struct ProgressUnknown{O<:IO} <: AbstractProgress
     spincounter::Int        # counter for spinner
     core::ProgressCore{O}   # common properties and internals
 
-    function ProgressUnknown(; spinner::Bool=false, output::O=stderr, kwargs...) where O<:IO
+    function ProgressUnknown(spinner::Bool, core::ProgressCore{O}) where O<:IO
         CLEAR_IJULIA[] = clear_ijulia()
-        core = ProgressCore(;output=output, kwargs...)
         new{O}(false, spinner, 0, core)
     end
+end
+function ProgressUnknown(; spinner::Bool=false, output::Union{IO,Nothing}=nothing, kwargs...)
+    return ProgressUnknown(spinner, progress_core(output; kwargs...))
 end
 
 #...length of percentage and ETA string with days is 29 characters, speed string is always 14 extra characters

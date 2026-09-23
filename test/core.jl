@@ -213,6 +213,15 @@ let io = IOBuffer()
     @test ProgressUnknown(; output=io) isa ProgressUnknown{IOBuffer}
 end
 
+# with the default output (the untyped global `stderr`) meters are the concrete
+# `...{IO}`, so construction infers and `next!` dispatches statically
+@test @inferred(Progress(10)) isa Progress{IO}
+@test @inferred(ProgressThresh(0.5)) isa ProgressThresh{Float64, IO}
+@test @inferred(ProgressUnknown()) isa ProgressUnknown{IO}
+let construct_with_output = io -> Progress(10; output=io)
+    @test @inferred(construct_with_output(IOBuffer())) isa Progress{IOBuffer}
+end
+
 # color escape codes reach the output only if it supports color
 let io = IOBuffer(), cio = IOContext(IOBuffer(), :color => true)
     for out in (io, cio)
