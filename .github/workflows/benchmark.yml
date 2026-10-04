@@ -1,0 +1,15 @@
+name: Benchmarks
+on:
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    env:
+      JULIA_NUM_THREADS: 2
+    steps:
+      - uses: MilesCranmer/AirspeedVelocity.jl@action-v1
+        with:
+          julia-version: '1'
+          job-summary: 'true'
