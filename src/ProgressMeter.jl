@@ -64,14 +64,15 @@ function BarGlyphs(s::AbstractString)
 end
 const defaultglyphs = BarGlyphs('|','█', Sys.iswindows() ? '█' : ['▏','▎','▍','▌','▋','▊','▉'],' ','|',)
 
-# Internal struct for holding common properties and internals for progress meters
-Base.@kwdef mutable struct ProgressCore
+# Internal struct for holding common properties and internals for progress meters.
+# parametrized on the output type so that printing to it is not a dynamic dispatch
+Base.@kwdef mutable struct ProgressCore{O<:IO}
     color::Symbol               = :green        # color of the meter
     desc::String                = "Progress: "  # prefix to the percentage, e.g.  "Computing..."
-    dt::Real                    = Float64(0.1)  # minimum time between updates
+    dt::Float64                 = 0.1           # minimum time between updates
     enabled::Bool               = true          # is the output enabled
     offset::Int                 = 0             # position offset of progress bar (default is 0)
-    output::IO                  = stderr        # output stream into which the progress is written
+    output::O                   = stderr        # output stream into which the progress is written
     showspeed::Bool             = false         # should the output include average time per iteration
     # internals
     check_iterations::Int       = 1             # number of iterations to check time for
@@ -86,6 +87,22 @@ Base.@kwdef mutable struct ProgressCore
     tlast::Float64              = time()        # time of last update
     tsecond::Float64            = time()        # ignore the first loop given usually uncharacteristically slow
 end
+# the default outer constructor of a parametric struct does not convert its
+# arguments, unlike the parametrized one:  route through it so that `dt=1` or
+# `offset=Int16(2)` keep working
+ProgressCore(color, desc, dt, enabled, offset, output::O, showspeed, internals::Vararg{Any,11}) where O<:IO =
+    ProgressCore{O}(color, desc, dt, enabled, offset, output, showspeed, internals...)
+
+# `stderr` is a typed global of *abstract* type `IO`, so parametrizing on
+# `typeof(stderr)` would make the default constructors type-unstable and turn
+# every subsequent `next!`/`update!` into a runtime dispatch.  When no output
+# is passed, store it behind `IO`: `ProgressCore{IO}` is concrete, so meter
+# construction infers and the hot path stays static, with a dynamic dispatch
+# only at the occasional actual print (as before the parametrization).
+# Passing a concretely typed `output` yields a fully static meter, which is
+# what `--trim=safe` binaries need.
+progress_core(output::Nothing; kwargs...) = ProgressCore{IO}(; output=stderr, kwargs...)
+progress_core(output::O; kwargs...) where O<:IO = ProgressCore{O}(; output, kwargs...)
 
 """
 `prog = Progress(n; dt=0.1, desc="Progress: ", color=:green,
@@ -97,24 +114,32 @@ the current task. Optionally you can disable the progress bar by setting
 `enabled=false`. You can also append a per-iteration average duration like
 "(12.34 ms/it)" to the description by setting `showspeed=true`.
 """
-mutable struct Progress <: AbstractProgress
+mutable struct Progress{O<:IO} <: AbstractProgress
     n::Int                  # total number of iterations
     start::Int              # which iteration number to start from
     barlen::Union{Int,Nothing} # progress bar size (default is available terminal width)
     barglyphs::BarGlyphs    # the characters to be used in the bar
     # internals
-    core::ProgressCore
+    core::ProgressCore{O}
 
     function Progress(
-            n::Integer;
+            n::Integer,
+            core::ProgressCore{O};
             start::Integer=0,
             barlen::Union{Int,Nothing}=nothing,
-            barglyphs::BarGlyphs=defaultglyphs,
-            kwargs...)
+            barglyphs::BarGlyphs=defaultglyphs) where O<:IO
         CLEAR_IJULIA[] = clear_ijulia()
-        core = ProgressCore(;kwargs...)
-        new(n, start, barlen, barglyphs, core)
+        new{O}(n, start, barlen, barglyphs, core)
     end
+end
+function Progress(
+        n::Integer;
+        output::Union{IO,Nothing}=nothing,
+        start::Integer=0,
+        barlen::Union{Int,Nothing}=nothing,
+        barglyphs::BarGlyphs=defaultglyphs,
+        kwargs...)
+    return Progress(n, progress_core(output; kwargs...); start, barlen, barglyphs)
 end
 
 """
@@ -128,18 +153,20 @@ the progress meter by setting `enabled=false`. You can also append a
 per-iteration average duration like "(12.34 ms/it)" to the description by
 setting `showspeed=true`.
 """
-mutable struct ProgressThresh{T<:Real} <: AbstractProgress
+mutable struct ProgressThresh{T<:Real, O<:IO} <: AbstractProgress
     thresh::T           # termination threshold
     val::T              # current value
     # internals
     triggered::Bool     # has the threshold been reached?
-    core::ProgressCore  # common properties and internals
+    core::ProgressCore{O}  # common properties and internals
 
-    function ProgressThresh{T}(thresh; val::T=typemax(T), triggered::Bool=false, kwargs...) where T
+    function ProgressThresh{T}(thresh, core::ProgressCore{O}; val::T=typemax(T), triggered::Bool=false) where {T, O<:IO}
         CLEAR_IJULIA[] = clear_ijulia()
-        core = ProgressCore(;kwargs...)
-        new{T}(thresh, val, triggered, core)
+        new{T, O}(thresh, val, triggered, core)
     end
+end
+function ProgressThresh{T}(thresh; val::T=typemax(T), triggered::Bool=false, output::Union{IO,Nothing}=nothing, kwargs...) where T
+    return ProgressThresh{T}(thresh, progress_core(output; kwargs...); val, triggered)
 end
 ProgressThresh(thresh::Real; kwargs...) = ProgressThresh{typeof(thresh)}(thresh; kwargs...)
 
@@ -155,18 +182,20 @@ per-iteration average duration like "(12.34 ms/it)" to the description by
 setting `showspeed=true`.  Instead of displaying a counter, it
 can optionally display a spinning ball by passing `spinner=true`.
 """
-mutable struct ProgressUnknown <: AbstractProgress
+mutable struct ProgressUnknown{O<:IO} <: AbstractProgress
     # internals
     done::Bool              # is the task done?
     spinner::Bool           # show a spinner
     spincounter::Int        # counter for spinner
-    core::ProgressCore      # common properties and internals
+    core::ProgressCore{O}   # common properties and internals
 
-    function ProgressUnknown(; spinner::Bool=false, kwargs...)
+    function ProgressUnknown(spinner::Bool, core::ProgressCore{O}) where O<:IO
         CLEAR_IJULIA[] = clear_ijulia()
-        core = ProgressCore(;kwargs...)
-        new(false, spinner, 0, core)
+        new{O}(false, spinner, 0, core)
     end
+end
+function ProgressUnknown(; spinner::Bool=false, output::Union{IO,Nothing}=nothing, kwargs...)
+    return ProgressUnknown(spinner, progress_core(output; kwargs...))
 end
 
 #...length of percentage and ETA string with days is 29 characters, speed string is always 14 extra characters
@@ -248,14 +277,14 @@ function _updateProgress!(p::Progress; showvalues = (),
                 sec_per_iter = elapsed_time / (p.counter - p.start)
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
             end
-            !CLEAR_IJULIA[] && print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
+            CLEAR_IJULIA[] || print_repeat(p.output, "\n", p.offset + p.numprintedvalues)
             move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             printover(p.output, msg, p.color)
             printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
             if keep
                 println(p.output)
             else
-                print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+                print_repeat(p.output, "\r\u1b[A", p.offset + p.numprintedvalues)
             end
             flush(p.output)
         end
@@ -285,11 +314,11 @@ function _updateProgress!(p::Progress; showvalues = (),
                 sec_per_iter = elapsed_time / (p.counter - p.start)
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
             end
-            !CLEAR_IJULIA[] && print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
+            CLEAR_IJULIA[] || print_repeat(p.output, "\n", p.offset + p.numprintedvalues)
             move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             printover(p.output, msg, p.color)
             printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
-            !CLEAR_IJULIA[] && print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+            CLEAR_IJULIA[] || print_repeat(p.output, "\r\u1b[A", p.offset + p.numprintedvalues)
             flush(p.output)
             # Compensate for any overhead of printing. This can be
             # especially important if you're running over a slow network
@@ -324,14 +353,14 @@ function _updateProgress!(p::ProgressThresh; showvalues = (),
                 sec_per_iter = elapsed_time / p.counter
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
             end
-            print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
+            print_repeat(p.output, "\n", p.offset + p.numprintedvalues)
             move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             printover(p.output, msg, p.color)
             printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
             if keep
                 println(p.output)
             else
-                print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+                print_repeat(p.output, "\r\u1b[A", p.offset + p.numprintedvalues)
             end
             flush(p.output)
         end
@@ -350,11 +379,11 @@ function _updateProgress!(p::ProgressThresh; showvalues = (),
                 sec_per_iter = elapsed_time / p.counter
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
             end
-            print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
+            print_repeat(p.output, "\n", p.offset + p.numprintedvalues)
             move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             printover(p.output, msg, p.color)
             printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
-            print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+            print_repeat(p.output, "\r\u1b[A", p.offset + p.numprintedvalues)
             flush(p.output)
             # Compensate for any overhead of printing. This can be
             # especially important if you're running over a slow network
@@ -400,14 +429,14 @@ function _updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = 
                 sec_per_iter = elapsed_time / p.counter
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
             end
-            print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
+            print_repeat(p.output, "\n", p.offset + p.numprintedvalues)
             move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             printover(p.output, msg, p.color)
             printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
             if keep
                 println(p.output)
             else
-                print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+                print_repeat(p.output, "\r\u1b[A", p.offset + p.numprintedvalues)
             end
             flush(p.output)
         end
@@ -431,11 +460,11 @@ function _updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = 
                 sec_per_iter = elapsed_time / p.counter
                 msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
             end
-            print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
+            print_repeat(p.output, "\n", p.offset + p.numprintedvalues)
             move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             printover(p.output, msg, p.color)
             printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
-            print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+            print_repeat(p.output, "\r\u1b[A", p.offset + p.numprintedvalues)
             flush(p.output)
             # Compensate for any overhead of printing. This can be
             # especially important if you're running over a slow network
@@ -535,14 +564,14 @@ function cancel(p::AbstractProgress, msg::AbstractString = "Aborted before all t
     lock_if_threading(p) do
         p.offset = offset
         if p.printed
-            print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
+            print_repeat(p.output, "\n", p.offset + p.numprintedvalues)
             move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             printover(p.output, msg, color)
             printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
             if keep
                 println(p.output)
             else
-                print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+                print_repeat(p.output, "\r\u1b[A", p.offset + p.numprintedvalues)
             end
         end
     end
@@ -608,15 +637,34 @@ function move_cursor_up_while_clearing_lines(io, numlinesup)
             @warn "ProgressMeter by default refresh meters with additional information in IJulia via `IJulia.clear_output`, which clears all outputs in the cell. \n - To prevent this behaviour, do `ProgressMeter.ijulia_behavior(:append)`. \n - To disable this warning message, do `ProgressMeter.ijulia_behavior(:clear)`."
         end
     else
-        for _ in 1:numlinesup
-            print(io, "\r\u1b[K\u1b[A")
-        end
+        print_repeat(io, "\r\u1b[K\u1b[A", numlinesup)
     end
+end
+
+# `printstyled` cannot be compiled under `--trim`:  `with_output_color` calls an
+# untyped `f::Function`.  this reproduces its output for a plain color:  escape
+# codes only when `io` advertises color support, applied per line, skipping
+# empty lines
+function printcolored(io::IO, s::AbstractString, color::Symbol)
+    if !get(io, :color, false)::Bool
+        print(io, s)
+        return nothing
+    end
+    enable = get(Base.text_colors, color, Base.text_colors[:default])
+    disable = get(Base.disable_text_style, color, Base.text_colors[:default])
+    first = true
+    for line in eachsplit(s, '\n')
+        first || print(io, '\n')
+        first = false
+        isempty(line) && continue
+        print(io, enable, line, disable)
+    end
+    return nothing
 end
 
 function printover(io::IO, s::AbstractString, color::Symbol = :color_normal)
     print(io, "\r")
-    printstyled(io, s; color=color)
+    printcolored(io, s, color)
     if isdefined(Main, :IJulia)
         # issue #76: circumvent IJulia I/O throttling
         if pkgversion(Main.IJulia) < v"1.30"
@@ -631,31 +679,40 @@ function printover(io::IO, s::AbstractString, color::Symbol = :color_normal)
 end
 
 function compute_front(barglyphs::BarGlyphs, frac_solid::AbstractFloat)
-    barglyphs.front isa Char && return barglyphs.front
-    idx = round(Int, frac_solid * (length(barglyphs.front) + 1))
-    return idx > length(barglyphs.front) ? barglyphs.fill :
+    # read the field once:  `BarGlyphs` is mutable, so a second read after the
+    # `isa` check would be inferred as the full `Union` again
+    front = barglyphs.front
+    front isa Char && return front
+    idx = round(Int, frac_solid * (length(front) + 1))
+    return idx > length(front) ? barglyphs.fill :
            idx == 0 ? barglyphs.empty :
-           barglyphs.front[idx]
+           front[idx]
+end
+
+# Helper for verifier-friendly string repetition
+function print_repeat(io::IO, s::Union{AbstractChar,AbstractString}, n::Integer)
+    n <= 0 && return
+    for _ in 1:Int(n)
+        print(io, s)
+    end
 end
 
 function barstring(barlen, percentage_complete; barglyphs)
-    bar = ""
-    if barlen > 0
-        if percentage_complete == 100 # if we're done, don't use the "front" character
-            bar = string(barglyphs.leftend, repeat(string(barglyphs.fill), barlen), barglyphs.rightend)
-        else
-            n_bars = barlen * percentage_complete / 100
-            nsolid = trunc(Int, n_bars)
-            frac_solid = n_bars - nsolid
-            nempty = barlen - nsolid - 1
-            bar = string(barglyphs.leftend,
-                         repeat(string(barglyphs.fill), max(0,nsolid)),
-                         compute_front(barglyphs, frac_solid),
-                         repeat(string(barglyphs.empty), max(0, nempty)),
-                         barglyphs.rightend)
-        end
+    barlen <= 0 && return ""
+    res = IOBuffer()
+    print(res, barglyphs.leftend)
+    if percentage_complete >= 100
+        print_repeat(res, barglyphs.fill, barlen)
+    else
+        n_bars = barlen * percentage_complete / 100
+        nsolid = trunc(Int, n_bars)
+        print_repeat(res, barglyphs.fill, max(0, nsolid))
+        print(res, compute_front(barglyphs, n_bars - nsolid))
+        nempty = Int(barlen) - nsolid - 1
+        print_repeat(res, barglyphs.empty, max(0, nempty))
     end
-    bar
+    print(res, barglyphs.rightend)
+    return String(take!(res))
 end
 
 function durationstring(nsec)
