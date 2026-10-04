@@ -1,4 +1,4 @@
-name: Benchmark this PR
+name: Benchmarks
 on:
   pull_request:
     branches: [ master ]
