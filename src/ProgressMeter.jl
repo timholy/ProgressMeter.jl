@@ -2,10 +2,7 @@ module ProgressMeter
 
 using Printf: @sprintf
 
-export Progress, ProgressThresh, ProgressUnknown, BarGlyphs, next!, update!, cancel, finish!, @showprogress, progress_map, progress_pmap, ijulia_behavior
-@static if VERSION >= v"1.11.0-DEV.469"
-    eval(Meta.parse("public AbstractProgressElement, ProgressStatus, print_element, Description, Percentage, Bar, ETA, Speed, ElapsedTime, Counter, Threshold, Spinner"))
-end
+export Progress, ProgressThresh, ProgressUnknown, BarGlyphs, next!, update!, cancel, finish!, @showprogress, progress_map, progress_pmap, ijulia_behavior, Elements
 
 """
 `ProgressMeter` contains a suite of utilities for displaying progress
@@ -89,6 +86,8 @@ Base.@kwdef mutable struct ProgressCore
     tinit::Float64              = time()        # time meter was initialized
     tlast::Float64              = time()        # time of last update
     tsecond::Float64            = time()        # ignore the first loop given usually uncharacteristically slow
+    tcurrent::Float64           = time()        # time of the current redraw, read by the elements
+    finished::Bool              = false         # true while drawing the final status line
 end
 
 """
@@ -101,8 +100,8 @@ the current task. Optionally you can disable the progress bar by setting
 `enabled=false`. You can also append a per-iteration average duration like
 "(12.34 ms/it)" to the description by setting `showspeed=true`.
 To customize the status line pass a tuple of `elements`, e.g.
-`elements=(ProgressMeter.Description(), ProgressMeter.Bar(), " ", MyElement())`,
-see [`ProgressMeter.AbstractProgressElement`](@ref).
+`elements=(Elements.Description(), Elements.Bar(), " ", MyElement())`,
+see [`ProgressMeter.Elements`](@ref).
 """
 mutable struct Progress <: AbstractProgress
     n::Int                  # total number of iterations
@@ -134,7 +133,7 @@ apart, and perhaps longer if each iteration takes longer than
 the progress meter by setting `enabled=false`. You can also append a
 per-iteration average duration like "(12.34 ms/it)" to the description by
 setting `showspeed=true`. The status line can be customized with `elements`,
-see [`ProgressMeter.AbstractProgressElement`](@ref).
+see [`ProgressMeter.Elements`](@ref).
 """
 mutable struct ProgressThresh{T<:Real} <: AbstractProgress
     thresh::T           # termination threshold
@@ -168,7 +167,7 @@ per-iteration average duration like "(12.34 ms/it)" to the description by
 setting `showspeed=true`.  Instead of displaying a counter, it
 can optionally display a spinning ball by passing `spinner=true`.
 The status line can be customized with `elements`, see
-[`ProgressMeter.AbstractProgressElement`](@ref).
+[`ProgressMeter.Elements`](@ref).
 """
 mutable struct ProgressUnknown <: AbstractProgress
     # internals
@@ -224,176 +223,17 @@ function calc_check_iterations(p, t)
     return round(Int, clamp(iterations_per_dt, 1, p.check_iterations * 10))
 end
 
-"""
-    AbstractProgressElement
-
-Supertype for the pieces that make up the status line of a progress meter. A progress
-meter concatenates the strings returned by [`print_element`](@ref ProgressMeter.print_element)
-for each of its `elements`. Define a subtype and a `print_element` method to show custom
-information:
-
-```julia
-mutable struct Accepted <: ProgressMeter.AbstractProgressElement
-    count::Int
-end
-ProgressMeter.print_element(e::Accepted, p, status) = " accepted: \$(e.count)"
-
-accepted = Accepted(0)
-p = Progress(100; elements = (ProgressMeter.Description(), ProgressMeter.Percentage(),
-                              ProgressMeter.Bar(), ProgressMeter.ETA(), accepted))
-```
-"""
-abstract type AbstractProgressElement end
-
-"""
-    ProgressStatus
-
-Passed to every [`print_element`](@ref ProgressMeter.print_element) call of a redraw.
-Fields: `t` (`time()` of the redraw), `elapsed` (seconds since the meter was created) and
-`finished` (whether this is the final redraw).
-"""
-struct ProgressStatus
-    t::Float64
-    elapsed::Float64
-    finished::Bool
-end
-ProgressStatus(p::AbstractProgress, t::Float64, finished::Bool) = ProgressStatus(t, t - p.tinit, finished)
-
-"""
-    print_element(element, p::AbstractProgress, status::ProgressStatus) -> String
-
-Return the text of `element` for the progress meter `p`. Called once per element each time
-the meter is redrawn (at most every `dt` seconds), so this is the place to compute
-whatever the element shows. Strings are elements that print themselves.
-"""
-function print_element end
-# strings in `elements` act as separators, e.g. " " or "    Time: " in the default layouts
-print_element(s::AbstractString, ::AbstractProgress, ::ProgressStatus) = s
-
-"""Description of the progress meter (`desc`), followed by a space unless it already ends with one."""
-struct Description <: AbstractProgressElement
-    pad::Bool   # false: print `desc` verbatim
-end
-Description() = Description(true)
-print_element(e::Description, p::AbstractProgress, ::ProgressStatus) = e.pad ? description_prefix(p.desc) : p.desc
-
-"""Percentage of completed steps of a `Progress`, e.g. ` 42%`."""
-struct Percentage <: AbstractProgressElement end
-function print_element(::Percentage, p::Progress, status::ProgressStatus)
-    # don't round up to 100% if not finished (#300)
-    percentage = status.finished ? 100 : min(99, round(Int, 100.0 * p.counter / p.n))
-    return @sprintf "%3u%%" percentage
-end
-
-"""
-The bar of a `Progress`, drawn with the meter's `barglyphs`. Its length is the meter's
-`barlen`, or, if that is `nothing`, the terminal width left over by the other elements.
-"""
-struct Bar <: AbstractProgressElement
-    legacy_width::Bool   # true: estimate the width of the default elements instead of measuring
-end
-Bar() = Bar(false)
-print_element(b::Bar, p::Progress, status::ProgressStatus) = render_bar(b, p, status, 0, 1)
-
-function render_bar(b::Bar, p::Progress, status::ProgressStatus, width_used::Int, nbars::Int)
-    barlen = if p.barlen !== nothing
-        p.barlen
-    elseif b.legacy_width
-        tty_width(p.desc, p.output, p.showspeed)
-    else
-        # leave the last column free so the line doesn't wrap, the two bar ends need 2 columns
-        max(0, ((displaysize(p.output)::Tuple{Int,Int})[2] - width_used - 1) ÷ nbars - 2)
-    end
-    percentage_complete = status.finished ? 100.0 : 100.0 * p.counter / p.n
-    return barstring(barlen, percentage_complete; barglyphs = p.barglyphs)
-end
-
-"""Estimated remaining time of a `Progress`, or the total time once finished."""
-struct ETA <: AbstractProgressElement end
-function print_element(::ETA, p::Progress, status::ProgressStatus)
-    status.finished && return " Time: " * durationstring(status.elapsed)
-    est_total_time = status.elapsed * (p.n - p.start) / (p.counter - p.start)
-    if 0 <= est_total_time <= typemax(Int)
-        eta = durationstring(round(Int, est_total_time - status.elapsed))
-    else
-        eta = "N/A"
-    end
-    return "  ETA: " * eta
-end
-
-"""Average time per iteration, e.g. ` (12.34 ms/it)`."""
-struct Speed <: AbstractProgressElement end
-print_element(::Speed, p::AbstractProgress, status::ProgressStatus) =
-    " (" * speedstring(status.elapsed / iterations(p)) * ")"
-
-iterations(p::Progress) = p.counter - p.start
-iterations(p::AbstractProgress) = p.counter
-
-"""Time elapsed since the progress meter was created."""
-struct ElapsedTime <: AbstractProgressElement end
-print_element(::ElapsedTime, ::AbstractProgress, status::ProgressStatus) = durationstring(status.elapsed)
-
-"""Number of iterations so far."""
-struct Counter <: AbstractProgressElement end
-print_element(::Counter, p::AbstractProgress, ::ProgressStatus) = string(p.counter)
-
-"""Threshold and current value of a `ProgressThresh`, or the time and iterations taken once finished."""
-struct Threshold <: AbstractProgressElement end
-function print_element(::Threshold, p::ProgressThresh, status::ProgressStatus)
-    status.finished && return @sprintf "Time: %s (%d iterations)" durationstring(status.elapsed) p.counter
-    return @sprintf "(thresh = %g, value = %g)" p.thresh p.val
-end
-
-"""Spinning character of a `ProgressUnknown`, a check mark once done."""
-struct Spinner <: AbstractProgressElement end
-function print_element(::Spinner, p::ProgressUnknown, ::ProgressStatus)
-    c = spinner_char(p, p.spinnerchars)
-    p.spincounter += 1
-    return string(c)
-end
-
-# elements reproducing the layout from before elements were introduced; built on every redraw
-# so that changes to e.g. `p.showspeed` take effect
-function default_elements(p::Progress)
-    elements = (Description(), Percentage(), Bar(true), ETA())
-    return p.showspeed ? (elements..., Speed()) : elements
-end
-
-function default_elements(p::ProgressThresh)
-    elements = (Description(false), " ", Threshold())
-    return p.showspeed ? (elements..., Speed()) : elements
-end
-
-function default_elements(p::ProgressUnknown)
-    elements = p.spinner ?
-        (Spinner(), " ", Description(false), "    Time: ", ElapsedTime()) :
-        (Description(false), " ", Counter(), "    Time: ", ElapsedTime())
-    return p.showspeed ? (elements..., Speed()) : elements
-end
-
-function render_line(p::AbstractProgress, status::ProgressStatus)
-    elements = something(p.elements, default_elements(p))
-    # call `print_element` of every element (built-in or user-defined) to assemble the line;
-    # bars fill the width the other elements leave, so render those first
-    parts = map(e -> e isa Bar ? "" : print_element(e, p, status)::AbstractString, elements)
-    nbars = count(e -> e isa Bar, elements)
-    if nbars > 0
-        width_used = sum(textwidth, parts; init = 0)
-        parts = map((e, s) -> e isa Bar ? render_bar(e, p, status, width_used, nbars) : s, elements, parts)
-    end
-    return join(parts)
-end
-
-# Print `msg` over the current line, followed by `showvalues`. `keep` decides what happens at
-# the end: `true` moves to a new line, `false` moves back up to the meter, `nothing` (meter
-# still running) moves back up unless `guard_ijulia` is set and IJulia output is being cleared
-function draw!(p::AbstractProgress, msg::AbstractString; color = p.color, showvalues = (),
+# Print the `text => color` segments of a line over the current line, followed by
+# `showvalues`. `keep` decides what happens at the end: `true` moves to a new line, `false`
+# moves back up to the meter, `nothing` (meter still running) moves back up unless
+# `guard_ijulia` is set and IJulia output is being cleared
+function draw!(p::AbstractProgress, segments; showvalues = (),
                valuecolor = :blue, truncate_lines = false,
                keep::Union{Bool,Nothing}, guard_ijulia::Bool)
     skip_newlines = guard_ijulia && CLEAR_IJULIA[]
     skip_newlines || print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
     move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
-    printover(p.output, msg, color)
+    printover(p.output, segments)
     printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
     if keep === true
         println(p.output)
@@ -405,8 +245,9 @@ function draw!(p::AbstractProgress, msg::AbstractString; color = p.color, showva
 end
 
 function draw_finished!(p::AbstractProgress; draw_options...)
-    msg = render_line(p, ProgressStatus(p, time(), true))
-    draw!(p, msg; draw_options...)
+    p.tcurrent = time()
+    p.finished = true
+    draw!(p, render_line(p); draw_options...)
 end
 
 # redraw a running meter if enough iterations and time have passed since the last redraw
@@ -418,8 +259,9 @@ function draw_running!(p::AbstractProgress, force::Bool, ignore_predictor::Bool,
             p.check_iterations = calc_check_iterations(p, t)
         end
         if force || (t > p.tlast + p.dt && can_draw)
-            msg = render_line(p, ProgressStatus(p, t, false))
-            draw!(p, msg; keep = nothing, draw_options...)
+            p.tcurrent = t
+            p.finished = false
+            draw!(p, render_line(p); keep = nothing, draw_options...)
             # Compensate for any overhead of printing. This can be
             # especially important if you're running over a slow network
             # connection.
@@ -596,7 +438,7 @@ function cancel(p::AbstractProgress, msg::AbstractString = "Aborted before all t
     lock_if_threading(p) do
         p.offset = offset
         if p.printed
-            draw!(p, msg; color, showvalues, valuecolor, truncate_lines, keep, guard_ijulia = false)
+            draw!(p, (msg => color,); showvalues, valuecolor, truncate_lines, keep, guard_ijulia = false)
         end
     end
     return nothing
@@ -667,9 +509,17 @@ function move_cursor_up_while_clearing_lines(io, numlinesup)
     end
 end
 
-function printover(io::IO, s::AbstractString, color::Symbol = :color_normal)
-    print(io, "\r")
-    printstyled(io, s; color=color)
+printover(io::IO, s::AbstractString, color::Symbol = :color_normal) = printover(io, (s => color,))
+
+# print `text => color` segments over the current line
+function printover(io::IO, segments)
+    # style the segments in a buffer so that the line is written at once
+    buffer = IOContext(IOBuffer(), :color => get(io, :color, false))
+    print(buffer, "\r")
+    for (text, color) in segments
+        printstyled(buffer, text; color=color)
+    end
+    write(io, take!(buffer.io))
     if isdefined(Main, :IJulia)
         # issue #76: circumvent IJulia I/O throttling
         if pkgversion(Main.IJulia) < v"1.30"
@@ -1145,6 +995,7 @@ function __init__()
     end
 end
 
+include("elements.jl")
 include("deprecated.jl")
 
 end # module

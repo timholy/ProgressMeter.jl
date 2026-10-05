@@ -184,12 +184,14 @@ where the last bar is not yet fully filled.
 ### Customizing the status line
 
 The status line is made of *elements*, which can be rearranged or extended by passing a
-tuple as `elements`. Every element is a subtype of `ProgressMeter.AbstractProgressElement`
-that returns its text from `ProgressMeter.print_element(element, p, status)`, where `p` is the
-progress meter and `status::ProgressMeter.ProgressStatus` holds the time `t` of the
-redraw, the `elapsed` seconds and whether the meter is `finished`. Plain strings can be
-used as separators. `print_element` is only called when the meter is redrawn (at most every
-`dt` seconds), so elements can compute what they show on the fly.
+tuple as `elements`. The elements live in the exported module `Elements` (`using
+ProgressMeter.Elements` brings their names into scope). Every element is a subtype of
+`Elements.AbstractProgressElement` that returns its text from
+`Elements.print_element(element, p)`, where `p` is the progress meter. Besides its usual
+fields (`p.counter`, `p.desc`, ...), `p.tcurrent` holds the `time()` of the redraw, `p.tinit`
+the time the meter was created and `p.finished` whether this is the final redraw. Plain
+strings can be used as separators. `print_element` is only called when the meter is
+redrawn (at most every `dt` seconds), so elements can compute what they show on the fly.
 
 This is most useful to show information about the computation whose progress is being
 tracked, e.g. a statistic of the data being processed or a diagnostic of a running
@@ -198,16 +200,16 @@ show the current state on every redraw. Here `MaxValue` holds the vector `data` 
 loop fills, so the line shows its maximum so far:
 
 ```julia
-mutable struct MaxValue <: ProgressMeter.AbstractProgressElement
+mutable struct MaxValue <: Elements.AbstractProgressElement
     data::Vector{Float64}
 end
 
-ProgressMeter.print_element(e::MaxValue, p, status) = " max = $(round(maximum(e.data), digits=2))"
+Elements.print_element(e::MaxValue, p) = " max = $(round(maximum(e.data), digits=2))"
 
 data = zeros(100)
 p = Progress(length(data); desc = "Sampling:", barlen = 20,
-    elements = (ProgressMeter.Description(), ProgressMeter.Percentage(),
-                ProgressMeter.Bar(), ProgressMeter.ETA(), MaxValue(data)))
+    elements = (Elements.Description(), Elements.Percentage(),
+                Elements.Bar(), Elements.ETA(), MaxValue(data)))
 for i in eachindex(data)
     data[i] = i / 10
     next!(p)
@@ -231,13 +233,23 @@ The built-in elements are
 | `Counter()` | the number of iterations | all |
 | `Threshold()` | `(thresh = 0.1, value = 0.5)` | `ProgressThresh` |
 | `Spinner()` | a spinning character | `ProgressUnknown` |
+| `Colored(element, color)` | `element` in `color` | all |
+
+All elements are printed in the meter's `color`, unless wrapped in `Colored`. `color` is a
+`Symbol` or an `Int` (0-255) as for `printstyled`, e.g.
+
+```julia
+using ProgressMeter.Elements
+p = Progress(100; elements = (Colored(Description(), :blue), Percentage(),
+                              Bar(), Colored(ETA(), :light_black)))
+```
 
 Without `elements` the layout is determined by `desc`, `showspeed` and, for
 `ProgressUnknown`, `spinner`. For example, `Progress(n; showspeed=true)` corresponds to
 
 ```julia
-Progress(n; elements = (ProgressMeter.Description(), ProgressMeter.Percentage(),
-                        ProgressMeter.Bar(), ProgressMeter.ETA(), ProgressMeter.Speed()))
+Progress(n; elements = (Elements.Description(), Elements.Percentage(),
+                        Elements.Bar(), Elements.ETA(), Elements.Speed()))
 ```
 
 except that the default bar length is estimated rather than measured, so the bar may differ
