@@ -181,6 +181,54 @@ Progress:  34%|███▃      |  ETA: 0:00:02
 
 where the last bar is not yet fully filled.
 
+### Customizing the status line
+
+The status line is made of *elements*, which can be rearranged or extended by passing a
+tuple as `elements`. Every element is a subtype of `ProgressMeter.AbstractProgressElement`
+that returns its text from `ProgressMeter.print_element(element, p, status)`, where `p` is the
+progress meter and `status::ProgressMeter.ProgressStatus` holds the time `t` of the
+redraw, the `elapsed` seconds and whether the meter is `finished`. Plain strings can be
+used as separators. `print_element` is only called when the meter is redrawn (at most every
+`dt` seconds), so elements can compute what they show on the fly:
+
+```julia
+mutable struct MaxValue <: ProgressMeter.AbstractProgressElement
+    data::Vector{Float64}
+end
+
+ProgressMeter.print_element(e::MaxValue, p, status) = " max = $(round(maximum(e.data), digits=2))"
+
+data = zeros(100)
+p = Progress(length(data); desc = "Sampling:", barlen = 20,
+    elements = (ProgressMeter.Description(), ProgressMeter.Percentage(),
+                ProgressMeter.Bar(), ProgressMeter.ETA(), MaxValue(data)))
+for i in eachindex(data)
+    data[i] = i / 10
+    next!(p)
+end
+```
+
+```
+Sampling:  42%|████████▍           |  ETA: 0:00:01 max = 4.2
+```
+
+The built-in elements are
+
+| Element | Shows | Meters |
+|---|---|---|
+| `Description()` | `desc`, followed by a space | all |
+| `Percentage()` | ` 42%` | `Progress` |
+| `Bar()` | the bar; `barlen=nothing` fills the width the other elements leave | `Progress` |
+| `ETA()` | `  ETA: 0:00:01`, or ` Time: 0:00:02` once finished | `Progress` |
+| `Speed()` | ` (12.34 ms/it)` | all |
+| `ElapsedTime()` | `0:00:02` | all |
+| `Counter()` | the number of iterations | all |
+| `Threshold()` | `(thresh = 0.1, value = 0.5)` | `ProgressThresh` |
+| `Spinner()` | a spinning character | `ProgressUnknown` |
+
+Without `elements` the layout is the same as before and determined by `desc`, `showspeed`
+and, for `ProgressUnknown`, `spinner`.
+
 ### Progress meters for tasks with a target threshold
 
 Some tasks only terminate when some criterion is satisfied, for

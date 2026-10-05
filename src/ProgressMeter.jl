@@ -3,6 +3,9 @@ module ProgressMeter
 using Printf: @sprintf
 
 export Progress, ProgressThresh, ProgressUnknown, BarGlyphs, next!, update!, cancel, finish!, @showprogress, progress_map, progress_pmap, ijulia_behavior
+@static if VERSION >= v"1.11.0-DEV.469"
+    eval(Meta.parse("public AbstractProgressElement, ProgressStatus, print_element, Description, Percentage, Bar, ETA, Speed, ElapsedTime, Counter, Threshold, Spinner"))
+end
 
 """
 `ProgressMeter` contains a suite of utilities for displaying progress
@@ -73,6 +76,7 @@ Base.@kwdef mutable struct ProgressCore
     offset::Int                 = 0             # position offset of progress bar (default is 0)
     output::IO                  = stderr        # output stream into which the progress is written
     showspeed::Bool             = false         # should the output include average time per iteration
+    elements::Union{Nothing,Tuple} = nothing    # elements of the status line, `nothing` for the default layout
     # internals
     check_iterations::Int       = 1             # number of iterations to check time for
     counter::Int                = 0             # current iteration
@@ -96,6 +100,9 @@ iteration takes longer than `dt`. `desc` is a description of
 the current task. Optionally you can disable the progress bar by setting
 `enabled=false`. You can also append a per-iteration average duration like
 "(12.34 ms/it)" to the description by setting `showspeed=true`.
+To customize the status line pass a tuple of `elements`, e.g.
+`elements=(ProgressMeter.Description(), ProgressMeter.Bar(), " ", MyElement())`,
+see [`ProgressMeter.AbstractProgressElement`](@ref).
 """
 mutable struct Progress <: AbstractProgress
     n::Int                  # total number of iterations
@@ -126,7 +133,8 @@ apart, and perhaps longer if each iteration takes longer than
 `dt`. `desc` is a description of the current task. Optionally you can disable
 the progress meter by setting `enabled=false`. You can also append a
 per-iteration average duration like "(12.34 ms/it)" to the description by
-setting `showspeed=true`.
+setting `showspeed=true`. The status line can be customized with `elements`,
+see [`ProgressMeter.AbstractProgressElement`](@ref).
 """
 mutable struct ProgressThresh{T<:Real} <: AbstractProgress
     thresh::T           # termination threshold
@@ -154,18 +162,24 @@ the progress meter by setting `enabled=false`. You can also append a
 per-iteration average duration like "(12.34 ms/it)" to the description by
 setting `showspeed=true`.  Instead of displaying a counter, it
 can optionally display a spinning ball by passing `spinner=true`.
+The status line can be customized with `elements`, see
+[`ProgressMeter.AbstractProgressElement`](@ref).
 """
+const spinner_chars = ['◐','◓','◑','◒']
+const spinner_done = '✓'
+
 mutable struct ProgressUnknown <: AbstractProgress
     # internals
     done::Bool              # is the task done?
     spinner::Bool           # show a spinner
     spincounter::Int        # counter for spinner
+    spinnerchars::Union{AbstractChar,AbstractString,AbstractVector{<:AbstractChar}} # spinner characters of the current update
     core::ProgressCore      # common properties and internals
 
     function ProgressUnknown(; spinner::Bool=false, kwargs...)
         CLEAR_IJULIA[] = clear_ijulia()
         core = ProgressCore(;kwargs...)
-        new(false, spinner, 0, core)
+        new(false, spinner, 0, spinner_chars, core)
     end
 end
 
@@ -208,6 +222,211 @@ function calc_check_iterations(p, t)
     return round(Int, clamp(iterations_per_dt, 1, p.check_iterations * 10))
 end
 
+"""
+    AbstractProgressElement
+
+Supertype for the pieces that make up the status line of a progress meter. A progress
+meter concatenates the strings returned by [`print_element`](@ref ProgressMeter.print_element)
+for each of its `elements`. Define a subtype and a `print_element` method to show custom
+information:
+
+```julia
+mutable struct Accepted <: ProgressMeter.AbstractProgressElement
+    count::Int
+end
+ProgressMeter.print_element(e::Accepted, p, status) = " accepted: \$(e.count)"
+
+accepted = Accepted(0)
+p = Progress(100; elements = (ProgressMeter.Description(), ProgressMeter.Percentage(),
+                              ProgressMeter.Bar(), ProgressMeter.ETA(), accepted))
+```
+"""
+abstract type AbstractProgressElement end
+
+"""
+    ProgressStatus
+
+Passed to every [`print_element`](@ref ProgressMeter.print_element) call of a redraw.
+Fields: `t` (`time()` of the redraw), `elapsed` (seconds since the meter was created) and
+`finished` (whether this is the final redraw).
+"""
+struct ProgressStatus
+    t::Float64
+    elapsed::Float64
+    finished::Bool
+end
+ProgressStatus(p::AbstractProgress, t::Float64, finished::Bool) = ProgressStatus(t, t - p.tinit, finished)
+
+"""
+    print_element(element, p::AbstractProgress, status::ProgressStatus) -> String
+
+Return the text of `element` for the progress meter `p`. Called once per element each time
+the meter is redrawn (at most every `dt` seconds), so this is the place to compute
+whatever the element shows. Strings are elements that print themselves.
+"""
+function print_element end
+print_element(s::AbstractString, ::AbstractProgress, ::ProgressStatus) = s
+
+"""Description of the progress meter (`desc`), followed by a space unless it already ends with one."""
+struct Description <: AbstractProgressElement
+    pad::Bool   # false: print `desc` verbatim
+end
+Description() = Description(true)
+print_element(e::Description, p::AbstractProgress, ::ProgressStatus) = e.pad ? description_prefix(p.desc) : p.desc
+
+"""Percentage of completed steps of a `Progress`, e.g. ` 42%`."""
+struct Percentage <: AbstractProgressElement end
+function print_element(::Percentage, p::Progress, status::ProgressStatus)
+    # don't round up to 100% if not finished (#300)
+    percentage = status.finished ? 100 : min(99, round(Int, 100.0 * p.counter / p.n))
+    return @sprintf "%3u%%" percentage
+end
+
+"""
+The bar of a `Progress`, drawn with the meter's `barglyphs`. Its length is the meter's
+`barlen`, or, if that is `nothing`, the terminal width left over by the other elements.
+"""
+struct Bar <: AbstractProgressElement
+    legacy_width::Bool   # true: estimate the width of the default elements instead of measuring
+end
+Bar() = Bar(false)
+print_element(b::Bar, p::Progress, status::ProgressStatus) = render_bar(b, p, status, 0, 1)
+
+function render_bar(b::Bar, p::Progress, status::ProgressStatus, width_used::Int, nbars::Int)
+    barlen = if p.barlen !== nothing
+        p.barlen
+    elseif b.legacy_width
+        tty_width(p.desc, p.output, p.showspeed)
+    else
+        # leave the last column free so the line doesn't wrap, the two bar ends need 2 columns
+        max(0, ((displaysize(p.output)::Tuple{Int,Int})[2] - width_used - 1) ÷ nbars - 2)
+    end
+    percentage_complete = status.finished ? 100.0 : 100.0 * p.counter / p.n
+    return barstring(barlen, percentage_complete; barglyphs = p.barglyphs)
+end
+
+"""Estimated remaining time of a `Progress`, or the total time once finished."""
+struct ETA <: AbstractProgressElement end
+function print_element(::ETA, p::Progress, status::ProgressStatus)
+    status.finished && return " Time: " * durationstring(status.elapsed)
+    est_total_time = status.elapsed * (p.n - p.start) / (p.counter - p.start)
+    if 0 <= est_total_time <= typemax(Int)
+        eta = durationstring(round(Int, est_total_time - status.elapsed))
+    else
+        eta = "N/A"
+    end
+    return "  ETA: " * eta
+end
+
+"""Average time per iteration, e.g. ` (12.34 ms/it)`."""
+struct Speed <: AbstractProgressElement end
+print_element(::Speed, p::AbstractProgress, status::ProgressStatus) =
+    " (" * speedstring(status.elapsed / iterations(p)) * ")"
+
+iterations(p::Progress) = p.counter - p.start
+iterations(p::AbstractProgress) = p.counter
+
+"""Time elapsed since the progress meter was created."""
+struct ElapsedTime <: AbstractProgressElement end
+print_element(::ElapsedTime, ::AbstractProgress, status::ProgressStatus) = durationstring(status.elapsed)
+
+"""Number of iterations so far."""
+struct Counter <: AbstractProgressElement end
+print_element(::Counter, p::AbstractProgress, ::ProgressStatus) = string(p.counter)
+
+"""Threshold and current value of a `ProgressThresh`, or the time and iterations taken once finished."""
+struct Threshold <: AbstractProgressElement end
+function print_element(::Threshold, p::ProgressThresh, status::ProgressStatus)
+    status.finished && return @sprintf "Time: %s (%d iterations)" durationstring(status.elapsed) p.counter
+    return @sprintf "(thresh = %g, value = %g)" p.thresh p.val
+end
+
+"""Spinning character of a `ProgressUnknown`, a check mark once done."""
+struct Spinner <: AbstractProgressElement end
+function print_element(::Spinner, p::ProgressUnknown, ::ProgressStatus)
+    c = spinner_char(p, p.spinnerchars)
+    p.spincounter += 1
+    return string(c)
+end
+
+# elements reproducing the layout from before elements were introduced; built on every redraw
+# so that changes to e.g. `p.showspeed` take effect
+function default_elements(p::Progress)
+    elements = (Description(), Percentage(), Bar(true), ETA())
+    return p.showspeed ? (elements..., Speed()) : elements
+end
+
+function default_elements(p::ProgressThresh)
+    elements = (Description(false), " ", Threshold())
+    return p.showspeed ? (elements..., Speed()) : elements
+end
+
+function default_elements(p::ProgressUnknown)
+    elements = p.spinner ?
+        (Spinner(), " ", Description(false), "    Time: ", ElapsedTime()) :
+        (Description(false), " ", Counter(), "    Time: ", ElapsedTime())
+    return p.showspeed ? (elements..., Speed()) : elements
+end
+
+function render_line(p::AbstractProgress, status::ProgressStatus)
+    elements = something(p.elements, default_elements(p))
+    # bars fill the width the other elements leave, so render those first
+    parts = map(e -> e isa Bar ? "" : print_element(e, p, status)::AbstractString, elements)
+    nbars = count(e -> e isa Bar, elements)
+    if nbars > 0
+        width_used = sum(textwidth, parts; init = 0)
+        parts = map((e, s) -> e isa Bar ? render_bar(e, p, status, width_used, nbars) : s, elements, parts)
+    end
+    return join(parts)
+end
+
+# Print `msg` over the current line, followed by `showvalues`. `keep` decides what happens at
+# the end: `true` moves to a new line, `false` moves back up to the meter, `nothing` (meter
+# still running) moves back up unless `guard_ijulia` is set and IJulia output is being cleared
+function draw!(p::AbstractProgress, msg::AbstractString; color = p.color, showvalues = (),
+               valuecolor = :blue, truncate_lines = false,
+               keep::Union{Bool,Nothing}, guard_ijulia::Bool)
+    skip_newlines = guard_ijulia && CLEAR_IJULIA[]
+    skip_newlines || print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
+    move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
+    printover(p.output, msg, color)
+    printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
+    if keep === true
+        println(p.output)
+    elseif keep === false || !skip_newlines
+        print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+    end
+    flush(p.output)
+    return nothing
+end
+
+function draw_finished!(p::AbstractProgress; draw_options...)
+    msg = render_line(p, ProgressStatus(p, time(), true))
+    draw!(p, msg; draw_options...)
+end
+
+# redraw a running meter if enough iterations and time have passed since the last redraw
+function draw_running!(p::AbstractProgress, force::Bool, ignore_predictor::Bool, can_draw::Bool = true;
+                       draw_options...)
+    if force || ignore_predictor || predicted_updates_per_dt_have_passed(p)
+        t = time()
+        if p.counter > 2
+            p.check_iterations = calc_check_iterations(p, t)
+        end
+        if force || (t > p.tlast + p.dt && can_draw)
+            msg = render_line(p, ProgressStatus(p, t, false))
+            draw!(p, msg; keep = nothing, draw_options...)
+            # Compensate for any overhead of printing. This can be
+            # especially important if you're running over a slow network
+            # connection.
+            p.tlast = t + 2*(time()-t)
+            p.printed = true
+            p.prev_update_count = p.counter
+        end
+    end
+    return nothing
+end
+
 # improve performance by checking if enabled before dealing with the options
 function updateProgress!(p::AbstractProgress; options...)
     !p.enabled && return nothing
@@ -233,73 +452,14 @@ function _updateProgress!(p::Progress; showvalues = (),
     p.offset = offset
     p.color = color
     p.n = max_steps
+    draw_options = (; showvalues, valuecolor, truncate_lines, guard_ijulia = true)
     if p.counter >= p.n
         if p.counter == p.n && p.printed
-            t = time()
-            barlen = p.barlen isa Nothing ? tty_width(p.desc, p.output, p.showspeed) : p.barlen
-            percentage_complete = 100.0 * p.counter / p.n
-            percentage_rounded = 100
-            bar = barstring(barlen, percentage_complete, barglyphs=p.barglyphs)
-            elapsed_time = t - p.tinit
-            dur = durationstring(elapsed_time)
-            prefix = description_prefix(p.desc)
-            msg = @sprintf "%s%3u%%%s Time: %s" prefix percentage_rounded bar dur
-            if p.showspeed
-                sec_per_iter = elapsed_time / (p.counter - p.start)
-                msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
-            end
-            !CLEAR_IJULIA[] && print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
-            move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
-            printover(p.output, msg, p.color)
-            printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
-            if keep
-                println(p.output)
-            else
-                print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
-            end
-            flush(p.output)
+            draw_finished!(p; keep, draw_options...)
         end
         return nothing
     end
-    if force || ignore_predictor || predicted_updates_per_dt_have_passed(p)
-        t = time()
-        if p.counter > 2
-            p.check_iterations = calc_check_iterations(p, t)
-        end
-        if force || (t > p.tlast+p.dt)
-            barlen = p.barlen isa Nothing ? tty_width(p.desc, p.output, p.showspeed) : p.barlen
-            percentage_complete = 100.0 * p.counter / p.n
-            percentage_rounded = min(99, round(Int, percentage_complete)) # don't round up to 100% if not finished (#300)
-            bar = barstring(barlen, percentage_complete, barglyphs=p.barglyphs)
-            elapsed_time = t - p.tinit
-            est_total_time = elapsed_time * (p.n - p.start) / (p.counter - p.start)
-            if 0 <= est_total_time <= typemax(Int)
-                eta_sec = round(Int, est_total_time - elapsed_time )
-                eta = durationstring(eta_sec)
-            else
-                eta = "N/A"
-            end
-            prefix = description_prefix(p.desc)
-            msg = @sprintf "%s%3u%%%s  ETA: %s" prefix percentage_rounded bar eta
-            if p.showspeed
-                sec_per_iter = elapsed_time / (p.counter - p.start)
-                msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
-            end
-            !CLEAR_IJULIA[] && print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
-            move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
-            printover(p.output, msg, p.color)
-            printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
-            !CLEAR_IJULIA[] && print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
-            flush(p.output)
-            # Compensate for any overhead of printing. This can be
-            # especially important if you're running over a slow network
-            # connection.
-            p.tlast = t + 2*(time()-t)
-            p.printed = true
-            p.prev_update_count = p.counter
-        end
-    end
-    return nothing
+    draw_running!(p, force, ignore_predictor; draw_options...)
 end
 
 function _updateProgress!(p::ProgressThresh; showvalues = (),
@@ -312,63 +472,14 @@ function _updateProgress!(p::ProgressThresh; showvalues = (),
     p.thresh = thresh
     p.color = color
     p.desc = desc
+    draw_options = (; showvalues, valuecolor, truncate_lines, guard_ijulia = false)
     if p.val <= p.thresh && !p.triggered
         p.triggered = true
-        if p.printed
-            t = time()
-            elapsed_time = t - p.tinit
-            p.triggered = true
-            dur = durationstring(elapsed_time)
-            msg = @sprintf "%s Time: %s (%d iterations)" p.desc dur p.counter
-            if p.showspeed
-                sec_per_iter = elapsed_time / p.counter
-                msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
-            end
-            print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
-            move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
-            printover(p.output, msg, p.color)
-            printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
-            if keep
-                println(p.output)
-            else
-                print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
-            end
-            flush(p.output)
-        end
+        p.printed && draw_finished!(p; keep, draw_options...)
         return nothing
     end
-
-    if force || ignore_predictor || predicted_updates_per_dt_have_passed(p)
-        t = time()
-        if p.counter > 2
-            p.check_iterations = calc_check_iterations(p, t)
-        end
-        if force || (t > p.tlast+p.dt && !p.triggered)
-            msg = @sprintf "%s (thresh = %g, value = %g)" p.desc p.thresh p.val
-            if p.showspeed
-                elapsed_time = t - p.tinit
-                sec_per_iter = elapsed_time / p.counter
-                msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
-            end
-            print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
-            move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
-            printover(p.output, msg, p.color)
-            printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
-            print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
-            flush(p.output)
-            # Compensate for any overhead of printing. This can be
-            # especially important if you're running over a slow network
-            # connection.
-            p.tlast = t + 2*(time()-t)
-            p.printed = true
-            p.prev_update_count = p.counter
-        end
-    end
-    return nothing
+    draw_running!(p, force, ignore_predictor, !p.triggered; draw_options...)
 end
-
-const spinner_chars = ['◐','◓','◑','◒']
-const spinner_done = '✓'
 
 spinner_char(p::ProgressUnknown, spinner::AbstractChar) = spinner
 spinner_char(p::ProgressUnknown, spinner::AbstractVector{<:AbstractChar}) =
@@ -385,67 +496,13 @@ function _updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = 
     p.offset = offset
     p.color = color
     p.desc = desc
+    p.spinnerchars = spinner
+    draw_options = (; showvalues, valuecolor, truncate_lines, guard_ijulia = false)
     if p.done
-        if p.printed
-            t = time()
-            elapsed_time = t - p.tinit
-            dur = durationstring(elapsed_time)
-            if p.spinner
-                msg = @sprintf "%c %s    Time: %s" spinner_char(p, spinner) p.desc dur
-                p.spincounter += 1
-            else
-                msg = @sprintf "%s %d    Time: %s" p.desc p.counter dur
-            end
-            if p.showspeed
-                sec_per_iter = elapsed_time / p.counter
-                msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
-            end
-            print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
-            move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
-            printover(p.output, msg, p.color)
-            printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
-            if keep
-                println(p.output)
-            else
-                print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
-            end
-            flush(p.output)
-        end
+        p.printed && draw_finished!(p; keep, draw_options...)
         return nothing
     end
-    if force || ignore_predictor || predicted_updates_per_dt_have_passed(p)
-        t = time()
-        if p.counter > 2
-            p.check_iterations = calc_check_iterations(p, t)
-        end
-        if force || (t > p.tlast+p.dt)
-            dur = durationstring(t-p.tinit)
-            if p.spinner
-                msg = @sprintf "%c %s    Time: %s" spinner_char(p, spinner) p.desc dur
-                p.spincounter += 1
-            else
-                msg = @sprintf "%s %d    Time: %s" p.desc p.counter dur
-            end
-            if p.showspeed
-                elapsed_time = t - p.tinit
-                sec_per_iter = elapsed_time / p.counter
-                msg = @sprintf "%s (%s)" msg speedstring(sec_per_iter)
-            end
-            print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
-            move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
-            printover(p.output, msg, p.color)
-            printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
-            print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
-            flush(p.output)
-            # Compensate for any overhead of printing. This can be
-            # especially important if you're running over a slow network
-            # connection.
-            p.tlast = t + 2*(time()-t)
-            p.printed = true
-            p.prev_update_count = p.counter
-        end
-    end
-    return nothing
+    draw_running!(p, force, ignore_predictor; draw_options...)
 end
 
 predicted_updates_per_dt_have_passed(p::AbstractProgress) = p.counter - p.prev_update_count >= p.check_iterations
@@ -535,15 +592,7 @@ function cancel(p::AbstractProgress, msg::AbstractString = "Aborted before all t
     lock_if_threading(p) do
         p.offset = offset
         if p.printed
-            print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
-            move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
-            printover(p.output, msg, color)
-            printvalues!(p, showvalues; color = valuecolor, truncate = truncate_lines)
-            if keep
-                println(p.output)
-            else
-                print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
-            end
+            draw!(p, msg; color, showvalues, valuecolor, truncate_lines, keep, guard_ijulia = false)
         end
     end
     return nothing
