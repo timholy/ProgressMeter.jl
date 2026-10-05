@@ -189,7 +189,13 @@ that returns its text from `ProgressMeter.print_element(element, p, status)`, wh
 progress meter and `status::ProgressMeter.ProgressStatus` holds the time `t` of the
 redraw, the `elapsed` seconds and whether the meter is `finished`. Plain strings can be
 used as separators. `print_element` is only called when the meter is redrawn (at most every
-`dt` seconds), so elements can compute what they show on the fly:
+`dt` seconds), so elements can compute what they show on the fly.
+
+This is most useful to show information about the computation whose progress is being
+tracked, e.g. a statistic of the data being processed or a diagnostic of a running
+simulation. Give the element a reference to that data when constructing it, and it will
+show the current state on every redraw. Here `MaxValue` holds the vector `data` that the
+loop fills, so the line shows its maximum so far:
 
 ```julia
 mutable struct MaxValue <: ProgressMeter.AbstractProgressElement
@@ -226,8 +232,16 @@ The built-in elements are
 | `Threshold()` | `(thresh = 0.1, value = 0.5)` | `ProgressThresh` |
 | `Spinner()` | a spinning character | `ProgressUnknown` |
 
-Without `elements` the layout is the same as before and determined by `desc`, `showspeed`
-and, for `ProgressUnknown`, `spinner`.
+Without `elements` the layout is determined by `desc`, `showspeed` and, for
+`ProgressUnknown`, `spinner`. For example, `Progress(n; showspeed=true)` corresponds to
+
+```julia
+Progress(n; elements = (ProgressMeter.Description(), ProgressMeter.Percentage(),
+                        ProgressMeter.Bar(), ProgressMeter.ETA(), ProgressMeter.Speed()))
+```
+
+except that the default bar length is estimated rather than measured, so the bar may differ
+in length by a few characters.
 
 ### Progress meters for tasks with a target threshold
 

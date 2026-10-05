@@ -151,6 +151,11 @@ mutable struct ProgressThresh{T<:Real} <: AbstractProgress
 end
 ProgressThresh(thresh::Real; kwargs...) = ProgressThresh{typeof(thresh)}(thresh; kwargs...)
 
+const spinner_chars = ['◐','◓','◑','◒']
+const spinner_done = '✓'
+# spinner characters can be given as a single character, a string or a vector of characters
+const SpinnerTypes = Union{AbstractChar,AbstractString,AbstractVector{<:AbstractChar}}
+
 """
 `prog = ProgressUnknown(; dt=0.1, desc="Progress: ",
 color=:green, output=stderr)` creates a progress meter for a task
@@ -165,15 +170,12 @@ can optionally display a spinning ball by passing `spinner=true`.
 The status line can be customized with `elements`, see
 [`ProgressMeter.AbstractProgressElement`](@ref).
 """
-const spinner_chars = ['◐','◓','◑','◒']
-const spinner_done = '✓'
-
 mutable struct ProgressUnknown <: AbstractProgress
     # internals
     done::Bool              # is the task done?
     spinner::Bool           # show a spinner
     spincounter::Int        # counter for spinner
-    spinnerchars::Union{AbstractChar,AbstractString,AbstractVector{<:AbstractChar}} # spinner characters of the current update
+    spinnerchars::SpinnerTypes # spinner characters of the current update
     core::ProgressCore      # common properties and internals
 
     function ProgressUnknown(; spinner::Bool=false, kwargs...)
@@ -265,6 +267,7 @@ the meter is redrawn (at most every `dt` seconds), so this is the place to compu
 whatever the element shows. Strings are elements that print themselves.
 """
 function print_element end
+# strings in `elements` act as separators, e.g. " " or "    Time: " in the default layouts
 print_element(s::AbstractString, ::AbstractProgress, ::ProgressStatus) = s
 
 """Description of the progress meter (`desc`), followed by a space unless it already ends with one."""
@@ -370,6 +373,7 @@ end
 
 function render_line(p::AbstractProgress, status::ProgressStatus)
     elements = something(p.elements, default_elements(p))
+    # call `print_element` of every element (built-in or user-defined) to assemble the line;
     # bars fill the width the other elements leave, so render those first
     parts = map(e -> e isa Bar ? "" : print_element(e, p, status)::AbstractString, elements)
     nbars = count(e -> e isa Bar, elements)
@@ -490,7 +494,7 @@ spinner_char(p::ProgressUnknown, spinner::AbstractString) =
 function _updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = false,
                         valuecolor = :blue, desc = p.desc,
                         ignore_predictor = false, force::Bool = false,
-                        spinner::Union{AbstractChar,AbstractString,AbstractVector{<:AbstractChar}} = spinner_chars,
+                        spinner::SpinnerTypes = spinner_chars,
                         offset::Integer = p.offset, keep = (offset == 0),
                         color = p.color)
     p.offset = offset
