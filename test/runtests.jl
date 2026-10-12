@@ -31,3 +31,9 @@ using Distributed
 @testset "DistributedExt" begin
     include("test_distributed.jl")
 end
+
+using IJulia
+
+@testset "IJuliaExt" begin
+    include("test_ijulia.jl")
+end
