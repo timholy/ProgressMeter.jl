@@ -3,7 +3,7 @@ JuliaC = "acedd4c2-ced6-4a15-accc-2607eb759ba2"
 ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
 
 [sources]
-ProgressMeter = {path = "/workspace"}
+ProgressMeter = {path = "../.."}
 
 [compat]
 JuliaC = "0.3"

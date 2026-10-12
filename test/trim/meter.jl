@@ -2,7 +2,7 @@
 # compile with no verifier errors and run without runtime code generation.
 # CI builds and runs it from the repository root with
 #
-#     julia --project=test/trim -e 'using Pkg; Pkg.develop(path=pwd()); Pkg.instantiate()'
+#     julia --project=test/trim -e 'using Pkg; Pkg.instantiate()'
 #     julia --project=test/trim -e 'using JuliaC; JuliaC.main(ARGS)' -- \
 #         --output-exe pmtrim --project=test/trim --experimental --trim=safe test/trim/meter.jl
 #     JULIA_LOAD_CODEGEN_LIB=0 ./pmtrim

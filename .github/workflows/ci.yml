@@ -57,7 +57,7 @@ jobs:
           version: '1.13'
       - uses: julia-actions/cache@v3
       - name: Set up the trim test environment
-        run: julia --project=test/trim -e 'using Pkg; Pkg.develop(path=pwd()); Pkg.instantiate()'
+        run: julia --project=test/trim -e 'using Pkg; Pkg.instantiate()'
       - name: Compile a meter with safe trimming
         run: julia --project=test/trim -e 'using JuliaC; JuliaC.main(ARGS)' -- --output-exe pmtrim --project=test/trim --experimental --trim=safe test/trim/meter.jl
       - name: Run the trimmed binary without runtime code generation
