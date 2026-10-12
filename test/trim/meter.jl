@@ -9,9 +9,12 @@
 using ProgressMeter
 
 function @main(args::Vector{String})::Cint
+    # `force` prints every frame:  otherwise a frame is skipped while the clock has
+    # not moved past the previous one, and a trimmed binary can run the whole loop
+    # inside one microsecond, printing nothing at all
     p = Progress(3; output=Core.stderr, dt=0.0)
     for i in 1:3
-        update!(p, i)
+        update!(p, i; force=true)
     end
     finish!(p)
     return 0
