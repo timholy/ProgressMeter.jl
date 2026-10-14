@@ -10,6 +10,10 @@ on:
 jobs:
   test:
     runs-on: ${{ matrix.os }}
+    permissions:
+      actions: write    # lets julia-actions/cache delete the caches it created
+      contents: read
+      id-token: write   # authenticates the Codecov upload (see below)
     strategy:
       fail-fast: false
       matrix:
@@ -38,4 +42,10 @@ jobs:
       - uses: julia-actions/julia-processcoverage@v1
       - uses: codecov/codecov-action@v5
         with:
+          # master is a protected branch, so Codecov rejects tokenless uploads to it.
+          # authenticate with the job's OIDC token whenever the workflow runs in this
+          # repository, and then also fail the job if the upload fails; pull requests
+          # from forks have no OIDC token and keep the tokenless path
+          use_oidc: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+          fail_ci_if_error: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
           files: lcov.info
