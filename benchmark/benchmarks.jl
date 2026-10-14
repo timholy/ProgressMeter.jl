@@ -42,10 +42,9 @@ const SUITE = BenchmarkGroup()
 SUITE["singlethreaded"] = BenchmarkGroup()
 SUITE["threaded"] = BenchmarkGroup()
 
-N = 10^6
-N_force = 100
-
-Nth = Threads.nthreads() * 10^5
+N = 10^8
+N_force = 1000
+Nth = Threads.nthreads() * 10^6
 Nth_force = Threads.nthreads() * 100
 
 SUITE["singlethreaded"]["without progress"] = @benchmarkable noprog_perf(N)
