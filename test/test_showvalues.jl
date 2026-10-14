@@ -1,3 +1,5 @@
+using StyledStrings, UnicodePlots
+
 for ijulia_behavior in [:warn, :clear, :append]
 
 ProgressMeter.ijulia_behavior(ijulia_behavior)
@@ -111,4 +113,19 @@ for i in 1:50
     sleep(0.1)
 end
 
-end # if
+println("Testing showvalues with UnicodePlot")
+prog = Progress(50; dt=1, desc="progress: ")
+for i in 1:50
+    update!(prog, i; showvalues = [("A plot", lineplot(rand(10)))])
+    sleep(0.1)
+end
+
+println("Testing showvalues with StyledStrings")
+prog = Progress(50; dt=1, desc="progress: ")
+for i in 1:50
+    str = AnnotatedString(" julia", [(2:6, :face, rand((:magenta, :red, :blue, :green)))])
+    update!(prog, i; showvalues = [("A plot", str)])
+    sleep(0.1)
+end
+    
+end # for
