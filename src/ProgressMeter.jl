@@ -101,7 +101,7 @@ ProgressCore(color, desc, dt, enabled, offset, output::O, showspeed, internals::
 # only at the occasional actual print (as before the parametrization).
 # Passing a concretely typed `output` yields a fully static meter, which is
 # what `--trim=safe` binaries need.
-progress_core(output::Nothing; kwargs...) = ProgressCore{typeof(stderr)}(; output=stderr, kwargs...)
+progress_core(output::Nothing; kwargs...) = ProgressCore{IO}(; output=stderr, kwargs...)
 progress_core(output::O; kwargs...) where O<:IO = ProgressCore{O}(; output, kwargs...)
 
 """
