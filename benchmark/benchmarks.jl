@@ -62,4 +62,3 @@ SUITE["threaded"]["with forced lock"] = @benchmarkable prog_threaded(Nth; safe_l
 SUITE["threaded"]["with no printing"] = @benchmarkable prog_threaded(Nth; dt=9999.9)
 SUITE["threaded"]["with disabled"] = @benchmarkable prog_threaded(Nth; enabled=false)
 SUITE["threaded"]["with force"] = @benchmarkable prog_threaded(Nth_force; force=true)
-
