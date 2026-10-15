@@ -22,6 +22,9 @@ end
 @testset "Threading" begin
     include("test_threads.jl")
 end
+@testset "Elements" begin
+    include("test_elements.jl")
+end
 @testset "Deprecated" begin
     include("deprecated.jl")
 end

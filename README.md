@@ -181,6 +181,80 @@ Progress:  34%|███▃      |  ETA: 0:00:02
 
 where the last bar is not yet fully filled.
 
+### Customizing the status line
+
+The status line is made of *elements*, which can be rearranged or extended by passing a
+tuple as `elements`. The elements live in the exported module `Elements` (`using
+ProgressMeter.Elements` brings their names into scope). Every element is a subtype of
+`Elements.AbstractProgressElement` that returns its text from
+`Elements.print_element(element, p)`, where `p` is the progress meter. Besides its usual
+fields (`p.counter`, `p.desc`, ...), `p.tcurrent` holds the `time()` of the redraw, `p.tinit`
+the time the meter was created and `p.finished` whether this is the final redraw. Plain
+strings can be used as separators. `print_element` is only called when the meter is
+redrawn (at most every `dt` seconds), so elements can compute what they show on the fly.
+
+This is most useful to show information about the computation whose progress is being
+tracked, e.g. a statistic of the data being processed or a diagnostic of a running
+simulation. Give the element a reference to that data when constructing it, and it will
+show the current state on every redraw. Here `MaxValue` holds the vector `data` that the
+loop fills, so the line shows its maximum so far:
+
+```julia
+mutable struct MaxValue <: Elements.AbstractProgressElement
+    data::Vector{Float64}
+end
+
+Elements.print_element(e::MaxValue, p) = " max = $(round(maximum(e.data), digits=2))"
+
+data = zeros(100)
+p = Progress(length(data); desc = "Sampling:", barlen = 20,
+    elements = (Elements.Description(), Elements.Percentage(),
+                Elements.Bar(), Elements.ETA(), MaxValue(data)))
+for i in eachindex(data)
+    data[i] = i / 10
+    next!(p)
+end
+```
+
+```
+Sampling:  42%|████████▍           |  ETA: 0:00:01 max = 4.2
+```
+
+The built-in elements are
+
+| Element | Shows | Meters |
+|---|---|---|
+| `Description()` | `desc`, followed by a space | all |
+| `Percentage()` | ` 42%` | `Progress` |
+| `Bar()` | the bar; `barlen=nothing` fills the width the other elements leave | `Progress` |
+| `ETA()` | `  ETA: 0:00:01`, or ` Time: 0:00:02` once finished | `Progress` |
+| `Speed()` | ` (12.34 ms/it)` | all |
+| `ElapsedTime()` | `0:00:02` | all |
+| `Counter()` | the number of iterations | all |
+| `Threshold()` | `(thresh = 0.1, value = 0.5)` | `ProgressThresh` |
+| `Spinner()` | a spinning character | `ProgressUnknown` |
+| `Colored(element, color)` | `element` in `color` | all |
+
+All elements are printed in the meter's `color`, unless wrapped in `Colored`. `color` is a
+`Symbol` or an `Int` (0-255) as for `printstyled`, e.g.
+
+```julia
+using ProgressMeter.Elements
+p = Progress(100; elements = (Colored(Description(), :blue), Percentage(),
+                              Bar(), Colored(ETA(), :light_black)))
+```
+
+Without `elements` the layout is determined by `desc`, `showspeed` and, for
+`ProgressUnknown`, `spinner`. For example, `Progress(n; showspeed=true)` corresponds to
+
+```julia
+Progress(n; elements = (Elements.Description(), Elements.Percentage(),
+                        Elements.Bar(), Elements.ETA(), Elements.Speed()))
+```
+
+except that the default bar length is estimated rather than measured, so the bar may differ
+in length by a few characters.
+
 ### Progress meters for tasks with a target threshold
 
 Some tasks only terminate when some criterion is satisfied, for
