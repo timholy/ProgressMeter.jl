@@ -2,7 +2,7 @@ using BenchmarkTools
 using ProgressMeter
 
 # Performance test (from #171, #323)
-function prog_perf(n; dt=0.001, enabled=true, force=false, safe_lock=0)
+function prog_perf(n; dt=0.01, enabled=true, force=false, safe_lock=0)
     prog = Progress(n; dt, enabled, safe_lock)
     x = 0.0
     for i in 1:n
@@ -20,7 +20,7 @@ function noprog_perf(n)
     return x
 end
 
-function prog_threaded(n; dt=0.001, enabled=true, force=false, safe_lock=2)
+function prog_threaded(n; dt=0.01, enabled=true, force=false, safe_lock=2)
     prog = Progress(n; dt, enabled, safe_lock)
     x = Threads.Atomic{Float64}(0.0)
     Threads.@threads for i in 1:n
@@ -42,10 +42,11 @@ const SUITE = BenchmarkGroup()
 SUITE["singlethreaded"] = BenchmarkGroup()
 SUITE["threaded"] = BenchmarkGroup()
 
-N = 10^8
-N_force = 1000
-Nth = Threads.nthreads() * 10^6
-Nth_force = Threads.nthreads() * 100
+# approx 1-2s for each test on github actions
+N = 10^10
+N_force = 10^6
+Nth = Threads.nthreads() * 10^8
+Nth_force = Threads.nthreads() * 10^4
 
 SUITE["singlethreaded"]["without progress"] = @benchmarkable noprog_perf(N)
 SUITE["singlethreaded"]["with progress"] = @benchmarkable prog_perf(N)
