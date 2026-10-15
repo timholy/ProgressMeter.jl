@@ -2,7 +2,7 @@ using BenchmarkTools
 using ProgressMeter
 
 # Performance test (from #171, #323)
-function prog_perf(n; dt=0.1, enabled=true, force=false, safe_lock=0)
+function prog_perf(n; dt=0.01, enabled=true, force=false, safe_lock=0)
     prog = Progress(n; dt, enabled, safe_lock)
     x = 0.0
     for i in 1:n
@@ -20,7 +20,7 @@ function noprog_perf(n)
     return x
 end
 
-function prog_threaded(n; dt=0.1, enabled=true, force=false, safe_lock=2)
+function prog_threaded(n; dt=0.01, enabled=true, force=false, safe_lock=2)
     prog = Progress(n; dt, enabled, safe_lock)
     x = Threads.Atomic{Float64}(0.0)
     Threads.@threads for i in 1:n
@@ -42,11 +42,10 @@ const SUITE = BenchmarkGroup()
 SUITE["singlethreaded"] = BenchmarkGroup()
 SUITE["threaded"] = BenchmarkGroup()
 
-N = 10^6
-N_force = 100
-
-Nth = Threads.nthreads() * 10^5
-Nth_force = Threads.nthreads() * 100
+N = 10^7
+N_force = 20
+Nth = 10^7
+Nth_force = 20
 
 SUITE["singlethreaded"]["without progress"] = @benchmarkable noprog_perf(N)
 SUITE["singlethreaded"]["with progress"] = @benchmarkable prog_perf(N)
@@ -63,3 +62,4 @@ SUITE["threaded"]["with forced lock"] = @benchmarkable prog_threaded(Nth; safe_l
 SUITE["threaded"]["with no printing"] = @benchmarkable prog_threaded(Nth; dt=9999.9)
 SUITE["threaded"]["with disabled"] = @benchmarkable prog_threaded(Nth; enabled=false)
 SUITE["threaded"]["with force"] = @benchmarkable prog_threaded(Nth_force; force=true)
+

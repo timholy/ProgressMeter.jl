@@ -1,7 +1,10 @@
 name: Benchmarks
 on:
-  pull_request:
-    branches: [ master ]
+  pull_request_target:
+    branches:
+      - master
+permissions:
+  pull-requests: write    # needed to post comments
 
 jobs:
   bench:
@@ -12,4 +15,4 @@ jobs:
       - uses: MilesCranmer/AirspeedVelocity.jl@action-v1
         with:
           julia-version: '1'
-          job-summary: 'true'
+          bench-on: ${{ github.event.pull_request.head.sha }}
