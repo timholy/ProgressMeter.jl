@@ -38,6 +38,7 @@ import ProgressMeter.ncalls
 
     # test ncalls
     @test ncalls(map, +, 1:10) == 10
+    @test ncalls(map!, +, zeros(10), 1:10) == 10
     @test ncalls(foldr, +, 1:10) == 9
     @test ncalls(foldl, +, 1:10) == 9
     @test ncalls(reduce, +, 1:10) == 9
@@ -59,6 +60,12 @@ import ProgressMeter.ncalls
 
     @test_throws DimensionMismatch ncalls(broadcast, +, 1:10, 1:100)
     @test_throws DimensionMismatch ncalls(broadcast, +, 1:100, 1:10)
+
+    # argument errors of the macro
+    @test_throws ArgumentError ProgressMeter.showprogress()
+    @test_throws ArgumentError ProgressMeter.showprogress(:notanexpression)
+    @test_throws ArgumentError ProgressMeter.showprogress(:(x = 1))
+    @test_throws ArgumentError macroexpand(@__MODULE__, :(@showprogress 1))
 
     @test_throws MethodError ncalls(map, 1:10, 1:10)
     @test_throws MethodError @showprogress map(1:10, 1:10)
