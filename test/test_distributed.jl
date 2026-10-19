@@ -69,6 +69,11 @@ result = @showprogress @distributed (+) for i in 1:10
 end
 @test result == sum(abs2, 1:10)
 
+# argument errors of the macro
+@test_throws ArgumentError ProgressMeter.showprogressdistributed()
+@test_throws ArgumentError ProgressMeter.showprogressdistributed(:(@distributed 1 2 3))
+@test_throws ArgumentError ProgressMeter.showprogressdistributed(:(@distributed f(x)))
+
 procs = addprocs(2)
 wp = WorkerPool(procs)
 @everywhere using ProgressMeter
@@ -81,6 +86,9 @@ wp = WorkerPool(procs)
         return x^2
     end
     @test vals == map(x->x^2, 1:10)
+
+    vals = progress_pmap(x -> x^2, 1:10)
+    @test vals == map(x -> x^2, 1:10)
 
     @test_throws RemoteException progress_map(1:10, mapfun=pmap) do x
         if x > 3

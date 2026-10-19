@@ -247,3 +247,72 @@ let l = ReentrantLock()
     @test Progress(1; dt=1, offset=Int16(2)).offset === 2
     @test_throws MethodError Progress(1; bogus=1)
 end
+
+
+# IJulia support is a package extension; without IJulia loaded the hooks are inert
+@test ProgressMeter.IJULIA_BACKEND[] isa ProgressMeter.NoIJulia
+@test !ProgressMeter.running_ijulia_kernel()
+@test ProgressMeter.ijulia_clear_output(ProgressMeter.IJULIA_BACKEND[]) === nothing
+@test ProgressMeter.ijulia_reset_stdio(ProgressMeter.IJULIA_BACKEND[]) === nothing
+let io = IOBuffer()
+    ProgressMeter.printover(io, "msg")
+    @test endswith(String(take!(io)), "\e[K")   # line clear: not in a notebook
+end
+@test !ProgressMeter.ijulia_loaded(ProgressMeter.IJULIA_BACKEND[])
+@test !ProgressMeter.ijulia_running(ProgressMeter.IJULIA_BACKEND[])
+
+# any backend can stand in for IJulia:  this one records the hook calls, so the
+# cell-clearing path runs without a kernel
+struct RecordingBackend <: ProgressMeter.IJuliaBackend
+    calls::Vector{Symbol}
+end
+ProgressMeter.ijulia_loaded(::RecordingBackend) = true
+ProgressMeter.ijulia_running(::RecordingBackend) = true
+ProgressMeter.ijulia_clear_output(b::RecordingBackend) = (push!(b.calls, :clear_output); nothing)
+ProgressMeter.ijulia_reset_stdio(b::RecordingBackend) = (push!(b.calls, :reset_stdio); nothing)
+let backend = RecordingBackend(Symbol[]), io = IOBuffer(),
+    behavior = ProgressMeter.IJULIABEHAVIOR[]
+    ProgressMeter.IJULIA_BACKEND[] = backend
+    try
+        @test ProgressMeter.running_ijulia_kernel()
+        ProgressMeter.printover(io, "msg")
+        @test String(take!(io)) == "\rmsg"            # no line clear with IJulia loaded
+        @test backend.calls == [:reset_stdio]
+        # a meter created in a "kernel" clears the cell instead of moving the cursor
+        ProgressMeter.ijulia_behavior(:warn)
+        Progress(3; output=io, dt=0)
+        @test ProgressMeter.CLEAR_IJULIA[]
+        @test_logs (:warn, r"IJulia.clear_output") ProgressMeter.move_cursor_up_while_clearing_lines(io, 2)
+        @test backend.calls[end] == :clear_output
+        ProgressMeter.ijulia_behavior(:clear)         # warns only until the user chooses
+        @test_logs ProgressMeter.move_cursor_up_while_clearing_lines(io, 2)
+        @test count(==(:clear_output), backend.calls) == 2
+        @test isempty(take!(io))                     # nothing printed in place of the cursor moves
+        ProgressMeter.move_cursor_up_while_clearing_lines(io, 0)
+        @test count(==(:clear_output), backend.calls) == 2  # nothing to clear
+        ProgressMeter.ijulia_behavior(:append)      # opting out keeps the terminal behavior
+        Progress(3; output=io, dt=0)
+        @test !ProgressMeter.CLEAR_IJULIA[]
+    finally
+        ProgressMeter.IJULIA_BACKEND[] = ProgressMeter.NoIJulia()
+        ProgressMeter.IJULIABEHAVIOR[] = behavior
+        ProgressMeter.CLEAR_IJULIA[] = false
+    end
+end
+
+# the untyped keyword constructor routes through the converting positional one
+let core = ProgressMeter.ProgressCore(; output=IOBuffer(), dt=1, offset=Int16(2))
+    @test core isa ProgressMeter.ProgressCore{IOBuffer}
+    @test core.dt === 1.0
+    @test core.offset === 2
+end
+
+# cancel without keep moves the cursor back up over the meter
+let io = IOBuffer()
+    p = Progress(10; output=io, dt=0, offset=1)
+    update!(p, 5; force=true)
+    cancel(p; keep=false)
+    s = String(take!(io))
+    @test occursin("Aborted before all tasks were completed", s)
+    @test endswith(s, "\r\e[A")
+end

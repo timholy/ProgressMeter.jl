@@ -34,6 +34,13 @@ jobs:
         with:
           version: ${{ matrix.version }}
       - uses: julia-actions/cache@v3
+      - name: Create Conda's root environment directory
+        # IJulia, a test dependency, depends on Conda, which fails to precompile when
+        # this directory is missing.  Conda's build creates it, but julia-actions/cache
+        # restores the built package without it and Pkg only builds newly installed
+        # packages (JuliaPy/Conda.jl#104), so nightly fails as soon as it re-precompiles.
+        run: julia -e 'mkpath(joinpath(first(DEPOT_PATH), "conda", "3", string(Sys.ARCH)))'
+        shell: bash
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
         env:
@@ -49,3 +56,24 @@ jobs:
           use_oidc: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
           fail_ci_if_error: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
           files: lcov.info
+  trim:
+    name: juliac --trim=safe
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: '1'
+      - uses: julia-actions/cache@v3
+      - name: Set up the trim test environment
+        run: julia --project=test/trim -e 'using Pkg; Pkg.instantiate()'
+      - name: Compile a meter with safe trimming
+        run: julia --project=test/trim -e 'using JuliaC; JuliaC.main(ARGS)' -- --output-exe pmtrim --project=test/trim --experimental --trim=safe test/trim/meter.jl
+      - name: Run the trimmed binary without runtime code generation
+        env:
+          JULIA_LOAD_CODEGEN_LIB: '0'
+        run: |
+          set -o pipefail
+          ./pmtrim 2>&1 | tee pmtrim.log
+          grep -q '100%' pmtrim.log
