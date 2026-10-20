@@ -67,7 +67,7 @@ const defaultglyphs = BarGlyphs('|','█', Sys.iswindows() ? '█' : ['▏','▎
 # Internal struct for holding common properties and internals for progress meters.
 # parametrized on the output type so that printing to it is not a dynamic dispatch
 Base.@kwdef mutable struct ProgressCore{O<:IO}
-    color::Symbol               = :green        # color of the meter
+    color::Union{Symbol,Int}    = :green        # color of the meter (a Symbol or a 0-255 color number)
     desc::String                = "Progress: "  # prefix to the percentage, e.g.  "Computing..."
     dt::Float64                 = 0.1           # minimum time between updates
     enabled::Bool               = true          # is the output enabled
@@ -112,7 +112,8 @@ generated at intervals at least `dt` seconds apart, and perhaps longer if each
 iteration takes longer than `dt`. `desc` is a description of
 the current task. Optionally you can disable the progress bar by setting
 `enabled=false`. You can also append a per-iteration average duration like
-"(12.34 ms/it)" to the description by setting `showspeed=true`.
+"(12.34 ms/it)" to the description by setting `showspeed=true`. Both `color`
+and `valuecolor` accept color names as `Symbol`s or 0-255 256-color indices.
 """
 mutable struct Progress{O<:IO} <: AbstractProgress
     n::Int                  # total number of iterations
@@ -659,13 +660,14 @@ end
 # untyped `f::Function`.  this reproduces its output for a plain color:  escape
 # codes only when `io` advertises color support, applied per line, skipping
 # empty lines
-function printcolored(io::IO, s::AbstractString, color::Symbol)
+function printcolored(io::IO, s::AbstractString, color::Union{Symbol,Int})
     if !get(io, :color, false)::Bool
         print(io, s)
         return nothing
     end
     enable = get(Base.text_colors, color, Base.text_colors[:default])
-    disable = get(Base.disable_text_style, color, Base.text_colors[:default])
+    disable = color isa Symbol ? get(Base.disable_text_style, color, Base.text_colors[:default]) :
+                                 Base.text_colors[:default]
     first = true
     for line in eachsplit(s, '\n')
         first || print(io, '\n')
@@ -676,7 +678,7 @@ function printcolored(io::IO, s::AbstractString, color::Symbol)
     return nothing
 end
 
-function printover(io::IO, s::AbstractString, color::Symbol = :color_normal)
+function printover(io::IO, s::AbstractString, color::Union{Symbol,Int} = :color_normal)
     print(io, "\r")
     printcolored(io, s, color)
     if ijulia_loaded(IJULIA_BACKEND[])

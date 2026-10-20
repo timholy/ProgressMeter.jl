@@ -512,3 +512,16 @@ function testfunc23(N, range, dt, tsleep)
 end
 println("Testing rounding (#300)")
 testfunc23(1000, [980;982;985;989;995;999;1000], 0.1, 1)
+
+function testfunc24(N, dt, tsleep, desc, color, valuecolor)
+    p = Progress(N; dt=dt, desc=desc, color=color)
+    for i in 1:N
+        next!(p; force=true, showvalues=[(:value, i)], valuecolor=valuecolor)
+        sleep(tsleep)
+    end
+end
+
+println("Testing 256-colors")
+testfunc24(100, 0.1, 0.01, "This is orange", 208, :blue)
+testfunc24(100, 0.1, 0.01, "Values are orange", :green, 208)
+
