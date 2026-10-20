@@ -264,7 +264,7 @@ function _updateProgress!(p::Progress; showvalues = (),
                          offset::Integer = p.offset, keep = (offset == 0),
                          desc::Union{Nothing,AbstractString} = nothing,
                          ignore_predictor = false, force::Bool = false,
-                         color = p.color, max_steps = p.n)
+                         color = nothing, max_steps = p.n)
     if p.counter == 2 # ignore the first loop given usually uncharacteristically slow
         p.tsecond = time()
     end
@@ -275,7 +275,7 @@ function _updateProgress!(p::Progress; showvalues = (),
         p.desc = desc
     end
     p.offset = offset
-    p.color = color
+    color === nothing || (p.color = color)
     p.n = max_steps
     if p.counter >= p.n
         if p.counter == p.n && p.printed
@@ -351,10 +351,10 @@ function _updateProgress!(p::ProgressThresh; showvalues = (),
                          offset::Integer = p.offset, keep = (offset == 0),
                          desc = p.desc,
                          ignore_predictor = false, force::Bool = false,
-                         color = p.color, thresh = p.thresh)
+                         color = nothing, thresh = p.thresh)
     p.offset = offset
     p.thresh = thresh
-    p.color = color
+    color === nothing || (p.color = color)
     p.desc = desc
     if p.val <= p.thresh && !p.triggered
         p.triggered = true
@@ -425,9 +425,9 @@ function _updateProgress!(p::ProgressUnknown; showvalues = (), truncate_lines = 
                         ignore_predictor = false, force::Bool = false,
                         spinner::Union{AbstractChar,AbstractString,AbstractVector{<:AbstractChar}} = spinner_chars,
                         offset::Integer = p.offset, keep = (offset == 0),
-                        color = p.color)
+                        color = nothing)
     p.offset = offset
-    p.color = color
+    color === nothing || (p.color = color)
     p.desc = desc
     if p.done
         if p.printed

@@ -242,6 +242,15 @@ let io = IOContext(IOBuffer(), :color => true)
     @test occursin("\e[38;5;208m", output)
 end
 
+# omitted color updates retain the last explicitly selected color
+let io = IOContext(IOBuffer(), :color => true)
+    p = Progress(3; output=io, dt=0)
+    next!(p; force=true, color=208)
+    @test p.color == 208
+    next!(p; force=true)
+    @test p.color == 208
+end
+
 # integer color indices are supported for showvalues
 let io = IOContext(IOBuffer(), :color => true)
     p = Progress(2; output=io, dt=0)
