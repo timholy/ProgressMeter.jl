@@ -12,7 +12,7 @@ permissions:
   checks: read
   contents: write
   deployments: read
-  issues: read
+  issues: write
   discussions: read
   packages: read
   pages: read
@@ -28,4 +28,4 @@ jobs:
       - uses: JuliaRegistries/TagBot@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          ssh: ${{ secrets.DOCUMENTER_KEY }}
+#          ssh: ${{ secrets.DOCUMENTER_KEY }}
