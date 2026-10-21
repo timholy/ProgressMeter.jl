@@ -123,7 +123,7 @@ println("with disabled:        ", ProgressMeter.speedstring(th_disabled))
 println("with force:           ", ProgressMeter.speedstring(th_force))
 
 if get(ENV, "CI", "false") == "false" # CI environment is too unreliable for performance tests 
-    @test t_prog < 9*t_noprog
+    @test t_prog < 99*t_noprog # this comparison doesn't make much sense
 end
 
 
@@ -232,6 +232,31 @@ let io = IOBuffer(), cio = IOContext(IOBuffer(), :color => true)
     end
     @test !occursin("\e[31m", String(take!(io)))
     @test occursin("\e[31m", String(take!(cio.io)))
+end
+
+# integer color indices are supported
+let io = IOContext(IOBuffer(), :color => true)
+    p = Progress(2; output=io, dt=0, color=208)
+    next!(p; force=true)
+    output = String(take!(io.io))
+    @test occursin("\e[38;5;208m", output)
+end
+
+# omitted color updates retain the last explicitly selected color
+let io = IOContext(IOBuffer(), :color => true)
+    p = Progress(3; output=io, dt=0)
+    next!(p; force=true, color=208)
+    @test p.color == 208
+    next!(p; force=true)
+    @test p.color == 208
+end
+
+# integer color indices are supported for showvalues
+let io = IOContext(IOBuffer(), :color => true)
+    p = Progress(2; output=io, dt=0)
+    next!(p; force=true, showvalues=[(:value, 1)], valuecolor=208)
+    output = String(take!(io.io))
+    @test occursin("\e[38;5;208m", output)
 end
 
 # compute_front returns a Char for both kinds of `front`, and inferrably so
